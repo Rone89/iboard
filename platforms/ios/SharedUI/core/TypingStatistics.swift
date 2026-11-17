@@ -1167,15 +1167,15 @@ struct TypingStatisticsStore {
     if recordingOff { return nil }
     switch availability {
     case .containerUnavailable:
-      return "无法访问共享存储，键盘与本 app 之间没有可用的数据通道。重装水杉输入法可以重建它。"
+      return "无法访问共享存储，键盘与本 app 之间没有可用的数据通道。重装iBoard可以重建它。"
     case .neverWritten:
-      return "键盘从未写入过统计。请在系统设置 → 通用 → 键盘 → 键盘 → 水杉输入法中开启“允许完全访问”，"
-        + "然后用水杉键盘输入几个字再回来刷新。未开启时仍可正常打字，只是不记录统计。"
+      return "键盘从未写入过统计。请在系统设置 → 通用 → 键盘 → 键盘 → iBoard中开启“允许完全访问”，"
+        + "然后用iBoard 键盘输入几个字再回来刷新。未开启时仍可正常打字，只是不记录统计。"
     case .ready(let lastWritten):
       guard total == 0 else { return nil }
-      let fullAccess = "请先确认已在系统设置 → 通用 → 键盘 → 键盘 → 水杉输入法中为水杉键盘开启“允许完全访问”，未开启时键盘不记录统计。"
+      let fullAccess = "请先确认已在系统设置 → 通用 → 键盘 → 键盘 → iBoard中为iBoard 键盘开启“允许完全访问”，未开启时键盘不记录统计。"
       guard let lastWritten else {
-        return "统计文件存在但还没有计数。" + fullAccess + "已开启的话，用水杉键盘输入几个字再刷新。"
+        return "统计文件存在但还没有计数。" + fullAccess + "已开启的话，用iBoard 键盘输入几个字再刷新。"
       }
       return "统计文件最后写入于 \(lastWritten.formatted(.dateTime.month().day().hour().minute()))，但计数为零。"
         + fullAccess + "已开启的话，若此前清空过统计，这是正常的；否则请附上这条信息反馈。"

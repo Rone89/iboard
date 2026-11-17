@@ -104,7 +104,7 @@ struct DictionarySettingsView: View {
       Button("取消", role: .cancel) {}
       Button("导入") { add(item) }
     } message: { item in
-      Text("「\(item.name)」的 \(item.content.entries?.count ?? 0) 条词条会加入本机个人词库，开启完全访问后由水杉键盘在空闲时导入。")
+      Text("「\(item.name)」的 \(item.content.entries?.count ?? 0) 条词条会加入本机个人词库，开启完全访问后由iBoard 键盘在空闲时导入。")
     }
     .confirmationDialog(ClearLearningCopy.confirmTitle, isPresented: $confirmsClearLearning, titleVisibility: .visible) {
       Button(ClearLearningCopy.action, role: .destructive) { Task { await clearLearning() } }

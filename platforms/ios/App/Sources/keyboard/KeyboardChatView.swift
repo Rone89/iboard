@@ -20,7 +20,7 @@ struct KeyboardTryoutView: View {
           if chat.messages.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
               Label("边聊天，边试键盘", systemImage: "keyboard").font(.title3.bold())
-              Text("长按地球键切换到水杉输入法。试试你的皮肤、输入方案和模糊音，再发一条消息给 AI。").foregroundStyle(.secondary)
+              Text("长按地球键切换到iBoard。试试你的皮肤、输入方案和模糊音，再发一条消息给 AI。").foregroundStyle(.secondary)
               Text("发送后，本次对话会经水杉后端交由 EveryAPI 处理。").font(.footnote).foregroundStyle(.secondary)
             }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
               .background(MetasequoiaTheme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

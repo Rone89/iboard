@@ -122,7 +122,7 @@ struct PluginDetailView: View {
       }
     } header: {
       DesignSectionHeader(title: "使用", info: pack.isMelody ? nil
-        : "按键音由水杉输入法自己播放，需要「允许完全访问」；开关和其他音效在「键盘 → 按键反馈」里。")
+        : "按键音由iBoard自己播放，需要「允许完全访问」；开关和其他音效在「键盘 → 按键反馈」里。")
     } footer: {
       // 保存失败和「按键音现在没有打开」是状态，留在原处。
       if !pack.isMelody {

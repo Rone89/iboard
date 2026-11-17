@@ -28,11 +28,11 @@ struct WelcomeFlowView: View {
   }
 
   private let steps = [
-    Step(symbol: "keyboard.fill", kicker: "第一步 · 约 30 秒", title: "把水杉加进键盘",
-         body: "在系统设置里添加水杉键盘，再打开「允许完全访问」，云候选、云剪贴板和同步才能工作。"),
+    Step(symbol: "keyboard.fill", kicker: "第一步 · 约 30 秒", title: "把 iBoard 加进键盘",
+         body: "在系统设置里添加iBoard 键盘，再打开「允许完全访问」，云候选、云剪贴板和同步才能工作。"),
     Step(symbol: "textformat", kicker: "第二步 · 随时可以改", title: "选一套输入方案",
          body: WelcomeFlowView.schemeStepBody),
-    Step(symbol: "translate", kicker: "第三步 · 水杉的特点", title: "候选下方就是译文",
+    Step(symbol: "translate", kicker: "第三步 · iBoard 的特点", title: "候选下方就是译文",
          body: "每个候选词下面那行小字是英文释义，本地词库优先，没命中时才联网查询。"),
     Step(symbol: "arrow.triangle.2.circlepath.circle.fill", kicker: "最后一步", title: "登录后多端同步",
          body: "登录后词库、自造词、皮肤和云剪贴板会在手机、平板和电脑之间同步。"),
@@ -123,9 +123,9 @@ struct WelcomeFlowView: View {
       }
       card {
         VStack(alignment: .leading, spacing: 12) {
-          instruction(1, "打开「设置 → 通用 → 键盘 → 键盘」，选择「添加新键盘」里的水杉输入法")
-          instruction(2, "点进水杉输入法，打开「允许完全访问」")
-          instruction(3, "在输入框长按地球键，切换到水杉")
+          instruction(1, "打开「设置 → 通用 → 键盘 → 键盘」，选择「添加新键盘」里的iBoard")
+          instruction(2, "点进iBoard，打开「允许完全访问」")
+          instruction(3, "在输入框长按地球键，切换到 iBoard")
         }
       }
       Button {
@@ -139,7 +139,7 @@ struct WelcomeFlowView: View {
       }
       .buttonStyle(.plain)
       .accessibilityIdentifier("openKeyboardSettingsButton")
-      .accessibilityHint("打开水杉输入法的系统设置页面")
+      .accessibilityHint("打开iBoard的系统设置页面")
     }
   }
 

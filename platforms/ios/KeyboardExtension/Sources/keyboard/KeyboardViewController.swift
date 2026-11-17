@@ -3247,7 +3247,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     KeyboardAppLauncher.open(url, from: self) { [weak self] success in
       guard !success else { return }
       DispatchQueue.main.async { [weak self] in
-        self?.showDiagnostic("未能打开水杉，请手动打开应用。")
+        self?.showDiagnostic("未能打开 iBoard，请手动打开应用。")
       }
     }
   }
@@ -5869,7 +5869,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func generateReply(style: String) {
     guard hasFullAccess else { replyModel.status = "请在系统键盘设置中允许完全访问"; return }
     guard let configuration = KeyboardAIService.configuration() else {
-      replyModel.status = "请在水杉 App → AI 设置中保存键盘 AI 配置"; return
+      replyModel.status = "请在iBoard App → AI 设置中保存键盘 AI 配置"; return
     }
     guard !hasComposition, let document = KeyboardHostContext.documentIdentifier(for: textDocumentProxy) else {
       replyModel.status = "请先完成输入，再选择回复方式"; return
@@ -5905,7 +5905,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func showKeyboardAI() {
     guard hasFullAccess else { showDiagnostic("AI 需要开启键盘的“允许完全访问”。"); return }
     guard let configuration = KeyboardAIService.configuration() else {
-      showDiagnostic("请在水杉 App 的 AI 设置中启用键盘 AI 并保存配置。"); return
+      showDiagnostic("请在iBoard App 的 AI 设置中启用键盘 AI 并保存配置。"); return
     }
     guard !hasComposition, let document = KeyboardHostContext.documentIdentifier(for: textDocumentProxy),
           let selected = textDocumentProxy.selectedText, !selected.isEmpty, selected.count <= 10_000 else {
@@ -6037,7 +6037,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     KeyboardAppLauncher.open(KeyboardAppLauncher.voiceSessionURL, from: self) { [weak self] opened in
       guard !opened else { return }
       DispatchQueue.main.async {
-        self?.showDiagnostic("未能打开水杉，请手动打开水杉 App 开启语音。")
+        self?.showDiagnostic("未能打开 iBoard，请手动打开iBoard App 开启语音。")
         self?.renderCandidateStrip()
       }
     }
@@ -6652,7 +6652,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let modeName = Self.localInputModes.first { $0.trigger == localModeTrigger }?.title
     let title = isInLocalMode && visiblePreedit == localModeTrigger
       ? (modeName ?? visiblePreedit)
-      : (idle ? (isChineseMode ? "水杉输入法" : "英文输入") : visiblePreedit)
+      : (idle ? (isChineseMode ? "iBoard" : "英文输入") : visiblePreedit)
     // 拼写写进输入框（`showInlineComposition`），候选栏不再重复画它：读音那一段只剩编辑拼写的笔（不能编辑时收成零宽），候选不会随拼写变长被推着走。只改画出来的标题：`visiblePreedit` 仍表示正在组字，拼写还没有候选时候选栏照样显示，VoiceOver 仍读出完整标题。日语读音和就地组字的方案不是拼写，照常画。全拼 14 键不写输入框，读音仍单独一行画在候选上面。
     let style: CandidatePreeditStyle = separateReadingRow ? .pinyin : .empty
     // A caret moved into the spelling is drawn even under 「不显示」: the next key acts at that caret, and a hidden one leaves no way to tell where.
@@ -6672,7 +6672,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       preeditButton.configuration = configuration
     }
     preeditPenMinimumWidth.isActive = showsPen
-    // 读音并入候选行时，没有在组的内容、或「候选栏预编辑」选了不显示而标题为空、又没有笔可画时，这一段不占位置：单独一行时那里显示的「水杉输入法」和它的本地输入菜单，在候选行里只会挤掉联想候选，本地输入仍可从「更多」里打开。
+    // 读音并入候选行时，没有在组的内容、或「候选栏预编辑」选了不显示而标题为空、又没有笔可画时，这一段不占位置：单独一行时那里显示的「iBoard」和它的本地输入菜单，在候选行里只会挤掉联想候选，本地输入仍可从「更多」里打开。
     let collapsed = (idle || drawnTitle.isEmpty) && !separateReadingRow && !showsPen
     inlineReadingCollapse?.isActive = collapsed
     if preeditButton.isHidden != collapsed { preeditButton.isHidden = collapsed }

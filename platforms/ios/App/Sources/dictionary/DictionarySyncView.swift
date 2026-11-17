@@ -594,7 +594,7 @@ struct DictionarySyncWebDAVEditor: View {
             .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
             .accessibilityIdentifier("dictionarySyncURLField")
         } header: {
-          DesignSectionHeader(subject: "服务器地址", info: "坚果云填 https://dav.jianguoyun.com/dav/ 即可，水杉会在里面自动建 msime-dictionary 文件夹，不用自己先建；其他网盘填它给的 WebDAV 地址。必须是 HTTPS，证书要由公网信任的机构签发。可以与云剪贴板用同一个网盘。") { SettingsGroupHeader(title: "服务器地址") }
+          DesignSectionHeader(subject: "服务器地址", info: "坚果云填 https://dav.jianguoyun.com/dav/ 即可，iBoard 会在里面自动建 msime-dictionary 文件夹，不用自己先建；其他网盘填它给的 WebDAV 地址。必须是 HTTPS，证书要由公网信任的机构签发。可以与云剪贴板用同一个网盘。") { SettingsGroupHeader(title: "服务器地址") }
         } footer: {
           DictionarySyncFieldFooter(issue: url.isEmpty ? nil : urlIssue)
         }

@@ -57,7 +57,7 @@ actor TypingUpload {
   static func changedMessage(_ status: Status, enabling: Bool) -> String {
     guard enabling else { return "已关闭上传，云端的打字统计已删除。" }
     return status.lastUpload == nil
-      ? "已打开上传。本机还没有可上传的打字计数，用水杉键盘打字以后再打开 App 会自动上传。"
+      ? "已打开上传。本机还没有可上传的打字计数，用iBoard 键盘打字以后再打开 App 会自动上传。"
       : "已打开上传，最近 7 天的每日计数已传到你的水杉账号。"
   }
 

@@ -268,7 +268,7 @@ struct AboutView: View {
   private var hero: some View {
     VStack(spacing: 0) {
       AppMark(box: 116)
-      Text("水杉输入法").font(.system(size: 22, weight: .bold)).padding(.top, 16)
+      Text("iBoard").font(.system(size: 22, weight: .bold)).padding(.top, 16)
       Text(version).designSubtext()
         .padding(.top, 6)
         .accessibilityIdentifier("aboutAppVersion")
@@ -340,7 +340,7 @@ private struct LicenseNotice: Identifiable {
 
   private static let all = [
     // 本应用和键盘扩展里拼音词库的 rime-ice 数据都按 GPL-3.0 分发，排在第一项。
-    LicenseNotice(file: "LICENSE", title: "水杉输入法", detail: "本应用与拼音词库 · GPL-3.0", fileExtension: ""),
+    LicenseNotice(file: "LICENSE", title: "iBoard", detail: "基于水杉输入法（msime）与拼音词库 · GPL-3.0", fileExtension: ""),
     LicenseNotice(file: "MLKit-NOTICES", title: "Google ML Kit", detail: "手写识别 · 第三方声明"),
     LicenseNotice(file: "MLKit-Dependencies", title: "ML Kit 依赖组件", detail: "手写识别 · 依赖清单"),
     LicenseNotice(file: "GoogleSignIn-Dependencies", title: "Google Sign-In", detail: "Google 登录 · Apache-2.0"),
@@ -399,7 +399,7 @@ struct LicensesView: View {
             .buttonStyle(PressFillButtonStyle())
           }
         }
-        Text("水杉输入法本身以 GPL-3.0 发布，全文见上方「水杉输入法」一项，源代码见关于页的 GitHub。")
+        Text("iBoard本身以 GPL-3.0 发布，全文见上方「iBoard」一项，源代码见关于页的 GitHub。")
           .designSubtext()
           .fixedSize(horizontal: false, vertical: true)
           .padding(.horizontal, 16)

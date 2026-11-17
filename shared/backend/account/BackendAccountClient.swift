@@ -9,7 +9,7 @@ enum MSIMEAppEdition {
   static let fullIdentifier = "full"
   static let fullAppGroupIdentifier = "group.773JTTH9DK.app.msime.ios"
   static let fullDefaultScheme = "quanpin"
-  static let fullURLScheme = "msime"
+  static let fullURLScheme = "iboard"
 
   #if os(iOS)
   private static var info: [String: Any] { Bundle.main.infoDictionary ?? [:] }

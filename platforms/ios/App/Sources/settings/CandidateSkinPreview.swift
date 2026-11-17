@@ -113,7 +113,7 @@ final class CandidateSkinPreviewRow: CandidateCanvasHostView {
       row.topAnchor.constraint(equalTo: candidateContentGuide.topAnchor, constant: 6),
       row.bottomAnchor.constraint(equalTo: candidateContentGuide.bottomAnchor, constant: -6),
     ])
-    for (index, word) in ["水杉", "输入", "输入法"].enumerated() {
+    for (index, word) in ["iBoard", "输入", "输入法"].enumerated() {
       let number = UILabel()
       number.text = "\(index + 1)"
       number.setContentHuggingPriority(.required, for: .horizontal)
@@ -142,7 +142,7 @@ final class CandidateSkinPreviewRow: CandidateCanvasHostView {
       items.append((item, number, text))
     }
     isAccessibilityElement = true
-    accessibilityLabel = "候选预览：水杉，输入，输入法"
+    accessibilityLabel = "候选预览：iBoard，输入，输入法"
   }
 
   @available(*, unavailable)
@@ -150,7 +150,7 @@ final class CandidateSkinPreviewRow: CandidateCanvasHostView {
 
   func apply(_ snapshot: CandidateSkinPreview.Snapshot) {
     canvas = snapshot.canvas
-    decorationWords = [ExternalCandidateSkin.Canvas.Word(text: "水杉", highlighted: true),
+    decorationWords = [ExternalCandidateSkin.Canvas.Word(text: "iBoard", highlighted: true),
       ExternalCandidateSkin.Canvas.Word(text: "输入"), ExternalCandidateSkin.Canvas.Word(text: "输入法")]
     let palette = snapshot.palette
     backgroundColor = canvas?.panelLoaded == true ? .clear : palette.surface

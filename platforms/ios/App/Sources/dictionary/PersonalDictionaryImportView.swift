@@ -131,7 +131,7 @@ struct PersonalDictionaryImportView: View {
           .designRow()
         }
         Section {
-          Text("确认后加入本机同步队列，打开水杉键盘后逐条生效。同步失败的词条可单独重试；相同类型、编码和内容的已有词条将更新权重。文件内容不会上传。")
+          Text("确认后加入本机同步队列，打开iBoard 键盘后逐条生效。同步失败的词条可单独重试；相同类型、编码和内容的已有词条将更新权重。文件内容不会上传。")
             .font(.footnote).foregroundStyle(.secondary)
         }
         .designRow()

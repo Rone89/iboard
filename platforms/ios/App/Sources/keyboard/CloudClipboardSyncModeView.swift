@@ -282,7 +282,7 @@ struct CloudClipboardWebDAVEditor: View {
             .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
             .accessibilityIdentifier("cloudClipboardWebDAVURLField")
         } header: {
-          DesignSectionHeader(subject: "服务器地址", info: "坚果云填 https://dav.jianguoyun.com/dav/ 即可，水杉会在里面自动建 msime-clipboard 文件夹，不用自己先建；其他网盘填它给的 WebDAV 地址。必须是 HTTPS，证书要由公网信任的机构签发。") { SettingsGroupHeader(title: "服务器地址") }
+          DesignSectionHeader(subject: "服务器地址", info: "坚果云填 https://dav.jianguoyun.com/dav/ 即可，iBoard 会在里面自动建 msime-clipboard 文件夹，不用自己先建；其他网盘填它给的 WebDAV 地址。必须是 HTTPS，证书要由公网信任的机构签发。") { SettingsGroupHeader(title: "服务器地址") }
         } footer: {
           CloudClipboardFieldFooter(issue: url.isEmpty ? nil : urlIssue)
         }

@@ -229,7 +229,7 @@ private struct AuthenticatedTypingStatisticsView: View {
   }
 
   private static let aboutParagraphs = [
-    "字数只统计水杉键盘提交的字符，含标点及表情，不含空格和换行。组合表情计为一个字符，删除文字不扣减。",
+    "字数只统计iBoard 键盘提交的字符，含标点及表情，不含空格和换行。组合表情计为一个字符，删除文字不扣减。",
     "平均速度按连续打字的时间计算，两次上屏间隔超过 10 秒算休息、不计入；只统计汉字与各种文字的字母，数字、标点和表情不参与。首选命中在选词满 50 次后显示。",
     "按键热力图另计每个键的按下次数，拼音拼写、删除和功能键都算，密码框里的按键不计；只保存每个键每天被按下的次数，不保存按键顺序和输入内容。",
     "成就由统计数据推算，清空统计时一并清除。",
@@ -602,7 +602,7 @@ struct TypingDailyDetailView: View {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
                                               attributes: [.posixPermissions: 0o700])
     } catch { return nil }
-    let url = directory.appendingPathComponent("水杉IME-打字统计.csv")
+    let url = directory.appendingPathComponent("iBoard-打字统计.csv")
     do {
       try Data(statistics.dailyCSV().utf8).write(to: url, options: .atomic)
       return url

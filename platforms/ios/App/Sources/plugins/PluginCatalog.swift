@@ -402,7 +402,7 @@ enum PluginCatalogPolicy {
 
   /// 「本地输入」菜单和候选栏怎么打开一个模式，与 `iosLocalModeEntry` 相同。
   static func localModeEntry(_ title: String) -> String {
-    "在候选栏点「水杉输入法」，或在「更多 → 本地输入」里选「\(title)」，"
+    "在候选栏点「iBoard」，或在「更多 → 本地输入」里选「\(title)」，"
   }
 
   /// 单词本插件在背单词里的词书 id：`wordbook_pack::book_id`。

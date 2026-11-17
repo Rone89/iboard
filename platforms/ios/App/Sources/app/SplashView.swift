@@ -21,7 +21,7 @@ struct SplashView: View {
     .contentShape(Rectangle())
     .onTapGesture(perform: finish)
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel("水杉输入法")
+    .accessibilityLabel("iBoard")
     .accessibilityHint("轻点跳过")
     .accessibilityAddTraits(.isButton)
     .accessibilityAction { finish() }
@@ -51,7 +51,7 @@ struct SplashView: View {
         .opacity(frame.glowOpacity)
       VStack(spacing: 18) {
         mark(frame)
-        Text("水杉输入法").font(.system(size: 24, weight: .bold)).tracking(1.44).foregroundStyle(.white)
+        Text("iBoard").font(.system(size: 24, weight: .bold)).tracking(1.44).foregroundStyle(.white)
           .opacity(frame.nameOpacity).offset(y: frame.nameOffset)
         Text("METASEQUOIA IME").font(.system(size: 13)).tracking(2.34).foregroundStyle(.white.opacity(0.62))
           .opacity(frame.latinOpacity).offset(y: frame.latinOffset)

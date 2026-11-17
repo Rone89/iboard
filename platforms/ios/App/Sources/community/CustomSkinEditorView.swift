@@ -231,7 +231,7 @@ struct CustomSkinEditorView: View {
           }
         }
       } header: {
-        DesignSectionHeader(title: "水杉设计 · 14 款",
+        DesignSectionHeader(title: "iBoard 设计 · 14 款",
                             info: "选择模板后，继续调整背景、按键和文本。修改自动保存；撤销可找回刚才的设计，命名保存可保留多套方案。")
       }
       Section { Button("重置我的皮肤", role: .destructive) { confirmReset = true } }

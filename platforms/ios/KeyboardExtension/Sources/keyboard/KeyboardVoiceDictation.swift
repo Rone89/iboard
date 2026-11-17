@@ -47,7 +47,7 @@ final class KeyboardVoiceDictation {
     endsOnPauseReported = false
     observer = DarwinNotificationObserver(VoiceSessionChannel.stateNotification) { [weak self] in self?.stateChanged() }
     channel.send(VoiceSessionCommand(action: .start, request: id, sentAt: Date(), tapStarted: !held))
-    watch(Self.startTimeout, .failed("水杉没有回应，正在重新开启语音…", reopensSession: true))
+    watch(Self.startTimeout, .failed("iBoard 没有回应，正在重新开启语音…", reopensSession: true))
   }
 
   /// 松开或再点一次：停止录音，等结果。App 还没回应开始命令时先记下，回应后再发，免得停止命令盖掉还没读到的开始命令。

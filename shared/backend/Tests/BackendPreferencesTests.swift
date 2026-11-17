@@ -69,22 +69,22 @@ final class BackendPreferencesTests: XCTestCase {
   func testFullKeepsTodaysAppGroupAndSchemes() throws {
     let info = try editionInfo("full")
     XCTAssertEqual(MSIMEAppEdition.identifier(in: info), "full")
-    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier(in: info), "group.app.msime.ios")
+    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier(in: info), "group.773JTTH9DK.app.msime.ios")
     XCTAssertNil(MSIMEAppEdition.inputSchemes(in: info))
     XCTAssertEqual(MSIMEAppEdition.defaultScheme(in: info), "quanpin")
     XCTAssertFalse(MSIMEAppEdition.wubiMixedPinyinDefault(in: info))
     // 测试进程不是 App bundle，读到的就是 full。
-    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier, "group.app.msime.ios")
+    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier, "group.773JTTH9DK.app.msime.ios")
     // 写明 full 的 Info.plist 和不写一样。
-    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier(in: ["MSIMEEdition": "full", "MSIMEInputSchemes": ["wubi"]]), "group.app.msime.ios")
+    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier(in: ["MSIMEEdition": "full", "MSIMEInputSchemes": ["wubi"]]), "group.773JTTH9DK.app.msime.ios")
     XCTAssertNil(MSIMEAppEdition.inputSchemes(in: ["MSIMEEdition": "full", "MSIMEInputSchemes": ["wubi"]]))
   }
 
   func testOtherEditionsGetTheirOwnAppGroupAndDefaultScheme() throws {
     let wubi = try editionInfo("wubi")
     let pinyin = try editionInfo("pinyin")
-    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier(in: wubi), "group.app.msime.ios.wubi")
-    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier(in: pinyin), "group.app.msime.ios.pinyin")
+    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier(in: wubi), "group.773JTTH9DK.app.msime.ios.wubi")
+    XCTAssertEqual(MSIMEAppEdition.appGroupIdentifier(in: pinyin), "group.773JTTH9DK.app.msime.ios.pinyin")
     XCTAssertEqual(MSIMEAppEdition.inputSchemes(in: wubi), ["wubi"])
     XCTAssertEqual(MSIMEAppEdition.defaultScheme(in: wubi), "wubi")
     XCTAssertEqual(MSIMEAppEdition.defaultScheme(in: pinyin), "quanpin")

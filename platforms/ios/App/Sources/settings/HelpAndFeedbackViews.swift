@@ -22,8 +22,8 @@ struct HelpView: View {
     Form {
       Section("启用键盘") {
         HelpItem(term: "1. 打开键盘设置", detail: "前往“设置 → 通用 → 键盘 → 键盘”。")
-        HelpItem(term: "2. 添加水杉输入法", detail: "选择“添加新键盘”，再选择水杉输入法。")
-        HelpItem(term: "3. 切换并开始输入", detail: "在输入框长按地球键，选择水杉输入法。")
+        HelpItem(term: "2. 添加iBoard", detail: "选择“添加新键盘”，再选择iBoard。")
+        HelpItem(term: "3. 切换并开始输入", detail: "在输入框长按地球键，选择iBoard。")
         SettingsActionRow(title: "打开系统键盘设置", detail: "直接跳到“设置”里对应的位置",
                           symbol: "gearshape.fill") {
           guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
@@ -43,7 +43,7 @@ struct HelpView: View {
       }
       .designRow()
       Section("遇到问题") {
-        HelpItem(term: "键盘里没有水杉", detail: "回到上面的启用步骤确认已添加；添加过仍看不到时，长按地球键翻一下列表。")
+        HelpItem(term: "键盘里没有 iBoard", detail: "回到上面的启用步骤确认已添加；添加过仍看不到时，长按地球键翻一下列表。")
         HelpItem(term: "云功能连不上", detail: "云词库、皮肤社区这些要联网并登录账号。在“我的”里确认账号状态。")
         HelpItem(term: "更新后行为变了", detail: "在 App Store 确认已是最新版本，词库随版本更新。")
       }
@@ -209,7 +209,7 @@ struct FeedbackView: View {
     let document = MetasequoiaInputSessionBridge.loadSharedPreferences()
     let scheme = InputSchemePreference.current(in: document).scheme.shortLabel
     let skin = KeyboardTheme.resolve(document: document).title
-    return "水杉输入法 \(version)（构建 \(build)）\n\(device.systemName) \(device.systemVersion)\n\(Self.machine())\n方案：\(scheme)\n皮肤：\(skin)"
+    return "iBoard \(version)（构建 \(build)）\n\(device.systemName) \(device.systemVersion)\n\(Self.machine())\n方案：\(scheme)\n皮肤：\(skin)"
   }
 
   /// 硬件型号标识，例如 iPhone16,2；`UIDevice.model` 只会给出 iPhone 或 iPad。

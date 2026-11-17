@@ -529,7 +529,7 @@ struct CommunityResourceDetail: View {
           try PersonalDictionaryStore().enqueueImport((selected.content.entries ?? []).map { try $0.localWord() })
           try request.checkCurrent(id)
           CommunityDictionaryImports.record(selected.id)
-          message = "已加入本机导入队列，打开水杉键盘后处理。可在「查看导入状态」检查每条结果。"
+          message = "已加入本机导入队列，打开iBoard 键盘后处理。可在「查看导入状态」检查每条结果。"
         }}
       }
       .confirmationDialog("下架后其他用户将无法获取此作品，已有本地副本保留。", isPresented: $confirmDelete, titleVisibility: .visible) {

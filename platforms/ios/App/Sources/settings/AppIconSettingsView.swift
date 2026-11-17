@@ -99,7 +99,7 @@ struct AppIconSettingsView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 24) {
         VStack(alignment: .leading, spacing: 8) {
-          Text("让水杉，带上你的颜色")
+          Text("让 iBoard，带上你的颜色")
             .font(.title2.bold())
           Text("挑选喜欢的图标，点一下换到主屏幕。")
             .font(.subheadline).foregroundStyle(.secondary)

@@ -63,7 +63,7 @@ struct SettingsView: View {
       if groups.isEmpty { ContentUnavailableView.search(text: query) }
     }
     // 「首页」标签的根页以应用名作大标题，与共享设置组件的 `mobilePageTitle("home")` 一致。
-    .navigationTitle("水杉输入法")
+    .navigationTitle("iBoard")
     .navigationBarTitleDisplayMode(.large)
     // 不按当前选中的标签页过滤：切走时读到 nil 会把推入的页面弹掉，切回来再重新推入，页面里更深一层的导航就丢了。
     // 从搜索结果进去时把命中的关键词带给页面，页面从它所在的分段开始；查询为空（首页那一行、深链）时没有目标。

@@ -692,8 +692,8 @@ struct OnboardingView: View {
 
   private let steps = [
     ("1", "打开键盘设置", "前往“设置 → 通用 → 键盘 → 键盘”。"),
-    ("2", "添加水杉输入法", "选择“添加新键盘”，再选择水杉输入法。"),
-    ("3", "切换并开始输入", "在输入框长按地球键，选择水杉输入法。"),
+    ("2", "添加iBoard", "选择“添加新键盘”，再选择iBoard。"),
+    ("3", "切换并开始输入", "在输入框长按地球键，选择iBoard。"),
   ]
 
   var body: some View {
@@ -723,7 +723,7 @@ struct OnboardingView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("openKeyboardSettingsButton")
-        .accessibilityHint("打开水杉输入法的系统设置页面")
+        .accessibilityHint("打开iBoard的系统设置页面")
 
         if let onFinish {
           Button("已完成，进入设置", action: onFinish)
@@ -760,10 +760,10 @@ struct OnboardingView: View {
         .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 5) {
-        Text("水杉输入法")
+        Text("iBoard")
           .font(.system(.largeTitle, design: .rounded).weight(.bold))
           .foregroundStyle(.primary)
-        Text("添加键盘，开始使用水杉输入法")
+        Text("添加键盘，开始使用iBoard")
           .font(.subheadline.weight(.medium))
           .foregroundStyle(MetasequoiaTheme.needle)
       }

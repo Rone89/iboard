@@ -169,7 +169,7 @@ struct CloudDictionaryView: View {
           try request.checkCurrent(id)
           let word = try entry.localWord()
           try PersonalDictionaryStore().enqueue(previous: nil, replacement: word)
-          message = "已加入本机队列。请打开允许完全访问的水杉键盘，确认同步后再试打。"
+          message = "已加入本机队列。请打开允许完全访问的iBoard 键盘，确认同步后再试打。"
         }
         downloading = nil
       }

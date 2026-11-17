@@ -12,7 +12,7 @@ struct WubiCodeLookupView: View {
   var body: some View {
     Form {
       Section {
-        TextField("例如：水杉输入法", text: $text, axis: .vertical)
+        TextField("例如：iBoard", text: $text, axis: .vertical)
           .lineLimit(2...6)
           .accessibilityLabel("要查五笔编码的文字")
           .accessibilityIdentifier("wubiCodeLookupText")

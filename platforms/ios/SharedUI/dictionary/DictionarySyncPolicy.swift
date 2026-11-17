@@ -78,7 +78,7 @@ enum IOSDictionarySyncPolicy {
     case "dictionary_sync_unsupported":
       return probe
         ? "这个网盘不支持词库同步需要的文件操作（独占创建、列目录），请换一个 WebDAV 服务或文件夹。"
-        : "网盘上的词库是更新版本的格式，请先更新水杉输入法。"
+        : "网盘上的词库是更新版本的格式，请先更新iBoard。"
     case "dictionary_sync_corrupt": return "网盘上的词库记录损坏了，自动同步已暂停。"
     case "dictionary_sync_storage": return "本机的同步记录读写失败。"
     case "clipboard_device_pending": return "本设备还在等待允许。"

@@ -16,7 +16,7 @@ struct PrivacySettingsView: View {
     ScrollView {
       VStack(spacing: 28) {
         DesignGroup(title: "联网功能",
-                    info: "水杉本地优先：拼音、词库、自造词和输入统计都在这台设备上处理和保存。AI、语音、账号、云同步和皮肤社区只在你使用时联网。",
+                    info: "iBoard 本地优先：拼音、词库、自造词和输入统计都在这台设备上处理和保存。AI、语音、账号、云同步和皮肤社区只在你使用时联网。",
                     radius: MetasequoiaTheme.tabCardRadius) {
           DesignToggleRow(
             title: "发送匿名使用统计",

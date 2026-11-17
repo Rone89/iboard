@@ -143,7 +143,7 @@ final class KeyboardAITests: XCTestCase {
     let otherPort = try XCTUnwrap(URL(string: "https://fixture.invalid:444/v1/chat/completions"))
     let query = KeyboardAIService.query(url: first)
     let account = kSecAttrAccount as String
-    XCTAssertEqual(query[kSecAttrAccessGroup as String] as? String, "group.app.msime.ios")
+    XCTAssertEqual(query[kSecAttrAccessGroup as String] as? String, "group.773JTTH9DK.app.msime.ios")
     XCTAssertEqual(query[account] as? String, KeyboardAIService.query(url: otherPath)[account] as? String)
     XCTAssertNotEqual(query[account] as? String, KeyboardAIService.query(url: otherHost)[account] as? String)
     XCTAssertNotEqual(query[account] as? String, KeyboardAIService.query(url: otherPort)[account] as? String)

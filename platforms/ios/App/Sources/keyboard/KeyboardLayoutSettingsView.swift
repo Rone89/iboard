@@ -301,7 +301,7 @@ struct KeyboardLayoutSettingsView: View {
   }
 
   private var feedbackInfo: String {
-    let sound = "按键音需要在系统设置里为水杉输入法打开“允许完全访问”。所选音效由水杉输入法自己播放，跟随静音模式和媒体音量，与正在播放的音乐混音，不受“声音与触感 › 键盘反馈 › 声音”影响；音效还没准备好时用系统按键声。"
+    let sound = "按键音需要在系统设置里为iBoard打开“允许完全访问”。所选音效由iBoard自己播放，跟随静音模式和媒体音量，与正在播放的音乐混音，不受“声音与触感 › 键盘反馈 › 声音”影响；音效还没准备好时用系统按键声。"
     return KeyboardFeedbackPreference.hapticsAvailable ? sound + "振动效果取决于设备与系统支持。" : sound
   }
 
@@ -431,7 +431,7 @@ struct KeyboardLayoutSettingsView: View {
   }
 
   private var tabletGroup: some View {
-    DesignGroup(title: "iPad", info: "全尺寸键盘在字母上方多一排数字、Q 左边多一个 Tab 键。组字时数字键选候选，Tab 打开全部候选（桌面端的 Tab 翻页）；没有组字时照常输入。浮动键盘和分屏的窄窗口用 iPhone 布局，不显示这两样。\n\n分离式键盘只在横屏时生效：字母、数字行和 123 符号页从中间分成左右两半，中间留空，方便双手握持时用拇指打字；九键、14 键、笔画、手写和注音不分。竖屏、浮动键盘和窄窗口照常显示整块键盘。\n\n功能面板的单手模式在 iPad 全宽键盘上把按键缩到手机大小、贴到一侧；分离式键盘画着时单手模式让位。\n\n外接实体键盘（妙控键盘、蓝牙键盘）时，iOS 不会把实体按键交给任何第三方键盘，实体键盘打出的是系统输入法的结果。要用水杉的拼音、候选和皮肤，请在屏幕键盘上输入。") {
+    DesignGroup(title: "iPad", info: "全尺寸键盘在字母上方多一排数字、Q 左边多一个 Tab 键。组字时数字键选候选，Tab 打开全部候选（桌面端的 Tab 翻页）；没有组字时照常输入。浮动键盘和分屏的窄窗口用 iPhone 布局，不显示这两样。\n\n分离式键盘只在横屏时生效：字母、数字行和 123 符号页从中间分成左右两半，中间留空，方便双手握持时用拇指打字；九键、14 键、笔画、手写和注音不分。竖屏、浮动键盘和窄窗口照常显示整块键盘。\n\n功能面板的单手模式在 iPad 全宽键盘上把按键缩到手机大小、贴到一侧；分离式键盘画着时单手模式让位。\n\n外接实体键盘（妙控键盘、蓝牙键盘）时，iOS 不会把实体按键交给任何第三方键盘，实体键盘打出的是系统输入法的结果。要用iBoard 的拼音、候选和皮肤，请在屏幕键盘上输入。") {
       DesignToggleRow(title: "数字行与 Tab 键", isOn: Binding(get: { tabletFullKeys }, set: { enabled in
         tabletFullKeys = enabled
         KeyboardLayoutPreference.tabletFullKeys = enabled
