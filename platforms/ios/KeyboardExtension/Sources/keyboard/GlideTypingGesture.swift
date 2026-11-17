@@ -161,9 +161,19 @@ final class GlideTrailView: UIView {
   /// `color` 为调用点兼容保留、不使用：参照的填充固定为灰，明暗一致
   /// （GlideKeyboard 移植时保留了同样的参照特征）。每个采样进几何后按
   /// 参照裁剪重建色带；<2pt 的密采样被丢弃，超过 150pt 的旧尾巴滑出窗口。
+  ///
+  /// iBoard 没有 GK 的 begin(at:)，draw 就是每一笔的入口：先按参照
+  /// clearStroke 的次序移走上一笔的淡出动画、恢复不透明度。淡出动画
+  /// `isRemovedOnCompletion = false` + `fillMode = .forwards`，不清的话它
+  /// 会把新一笔的展示层永久压在透明度 0 上——轨迹看起来就丢了。
   func draw(_ samples: [GlideTyping.Sample], color: UIColor) {
+    shape.removeAnimation(forKey: "fade")
     geometry.reset()
     for sample in samples { geometry.append(CGPoint(x: sample.x, y: sample.y)) }
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    shape.opacity = 1
+    CATransaction.commit()
     redraw()
   }
 

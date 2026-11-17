@@ -195,6 +195,23 @@ final class GlideTypingTests: XCTestCase {
     XCTAssertFalse(trail.hasTrail)
   }
 
+  /// 回归（轨迹「偶尔丢失」）：抬手淡出动画 `isRemovedOnCompletion = false` +
+  /// `fillMode = .forwards`，不清掉就会把下一笔的展示层永久压在透明度 0 上。
+  /// 新一笔的 draw 必须先摘动画、恢复不透明度（参照 clearStroke 的次序）。
+  func testNewStrokeRevivesTheTrailAfterAFade() {
+    let trail = GlideTrailView(frame: CGRect(x: 0, y: 0, width: 400, height: 300))
+    let shape = trail.layer.sublayers?.first
+    let samples = [GlideTyping.Sample(x: 0, y: 0, milliseconds: 0),
+                   GlideTyping.Sample(x: 100, y: 0, milliseconds: 100)]
+    trail.draw(samples, color: .red)
+    trail.fadeOut()
+    XCTAssertEqual(shape?.opacity ?? -1, 0, accuracy: 0.001, "淡出把模型透明度压到 0")
+    XCTAssertNotNil(shape?.animation(forKey: "fade"), "淡出动画留在层上")
+    trail.draw(samples, color: .red)
+    XCTAssertNil(shape?.animation(forKey: "fade"), "新的一笔摘走淡出动画")
+    XCTAssertEqual(shape?.opacity ?? -1, 1, accuracy: 0.001, "新的一笔恢复不透明度")
+  }
+
   // MARK: - 会话
 
   func testTheSessionTypesAQuanpinGlideAndRefusesOtherSchemes() throws {
