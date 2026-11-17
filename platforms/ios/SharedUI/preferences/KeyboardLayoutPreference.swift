@@ -35,8 +35,8 @@ enum KeyboardLayoutPreference {
     set { defaults.set(SharedNumber.clamped(newValue, to: 3...6), forKey: keySpacingKey) }
   }
   static var rowSpacing: Double {
-    get { spacing(key: rowSpacingKey, fallback: 7, range: 4...10) }
-    set { defaults.set(SharedNumber.clamped(newValue, to: 4...10), forKey: rowSpacingKey) }
+    get { spacing(key: rowSpacingKey, fallback: 11, range: 4...11) }
+    set { defaults.set(SharedNumber.clamped(newValue, to: 4...11), forKey: rowSpacingKey) }
   }
   /// Keyboard height adjustment relative to the platform's current default, in points.
   ///
@@ -280,7 +280,7 @@ enum KeyboardLayoutPreference {
 
   static func sharedRowSpacing(_ value: Any?) -> Double? {
     guard let integer = SharedNumber.strictInt(value) else { return nil }
-    return SharedNumber.clamped(Double(integer) / 10, to: 4...10)
+    return SharedNumber.clamped(Double(integer) / 10, to: 4...11)
   }
 
   static func sharedHeightAdjustment(_ value: Any?) -> Double? {

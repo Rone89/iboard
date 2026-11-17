@@ -255,11 +255,12 @@ struct KeyboardTheme: Equatable {
     (appearance ?? traits.userInterfaceStyle) == .dark
   }
 
-  /// 设计自带的圆角；原生皮肤在 iOS 26 起用系统键盘的圆角（`SystemKeyboardTokens.cornerRadius`）；其余为设计稿的原生按键圆角：手机 5、iPad 7。
+  /// 设计自带的圆角；原生皮肤在 iOS 26 起用系统键盘的圆角（`SystemKeyboardTokens.cornerRadius`）；其余主题
+  /// 对齐 iOS 27 系统键盘的 8.5pt（UI Kit 键帽圆角，原设计稿的手机 5、iPad 7 偏方）。
   var cornerRadius: CGFloat {
     if let design { return CGFloat(design.cornerRadius) }
     if drawsLiquidGlassKeys { return SystemKeyboardTokens.cornerRadius }
-    return UIDevice.current.userInterfaceIdiom == .pad ? 7 : 5
+    return UIDevice.current.userInterfaceIdiom == .pad ? 7 : 8.5
   }
   var borderWidth: CGFloat { design.map { CGFloat($0.borderWidth) } ?? 0 }
   var borderColor: UIColor {

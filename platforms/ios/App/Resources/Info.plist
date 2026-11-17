@@ -29,7 +29,7 @@
 			<string>app.msime.ios</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>iboard</string>
+				<string>msime</string>
 			</array>
 		</dict>
 		<dict>

@@ -467,9 +467,9 @@ final class KeyLayoutStyleTests: XCTestCase {
                      "1234567890")
       XCTAssertEqual(height(of: controller), taller, accuracy: 0.5, scheme.rawValue)
       if scheme == .quanpin {
-        // 字母键仍是 44pt：多出的留白按五排重算。
+        // 字母键仍是 45pt：多出的留白按五排重算。
         let letter = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == "字母 Q" })
-        XCTAssertEqual(letter.bounds.height, 44, accuracy: 0.5)
+        XCTAssertEqual(letter.bounds.height, 45, accuracy: 0.5)
         // 省下的高度不再整块垫在顶栏和数字行之间：数字行离顶栏是顶栏间隔加 4pt，数字行和 Q 之间是加宽后的排间距。
         let strip = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "candidateStrip" })
         let digit = try button("numberRowKey1", in: controller)
@@ -587,9 +587,9 @@ final class KeyLayoutStyleTests: XCTestCase {
     XCTAssertTrue(shown(period), "the new style is drawn without reopening the keyboard")
     let numberRow = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "numberRow" })
     XCTAssertTrue(shown(numberRow))
-    try assertLetterKeysAre44(controller, "number row switched on live")
+    try assertLetterKeysAre45(controller, "number row switched on live")
     XCTAssertEqual(try button("preeditButton", in: controller).accessibilityValue, preedit, "the composition survives")
-    // 再当场关掉数字行：留白按四排重算，字母键仍是 44pt。
+    // 再当场关掉数字行：留白按四排重算，字母键仍是 45pt。
     XCTAssertTrue(write(TouchKeyLayoutStyle(twentySixKey: .commaPeriod)))
     controller.viewWillAppear(false)
     let offDeadline = Date().addingTimeInterval(15)
@@ -598,12 +598,12 @@ final class KeyLayoutStyleTests: XCTestCase {
     }
     try layoutAtRequestedHeight(controller)
     XCTAssertFalse(shown(numberRow), "the number row goes away without reopening the keyboard")
-    try assertLetterKeysAre44(controller, "number row switched off live")
+    try assertLetterKeysAre45(controller, "number row switched off live")
     XCTAssertEqual(try button("preeditButton", in: controller).accessibilityValue, preedit, "the composition survives")
     controller.viewDidDisappear(false)
   }
 
-  /// 数字行在同一趟排版里出现时（从九键换到全拼、横屏转回竖屏），26 键的上下留白按这一趟的排数算，字母键仍是 44pt，键区面板的底边也停在同一处。
+  /// 数字行在同一趟排版里出现时（从九键换到全拼、横屏转回竖屏），26 键的上下留白按这一趟的排数算，字母键仍是 45pt，键区面板的底边也停在同一处。
   func testLetterKeysStay44WhenTheNumberRowAppearsInOnePass() throws {
     XCTAssertTrue(write(TouchKeyLayoutStyle(numberRow: true)))
     let taller = KeyboardViewController.keyboardHeight(phoneNumberRow: true)
@@ -617,7 +617,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     try layoutAtRequestedHeight(controller)
     XCTAssertTrue(shown(numberRow), "nine-key to quanpin")
     XCTAssertEqual(height(of: controller), taller, accuracy: 0.5)
-    try assertLetterKeysAre44(controller, "nine-key to quanpin")
+    try assertLetterKeysAre45(controller, "nine-key to quanpin")
     controller.viewDidDisappear(false)
 
     // 横屏不画数字行，转回竖屏时它在同一趟里回来。
@@ -636,7 +636,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     try layoutAtRequestedHeight(controller)
     XCTAssertTrue(shown(numberRow), "landscape to portrait")
     XCTAssertEqual(height(of: controller), taller, accuracy: 0.5)
-    try assertLetterKeysAre44(controller, "landscape to portrait")
+    try assertLetterKeysAre45(controller, "landscape to portrait")
     // 键区面板（这里是「更多」）按此刻的留白停在按键底边，与新建的五排键盘停在同一处。
     let rotated = try morePanelGap(controller)
     controller.viewDidDisappear(false)
@@ -2669,10 +2669,10 @@ final class KeyLayoutStyleTests: XCTestCase {
   }
 
   /// 26 键手机竖屏的字母键高 44pt（键帽收紧后的高度），与有几排无关。
-  private func assertLetterKeysAre44(_ controller: KeyboardViewController, _ label: String,
+  private func assertLetterKeysAre45(_ controller: KeyboardViewController, _ label: String,
                                      file: StaticString = #filePath, line: UInt = #line) throws {
     let letter = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == "字母 Q" }, file: file, line: line)
-    XCTAssertEqual(letter.bounds.height, 44, accuracy: 0.5, label, file: file, line: line)
+    XCTAssertEqual(letter.bounds.height, 45, accuracy: 0.5, label, file: file, line: line)
   }
 
   private func height(of controller: KeyboardViewController) -> CGFloat {

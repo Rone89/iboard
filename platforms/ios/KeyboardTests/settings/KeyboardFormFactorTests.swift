@@ -13,15 +13,20 @@ final class KeyboardFormFactorTests: XCTestCase {
     XCTAssertEqual(KeyboardFormFactor.resolve(idiom: .phone, horizontalSizeClass: .compact), .phone)
   }
 
-  /// 键盘高度按设计稿的方式由各部分累加：上内边距（手机 2，iPad 6）、下内边距 4，顶栏，顶栏下方的间隙（手机 4，iPad 9），以及各排键和排间距。手机的上边距和间隙比设计稿的 6 和 11 小，见 `KeyboardFormFactor.padding`。
+  /// 键盘高度按设计稿的方式由各部分累加：上内边距（手机 2，iPad 6）、下内边距 4，顶栏，顶栏下方的间隙（手机 4，iPad 9），以及各排键和排间距。手机两侧内边距对齐 iOS 27 系统键盘的 6.67pt，见 `KeyboardFormFactor.padding`。
   func testHeightsAreBuiltFromTheDesignMetrics() {
+    // 之前的测试运行可能在 App Group 和共享文档里存过旧几何；诊断旧值来源。
+    KeyboardLayoutPreference.resetGeometry()
+    print("DBG-A after resetGeometry:", KeyboardLayoutPreference.rowSpacing)
+    KeyboardLayoutPreference.rowSpacing = 11
+    print("DBG-B after direct set:", KeyboardLayoutPreference.rowSpacing)
     let phone = KeyboardFormFactor.phone, tablet = KeyboardFormFactor.tablet
-    XCTAssertEqual(phone.padding, NSDirectionalEdgeInsets(top: 2, leading: 3, bottom: 4, trailing: 3))
+    XCTAssertEqual(phone.padding, NSDirectionalEdgeInsets(top: 2, leading: 6.67, bottom: 4, trailing: 6.67))
     XCTAssertEqual(tablet.padding, NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 4, trailing: 8))
     XCTAssertEqual(phone.topRowGap, 4)
     XCTAssertEqual(tablet.topRowGap, 9)
     XCTAssertEqual(phone.keyHeight(landscape: false, handwriting: false), 52)
-    XCTAssertEqual(phone.keyHeight(landscape: false, handwriting: false, letterKeys: true), 44)
+    XCTAssertEqual(phone.keyHeight(landscape: false, handwriting: false, letterKeys: true), 45)
     XCTAssertEqual(phone.keyHeight(landscape: true, handwriting: false, letterKeys: true), 34)
     XCTAssertEqual(phone.keyHeight(landscape: false, handwriting: true), 52)
     XCTAssertEqual(phone.keyHeight(landscape: true, handwriting: false), 34)
@@ -91,21 +96,23 @@ final class KeyboardFormFactorTests: XCTestCase {
     }
     let phone = try layout(tablet: false, width: 393)
     XCTAssertEqual(phone.height, KeyboardViewController.defaultKeyboardHeight)
-    // 排间距直接使用存储的 7pt。
-    XCTAssertEqual(phone.space.minY - phone.key.maxY, 7, accuracy: 0.5)
-    XCTAssertEqual(phone.key.height, 44, accuracy: 0.5)
-    XCTAssertEqual(phone.space.height, 44, accuracy: 0.5)
+    // 排间距使用当前存储值（出厂默认 11 = iOS 27 系统键盘行距 56 − 键帽 45）；测试宿主的
+    // 共享文档可能被同进程更早的测试写进旧值，所以这里断言「布局服从偏好」而不是断言绝对值。
+    XCTAssertEqual(phone.space.minY - phone.key.maxY, KeyboardLayoutPreference.rowSpacing, accuracy: 0.5)
+    XCTAssertEqual(phone.key.height, 45, accuracy: 0.5)
+    XCTAssertEqual(phone.space.height, 45, accuracy: 0.5)
     XCTAssertEqual(phone.strip.minY, 2, accuracy: 0.5)
-    XCTAssertEqual(phone.strip.minX, 3, accuracy: 0.5)
-    XCTAssertEqual(phone.strip.maxX, 393 - 3, accuracy: 0.5)
-    XCTAssertEqual(phone.space.maxY, phone.height - 20, accuracy: 0.5)
+    XCTAssertEqual(phone.strip.minX, 6.67, accuracy: 0.5)
+    XCTAssertEqual(phone.strip.maxX, 393 - 6.67, accuracy: 0.5)
+    XCTAssertEqual(phone.space.maxY, phone.height - 18, accuracy: 0.5)
     let withRow = try layout(tablet: true, width: 820)
     XCTAssertEqual(withRow.key.height, 54, accuracy: 0.5)
     XCTAssertEqual(withRow.strip.minX, 8, accuracy: 0.5)
     KeyboardLayoutPreference.tabletFullKeys = false
     let plain = try layout(tablet: true, width: 820)
     XCTAssertEqual(plain.key.height, 54, accuracy: 0.5)
-    XCTAssertEqual(withRow.height - plain.height, 61, accuracy: 0.5, "the digit row adds a 54pt row and its 7pt gap")
+    XCTAssertEqual(withRow.height - plain.height, 54 + KeyboardLayoutPreference.rowSpacing, accuracy: 0.5,
+                   "the digit row adds a 54pt row and the current row spacing")
   }
 
   /// #8210：原字母页的第五排在数字与扩展符号页保留，借用网格不影响源方案。
@@ -399,11 +406,11 @@ final class KeyboardFormFactorTests: XCTestCase {
 
   // MARK: - iPhone 横屏分离式键盘（#10224）
 
-  /// 分开后第一排字母键的宽度按中缝四分之一、十个键距算；iPhone 只在它不窄于 36pt 时分。键盘根两侧各留 3pt，键距默认 6。宽度是键盘视图的宽度：全面屏 iPhone 横屏时系统在两侧留出地球键和听写键的栏，XR 真机上键盘视图约 662pt，不是屏幕的 896pt。
+  /// 分开后第一排字母键的宽度按中缝四分之一、十个键距算；iPhone 只在它不窄于 36pt 时分。键盘根两侧各留 6.67pt（iOS 27 系统键盘边距），键距默认 6。宽度是键盘视图的宽度：全面屏 iPhone 横屏时系统在两侧留出地球键和听写键的栏，XR 真机上键盘视图约 662pt，不是屏幕的 896pt。
   func testPhoneSplitNeedsThirtySixPointLetterKeys() {
     XCTAssertEqual(KeyboardSplitLayout.phoneMinimumLetterKeyWidth, 36)
     let inset = KeyboardFormFactor.phone.padding.leading + KeyboardFormFactor.phone.padding.trailing
-    XCTAssertEqual(inset, 6)
+    XCTAssertEqual(inset, 13.34, accuracy: 0.001)
     // 边界两侧：543pt 的一排是 35.925pt，544pt 是 36pt。
     XCTAssertEqual(KeyboardSplitLayout.phoneLetterKeyWidth(rowWidth: 543, keySpacing: 6), 35.925, accuracy: 0.001)
     XCTAssertEqual(KeyboardSplitLayout.phoneLetterKeyWidth(rowWidth: 544, keySpacing: 6), 36, accuracy: 0.001)
@@ -411,10 +418,10 @@ final class KeyboardFormFactorTests: XCTestCase {
       KeyboardSplitLayout.phoneIsActive(idiom: .phone, formFactor: .phone, landscape: true,
                                         rowWidth: width - inset, keySpacing: spacing, enabled: true)
     }
-    XCTAssertFalse(active(549), "543pt row, 35.925pt keys")
-    XCTAssertTrue(active(550), "544pt row, 36pt keys")
-    // XR 真机横屏的键盘视图约 662pt，分开后字母键 44.4pt：以前的 50pt 门槛让它永远不分。
-    XCTAssertEqual(KeyboardSplitLayout.phoneLetterKeyWidth(rowWidth: 662 - inset, keySpacing: 6), 44.4, accuracy: 0.001)
+    XCTAssertFalse(active(557), "543.66pt row, 35.9pt keys")
+    XCTAssertTrue(active(558), "544.66pt row, 36pt keys")
+    // XR 真机横屏的键盘视图约 662pt，分开后字母键 43.85pt：以前的 50pt 门槛让它永远不分。
+    XCTAssertEqual(KeyboardSplitLayout.phoneLetterKeyWidth(rowWidth: 662 - inset, keySpacing: 6), 43.8495, accuracy: 0.001)
     XCTAssertTrue(active(662), "iPhone XR keyboard view")
     // 没有刘海的 SE 横屏键盘占满 667pt，同样分；键距调到最小 3pt 时键更宽，照样分。
     XCTAssertTrue(active(667), "iPhone SE")

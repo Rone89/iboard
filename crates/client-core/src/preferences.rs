@@ -4352,7 +4352,7 @@ fn is_default_touch_keyboard_split_gap(value: &u8) -> bool {
 }
 
 fn default_touch_row_spacing_tenths() -> u8 {
-    70
+    110
 }
 
 fn default_candidate_font_family() -> String {
@@ -5449,7 +5449,7 @@ impl Preferences {
             return Err(PreferencesError::InvalidTextTrackpad);
         }
         if !(30..=60).contains(&self.touch_key_spacing_tenths)
-            || !(40..=100).contains(&self.touch_row_spacing_tenths)
+            || !(40..=110).contains(&self.touch_row_spacing_tenths)
             || !(-12..=48).contains(&self.touch_keyboard_height_adjustment)
         {
             return Err(PreferencesError::InvalidTouchKeyboardSpacing);

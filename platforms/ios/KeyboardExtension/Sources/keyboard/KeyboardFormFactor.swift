@@ -7,12 +7,13 @@ enum KeyboardFormFactor: Equatable {
   case phone
   case tablet
 
-  /// 26 键手机竖屏四排字母键的上下补偿留白。
-  static let phoneLetterVerticalPadding: CGFloat = 16
+  /// 26 键手机竖屏四排字母键的上下补偿留白：每排上下各 3.5pt，把 52pt 的排高压到 iOS 27 系统键盘的
+  /// 45pt 键帽（原设计稿 44pt 时每排 4）。
+  static let phoneLetterVerticalPadding: CGFloat = 14
 
-  /// 26 键手机竖屏有 `rows` 排键时，上下各留的补偿空间。五排时多出的一排也要保持 44pt 键帽。
+  /// 26 键手机竖屏有 `rows` 排键时，上下各留的补偿空间。五排时多出的一排也要保持 45pt 键帽。
   static func phoneLetterVerticalPadding(rows: Int) -> CGFloat {
-    CGFloat(rows) * 4
+    CGFloat(rows) * 3.5
   }
 
   static func resolve(
@@ -25,12 +26,13 @@ enum KeyboardFormFactor: Equatable {
     resolve(idiom: traits.userInterfaceIdiom, horizontalSizeClass: traits.horizontalSizeClass)
   }
 
-  /// 键盘在顶部那一行和按键四周的内边距（dc.html `kbPad`）：手机上方 2、两侧 3、下方 4，iPad 为 6 / 8 / 4。
+  /// 键盘在顶部那一行和按键四周的内边距（dc.html `kbPad`）：手机上方 2、下方 4，两侧对齐 iOS 27 系统键盘的
+  /// 6.67pt（UI Kit 20px@3x，见 IOS27_KEYBOARD_DESIGN.md 的取值）；iPad 为 6 / 8 / 4。
   ///
   /// 手机的上边距原是设计稿的 6：顶栏为了打字时按键不跳，空闲时也按读音行加候选行的高度留着，再加上边距和下面的间隔，iPhone 上按键以上占了约 72pt，比四排按键的三分之一还多。上边距和间隔（`topRowGap`）是这一截里纯空白的部分，所以从这两处压。
   var padding: NSDirectionalEdgeInsets {
     switch self {
-    case .phone: NSDirectionalEdgeInsets(top: 2, leading: 3, bottom: 4, trailing: 3)
+    case .phone: NSDirectionalEdgeInsets(top: 2, leading: 6.67, bottom: 4, trailing: 6.67)
     case .tablet: NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 4, trailing: 8)
     }
   }
@@ -42,10 +44,11 @@ enum KeyboardFormFactor: Equatable {
 
   /// 默认键盘高度下一排按键的高度。
   ///
-  /// 竖屏用设计稿的按键高度（`KeyboardHeightPercent.portraitKeyHeight`）：手机 52pt、26 键字母页 44pt，iPad 54pt。设计稿没有画横屏键盘，所以横屏沿用以前按系统尺寸做的横屏键盘的按键高度：手机 34pt，其中手写为 40pt，让书写区仍然够用；iPad 为更高的 73pt，和系统键盘一样随更宽的屏幕变大。
+  /// 竖屏用设计稿的按键高度（`KeyboardHeightPercent.portraitKeyHeight`）：手机 52pt、26 键字母页 45pt（iOS 27
+  /// 系统键盘实测键帽 45pt，原设计稿 44），iPad 54pt。设计稿没有画横屏键盘，所以横屏沿用以前按系统尺寸做的横屏键盘的按键高度：手机 34pt，其中手写为 40pt，让书写区仍然够用；iPad 为更高的 73pt，和系统键盘一样随更宽的屏幕变大。
   func keyHeight(landscape: Bool, handwriting: Bool, letterKeys: Bool = false) -> CGFloat {
     guard landscape else {
-      return self == .phone && letterKeys ? 44 : KeyboardHeightPercent.portraitKeyHeight(tablet: self == .tablet)
+      return self == .phone && letterKeys ? 45 : KeyboardHeightPercent.portraitKeyHeight(tablet: self == .tablet)
     }
     switch self {
     case .phone: return handwriting ? 40 : 34
