@@ -47,6 +47,14 @@ final class KeyboardSkinPickerView: UIView {
       tile.addAction(UIAction { _ in onSelectDesign(item.design) }, for: .primaryActionTriggered)
       return tile
     }
+    // 内置模板（含 iOS 原生）也直接可选：点一下就应用为自定义主题，不必先去 App 的编辑器里保存。
+    tiles += CustomKeyboardSkin.curatedTemplates.map { name, design in
+      let active = selected == GlobalThemeCatalog.customId && design == appliedDesign
+      let tile = KeyboardSkinTileView(preview: .designed(design), title: name, selected: active, panel: panel)
+      tile.accessibilityIdentifier = "templateSkinCard-" + name
+      tile.addAction(UIAction { _ in onSelectDesign(design) }, for: .primaryActionTriggered)
+      return tile
+    }
     grid.setTiles(tiles, preservingPage: false)
     // 打开时停在选中皮肤所在的那一页，让它的选中环在视野里。
     if let index = tiles.firstIndex(where: \.isSelected) {
