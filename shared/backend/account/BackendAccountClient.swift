@@ -7,7 +7,7 @@ import Foundation
 /// 版本身份写在 App 和键盘扩展各自的 Info.plist 里，键名与 macOS 相同（platforms/macos/src/core/EditionIdentity.h）：`MSIMEEdition` 是版本 id，`MSIMEInputSchemes` 是本版本提供的方案，`MSIMEDefaultScheme` 是回退方案，`MSIMEWubiMixedPinyinDefault` 是五笔混拼的默认值。full 不带这些键，没有 `MSIMEEdition` 就是 full，每个值都取引入版本之前的那个；测试进程同样读到 full。其他版本的 App Group 是 full 的标识加 `.<版本 id>`，两个版本同时装在一台设备上也不会读写对方的数据。只有 iOS 读 Info.plist，macOS 等平台编译这个文件时始终是 full，它们的版本身份另有来源。
 enum MSIMEAppEdition {
   static let fullIdentifier = "full"
-  static let fullAppGroupIdentifier = "group.app.msime.ios"
+  static let fullAppGroupIdentifier = "group.773JTTH9DK.app.msime.ios"
   static let fullDefaultScheme = "quanpin"
   static let fullURLScheme = "msime"
 

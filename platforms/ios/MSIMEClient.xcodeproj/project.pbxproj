@@ -27,6 +27,7 @@
 		03FACE0292F28008A9CFE54F /* KeyboardChatHistoryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C84616F00768E7DA4291F4 /* KeyboardChatHistoryPolicy.swift */; };
 		0401F417F0E941107235635F /* PromotionText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 652B32C59D45791D371669AB /* PromotionText.swift */; };
 		04026E4B12037C4BF9856011 /* EmailSuffixPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFE6A74D7F9F268EB038E0D8 /* EmailSuffixPolicy.swift */; };
+		04039D799FE765B9B58F4BF2 /* VoicePunctuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7AFEB0D601977936EB9B4A /* VoicePunctuation.swift */; };
 		040D1597F2F3DCA7CD0FC7D5 /* CandidateMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62B836D28DBED9680F0BBDD3 /* CandidateMarker.swift */; };
 		04418042A7B75FD7FC8DDB86 /* BackendInputModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C6E60D1255310204986D04 /* BackendInputModifiers.swift */; };
 		049EA8503D4877795B21C28E /* FrequencyAdjustmentPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3AB2A5BF965499D6D662031 /* FrequencyAdjustmentPreference.swift */; };
@@ -363,6 +364,7 @@
 		49933BC75AD7B456D92A9A36 /* KeyboardToolbarButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97AA91C710BBE7373B00A2D /* KeyboardToolbarButton.swift */; };
 		49A168437B180C190DE5ED5F /* TranslationProviderPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67826B857915C6E65F366518 /* TranslationProviderPreference.swift */; };
 		49C8FD95C073CB685AD2FF32 /* FourteenKeyLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 543C9DADA404F7AA48009C2B /* FourteenKeyLayout.swift */; };
+		4A005D5F79456928A07D4C24 /* VoicePunctuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7AFEB0D601977936EB9B4A /* VoicePunctuation.swift */; };
 		4A0645B6136F0211BAAE5DAE /* KeyboardSkinPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 056A372D26C6B68B89E7825B /* KeyboardSkinPickerView.swift */; };
 		4A3D8A5DB0BC8EA77F3ACD9C /* CandidateCanvasAssets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17741BB1CD90F04310170CA8 /* CandidateCanvasAssets.swift */; };
 		4A5C7A2A829DF9FAA747DA35 /* CommunitySkinTrialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 554DF108CE1D88971DE22972 /* CommunitySkinTrialView.swift */; };
@@ -387,6 +389,8 @@
 		4F04FAE6BAC1E84FB1EBFAA7 /* SymbolCandidateChipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69A52EDC8F4EF6FDE6B6C79B /* SymbolCandidateChipTests.swift */; };
 		4F06252B8888F915D81DB4E7 /* GlideTypingGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FD8491AFE005FCD91FC249 /* GlideTypingGesture.swift */; };
 		4F491FAE66EFFABB4B243CC5 /* OnlineCandidateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB0EAE607F7545FA0769CF9 /* OnlineCandidateProvider.swift */; };
+		4F7E74B0C1229D480AD5DB52 /* Pods_MSIMEApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BCD363F686437A4F7A0A938F /* Pods_MSIMEApp.framework */; };
+		4FC7904173704A637300713B /* Pods_MSIMEKeyboardExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F07CAFD22330D49F32E21B53 /* Pods_MSIMEKeyboardExtension.framework */; };
 		5022DD9FBC4B739F490D4F29 /* PluginEditorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBCE6AAD02B4C88413741AF /* PluginEditorModel.swift */; };
 		503E56126CCB1979D8DC4BEB /* OwnEditEchoWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24CFC7B25A297D666AB0B4BC /* OwnEditEchoWindow.swift */; };
 		5078F23BE45FA3D000CC384F /* KeyboardCloudClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE5D92375F4741B1A2E3BDA /* KeyboardCloudClipboard.swift */; };
@@ -424,6 +428,7 @@
 		56D83128B499AAB87AC60CEE /* LocalSpeechModelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D81D6CD9EC76C593AD3287 /* LocalSpeechModelsView.swift */; };
 		56F219C2DD544BBD8DAA4B3A /* BackendChatClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4382C16C3E9BCE74058CA5F8 /* BackendChatClient.swift */; };
 		57585332C5EB580BAE547BFA /* BackendCandidateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F8DF30A61A7F6604ED4032 /* BackendCandidateClient.swift */; };
+		5782F1FCADFEDFBFC546D44F /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B4C03B6E3171C65C81BC59EE /* LICENSE */; };
 		57B6CE08D7D6D5E556529821 /* BackendCommunityResourceClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7FA6A2465AAF8B5759E2157 /* BackendCommunityResourceClient.swift */; };
 		57C49313AF58A336E23C01A9 /* ImeModeMemoryPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 703F0A6DF0E8C6C550A36C13 /* ImeModeMemoryPreference.swift */; };
 		57C89EAF2F48CBDE254E6681 /* FakeRustTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E98D3FBDDCA31BF49882659 /* FakeRustTable.swift */; };
@@ -523,6 +528,7 @@
 		6B6C80EE440A5D595F52AE76 /* KeyboardCloudClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE5D92375F4741B1A2E3BDA /* KeyboardCloudClipboard.swift */; };
 		6BB07A13BC0E798DDC20C30B /* LocalSpeechModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12239F7A8C13CF7CC7C376B5 /* LocalSpeechModel.swift */; };
 		6C15CB1913FC55FE18DA4F97 /* EighteenKeyLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = D80EF68361517CA226C19DC8 /* EighteenKeyLayout.swift */; };
+		6C58630DBF87AB11678E31C5 /* VoicePunctuationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8CD9D35F7E2216C118FCB4 /* VoicePunctuationTests.swift */; };
 		6C5A0AA00DB661F5C289EDAF /* WordCharacterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A152549B4D3E07752BF4A2A /* WordCharacterTests.swift */; };
 		6CA2C66C2DCC95695C8D65FC /* LoginConsentPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 488D8F45870DB2FAFDE45A9E /* LoginConsentPolicy.swift */; };
 		6CB752D750521373CE35BAC1 /* KeyboardEmojiCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFBC401DFCE3F18547806B1E /* KeyboardEmojiCatalog.swift */; };
@@ -713,7 +719,6 @@
 		950EEAFC99D8DA760F4B52CA /* PersonalDictionaryImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70841255440CA3E4143108C1 /* PersonalDictionaryImport.swift */; };
 		958BECCA94E573DB016798F6 /* KeyboardPhrasesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F062B819666D4A4D9287AD8D /* KeyboardPhrasesView.swift */; };
 		9644D119B1C54F9EFD8C4D20 /* CandidatePanelSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C7C92F9595C8AC39C9A03C /* CandidatePanelSnapshot.swift */; };
-		B3D1199B76D5DF485F20A3BF /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9776B18C73C12963EBD7C59F /* LICENSE */; };
 		9692B7F90A2A531577DAF2CE /* OnlineTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720F2C5C7D633B6ECA1913B2 /* OnlineTransport.swift */; };
 		96F41804754520CC58688C26 /* SettingsOptionLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C134242D7F10017B55CF992C /* SettingsOptionLabel.swift */; };
 		978CA38256899EF37D37C680 /* KeyboardSkinBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF3ED60154586A3CB9CCD107 /* KeyboardSkinBackgroundView.swift */; };
@@ -853,6 +858,7 @@
 		B52F2FAB69DABC00963B1F70 /* KeyboardPunctuationContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03BDF370F68412D2706739B9 /* KeyboardPunctuationContext.swift */; };
 		B59AFC7FB9A8B92D0B5C3C2C /* RustCloudSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3F8C327CDE97B3864BE413 /* RustCloudSyncTests.swift */; };
 		B5B494FD599FD58008B49625 /* StrokeKeypadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F4950C6F74FAE801B8E9D22 /* StrokeKeypadView.swift */; };
+		B5DF5B1CCDCB38C25B3EC2A7 /* VoicePunctuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7AFEB0D601977936EB9B4A /* VoicePunctuation.swift */; };
 		B5E85B327D8AA1C1B4A88087 /* KeyboardVoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0714DB09F79EDE9A485EBE89 /* KeyboardVoiceView.swift */; };
 		B5F59564A0FB4F0D99604646 /* InlinePreeditPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7257003D3E4755834AC1188 /* InlinePreeditPreference.swift */; };
 		B613A6205364F21B96B9DBAC /* PersonalWordbookStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32CA0509FDC33EB78B2E316B /* PersonalWordbookStore.swift */; };
@@ -1143,6 +1149,7 @@
 		F6D208B84BC0CB049FE90F9E /* PersonalDictionaryImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70841255440CA3E4143108C1 /* PersonalDictionaryImport.swift */; };
 		F6DC532426FA15739D2EC01E /* SentenceAssociationPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27CF82584CFF6168FD5DA994 /* SentenceAssociationPreference.swift */; };
 		F6E6CDA6735358A1BDC96422 /* ReplyKeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD87E9001BFA2C28DCCCC9F /* ReplyKeyboardView.swift */; };
+		F6FFE3224DEAC4AA31C4407C /* VoicePunctuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7AFEB0D601977936EB9B4A /* VoicePunctuation.swift */; };
 		F7157E90E837FFDBC3E94480 /* KeyboardSkinBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF3ED60154586A3CB9CCD107 /* KeyboardSkinBackgroundView.swift */; };
 		F75E8F98F20493E807672BFB /* UsageReporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A42FAEB342260CCA9B4D581 /* UsageReporting.swift */; };
 		F77FC7E78184FAAE5426CBC3 /* UsageReportingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB19D5E11787887C1A08FCEE /* UsageReportingTests.swift */; };
@@ -1350,6 +1357,7 @@
 		241E775D6A085F275C789FCC /* language-dictionaries */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "language-dictionaries"; path = "../../target/ios/language-dictionaries"; sourceTree = SOURCE_ROOT; };
 		242213314EAC3989141C1BF8 /* AISkinGenerationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISkinGenerationView.swift; sourceTree = "<group>"; };
 		24CFC7B25A297D666AB0B4BC /* OwnEditEchoWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnEditEchoWindow.swift; sourceTree = "<group>"; };
+		24DC366C61E515EACF6900A7 /* Pods-MSIMEKeyboardExtension.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEKeyboardExtension.release.xcconfig"; path = "Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension.release.xcconfig"; sourceTree = "<group>"; };
 		252FD97AF6F8C9E6CFCAA2D3 /* LetterCornerHintTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LetterCornerHintTests.swift; sourceTree = "<group>"; };
 		25B1C8E88C7D7E0CA6F9BC93 /* CommunityDictionaryImportsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityDictionaryImportsTests.swift; sourceTree = "<group>"; };
 		25D1CD9785DF997C99638C35 /* KeyboardHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHomeView.swift; sourceTree = "<group>"; };
@@ -1422,6 +1430,7 @@
 		450BA21EB5160527283A918F /* CandidateCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateCanvasTests.swift; sourceTree = "<group>"; };
 		45B65369702DF08F20727C45 /* AboutUpdateRequestStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutUpdateRequestStateTests.swift; sourceTree = "<group>"; };
 		460A90066E261D34294ABDB8 /* DesignKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignKit.swift; sourceTree = "<group>"; };
+		4841BBE98CAB6FE7BE4B0757 /* Pods-MSIMEApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEApp.release.xcconfig"; path = "Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp.release.xcconfig"; sourceTree = "<group>"; };
 		488B833986CE8AAD950359C9 /* SkinCommunityAccountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinCommunityAccountTests.swift; sourceTree = "<group>"; };
 		488D8F45870DB2FAFDE45A9E /* LoginConsentPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginConsentPolicy.swift; sourceTree = "<group>"; };
 		48A3043BEB523A667119A0CF /* KeyboardKeyLayoutSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardKeyLayoutSettingsView.swift; sourceTree = "<group>"; };
@@ -1470,6 +1479,7 @@
 		5C721F2EB6F186F5A7C93B12 /* CustomService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomService.swift; sourceTree = "<group>"; };
 		5D3FB46140677FBE04AD2162 /* HandwritingCanvasCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandwritingCanvasCard.swift; sourceTree = "<group>"; };
 		5E0EC1E0D43CE10CB3870A65 /* CompositionCaretPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositionCaretPolicyTests.swift; sourceTree = "<group>"; };
+		5E7AFEB0D601977936EB9B4A /* VoicePunctuation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePunctuation.swift; sourceTree = "<group>"; };
 		5E84B9019E2218964EED1CBD /* SettingsRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRows.swift; sourceTree = "<group>"; };
 		5ED26487097D19CD4974775E /* BackendAccountClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendAccountClient.swift; sourceTree = "<group>"; };
 		5F03A68AA9F5CC4B135BEAD1 /* MetasequoiaTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetasequoiaTheme.swift; sourceTree = "<group>"; };
@@ -1546,6 +1556,7 @@
 		820E0D71CB5FF1C35CF579B1 /* EmailSuffixPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailSuffixPolicyTests.swift; sourceTree = "<group>"; };
 		8247FADFDC65265DAB0ABB43 /* MSIMEKeyboardTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MSIMEKeyboardTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		82618C844A1985076A84B3CF /* NineKeySidebarPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NineKeySidebarPreference.swift; sourceTree = "<group>"; };
+		8274C41D8163EECB3C53AD3B /* Pods-MSIMEApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEApp.debug.xcconfig"; path = "Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp.debug.xcconfig"; sourceTree = "<group>"; };
 		8287109EE6C4EB060ACDFD01 /* CandidateFontSizeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateFontSizeTests.swift; sourceTree = "<group>"; };
 		83C5BB90CF0932462B49BF08 /* LocalSpeechModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSpeechModelStore.swift; sourceTree = "<group>"; };
 		84C84616F00768E7DA4291F4 /* KeyboardChatHistoryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardChatHistoryPolicy.swift; sourceTree = "<group>"; };
@@ -1642,8 +1653,8 @@
 		AC601D4D0CBF4CCD8B1D39FA /* BackendLocalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendLocalStore.swift; sourceTree = "<group>"; };
 		ACD87E9001BFA2C28DCCCC9F /* ReplyKeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyKeyboardView.swift; sourceTree = "<group>"; };
 		AD218910A7F8A0937B5F9C4B /* SkinGenerationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinGenerationModel.swift; sourceTree = "<group>"; };
-		9776B18C73C12963EBD7C59F /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		AD52A986DB3B501E1E7974D2 /* InputSchemePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSchemePreference.swift; sourceTree = "<group>"; };
+		ADB965BAD8824F9D03FDBFDD /* Pods-MSIMEKeyboardExtension.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEKeyboardExtension.debug.xcconfig"; path = "Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension.debug.xcconfig"; sourceTree = "<group>"; };
 		AECD77C4832DAF8BE7348717 /* CandidatePageSizePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidatePageSizePreference.swift; sourceTree = "<group>"; };
 		AFA5AC2ED8E38D8E073C2C85 /* BackendDictionaryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendDictionaryClient.swift; sourceTree = "<group>"; };
 		AFE94AB86199A410B499F36A /* KeyboardAdjustLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAdjustLayout.swift; sourceTree = "<group>"; };
@@ -1658,6 +1669,7 @@
 		B2EB61063CAE3285B35F486F /* DictionarySnapshotWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySnapshotWorker.swift; sourceTree = "<group>"; };
 		B365A59F5CA8392059332A31 /* StatisticsAuthenticationGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsAuthenticationGate.swift; sourceTree = "<group>"; };
 		B3C0EC95BE1054CE00B48BE7 /* KeyboardFormFactorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardFormFactorTests.swift; sourceTree = "<group>"; };
+		B4C03B6E3171C65C81BC59EE /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		B4E0504938047C50A29C4222 /* KeyboardBottomHintTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBottomHintTests.swift; sourceTree = "<group>"; };
 		B5C089971B5D38E645D6A81A /* KeyboardUsageReporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardUsageReporting.swift; sourceTree = "<group>"; };
 		B5C7C92F9595C8AC39C9A03C /* CandidatePanelSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidatePanelSnapshot.swift; sourceTree = "<group>"; };
@@ -1669,6 +1681,7 @@
 		B958F722D77F264EB1AF5490 /* DoubaoHostFrameCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubaoHostFrameCodec.swift; sourceTree = "<group>"; };
 		BA1FE7CB15B9A5A9BCD3C244 /* offline-glosses */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "offline-glosses"; path = "../../target/ios/offline-glosses"; sourceTree = SOURCE_ROOT; };
 		BAFFAD7862417E1ED7B2FE00 /* BackendAccountSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendAccountSession.swift; sourceTree = "<group>"; };
+		BCD363F686437A4F7A0A938F /* Pods_MSIMEApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MSIMEApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD11D99530807021B657EBC3 /* VoiceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSettingsView.swift; sourceTree = "<group>"; };
 		BD3DBCF0D07C27E981A74FA1 /* AccountCodeLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCodeLoginView.swift; sourceTree = "<group>"; };
 		BDA6F08A3BB18BD9F6143D60 /* BoundedFileReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundedFileReaderTests.swift; sourceTree = "<group>"; };
@@ -1768,6 +1781,7 @@
 		DD529A5680B55F96705E74E4 /* KeyboardPanelButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardPanelButtonStyle.swift; sourceTree = "<group>"; };
 		DD5484BB43341C14418BF640 /* SystemSpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSpeechRecognizer.swift; sourceTree = "<group>"; };
 		DD631D4EDB5CF38EF5EAC720 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		DD8CD9D35F7E2216C118FCB4 /* VoicePunctuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePunctuationTests.swift; sourceTree = "<group>"; };
 		DE37C57DC5D9672B075F4F61 /* VoiceSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSessionView.swift; sourceTree = "<group>"; };
 		DE3CD6FB7B6261EEEA75BBA4 /* KeyboardFeedbackPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardFeedbackPreference.swift; sourceTree = "<group>"; };
 		DEAF15A86CDD5D3183D8708B /* InputSchemeRestoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSchemeRestoreTests.swift; sourceTree = "<group>"; };
@@ -1810,6 +1824,7 @@
 		EF89633F65684DF20D58CF81 /* SettingsAutosaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAutosaveTests.swift; sourceTree = "<group>"; };
 		F00250F90DDDC57808459590 /* vi-MIT.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "vi-MIT.txt"; sourceTree = "<group>"; };
 		F062B819666D4A4D9287AD8D /* KeyboardPhrasesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardPhrasesView.swift; sourceTree = "<group>"; };
+		F07CAFD22330D49F32E21B53 /* Pods_MSIMEKeyboardExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MSIMEKeyboardExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F0CE1B2A79B2393496CDEF85 /* GlobalTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalTheme.swift; sourceTree = "<group>"; };
 		F1ED59A26CD1D48229C6FCE0 /* msime-engine-dictionary-NOTICE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "msime-engine-dictionary-NOTICE.md"; sourceTree = "<group>"; };
 		F2134ADB15FD507683C832FF /* SkinCommunityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinCommunityTests.swift; sourceTree = "<group>"; };
@@ -1851,6 +1866,7 @@
 			files = (
 				829EEFF40B5139C0677D1E3C /* Security.framework in Frameworks */,
 				1E07C3CDA499858B400E0F57 /* SherpaOnnxC.xcframework in Frameworks */,
+				4F7E74B0C1229D480AD5DB52 /* Pods_MSIMEApp.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1875,6 +1891,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D37685BD149F3C46A55FDC88 /* Security.framework in Frameworks */,
+				4FC7904173704A637300713B /* Pods_MSIMEKeyboardExtension.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1954,6 +1971,18 @@
 			path = plugins;
 			sourceTree = "<group>";
 		};
+		09DD86944BC411F099C392CC /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				8274C41D8163EECB3C53AD3B /* Pods-MSIMEApp.debug.xcconfig */,
+				4841BBE98CAB6FE7BE4B0757 /* Pods-MSIMEApp.release.xcconfig */,
+				ADB965BAD8824F9D03FDBFDD /* Pods-MSIMEKeyboardExtension.debug.xcconfig */,
+				24DC366C61E515EACF6900A7 /* Pods-MSIMEKeyboardExtension.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		0D3C9EB21E80A97AC8A67F00 /* input */ = {
 			isa = PBXGroup;
 			children = (
@@ -1979,6 +2008,15 @@
 			path = input;
 			sourceTree = "<group>";
 		};
+		0D548A5B7FEFD0C0C9363853 /* msime-src */ = {
+			isa = PBXGroup;
+			children = (
+				B4C03B6E3171C65C81BC59EE /* LICENSE */,
+			);
+			name = "msime-src";
+			path = ../..;
+			sourceTree = "<group>";
+		};
 		11BE166BB8CCD2669A09A3C2 /* handwriting */ = {
 			isa = PBXGroup;
 			children = (
@@ -1989,15 +2027,6 @@
 				1C8710BA4EC739ADB8A35535 /* MLKitStatsOptOut.swift */,
 			);
 			path = handwriting;
-			sourceTree = "<group>";
-		};
-		904729A1862A276CA2F7850E /* msime */ = {
-			isa = PBXGroup;
-			children = (
-				9776B18C73C12963EBD7C59F /* LICENSE */,
-			);
-			name = msime;
-			path = ../..;
 			sourceTree = "<group>";
 		};
 		1CC78F9C3E0CD26C6B98F079 /* settings */ = {
@@ -2279,6 +2308,7 @@
 			isa = PBXGroup;
 			children = (
 				0714DB09F79EDE9A485EBE89 /* KeyboardVoiceView.swift */,
+				5E7AFEB0D601977936EB9B4A /* VoicePunctuation.swift */,
 				B0DC4F8D6A0415FE92057C89 /* VoiceSessionChannel.swift */,
 				1A5447CB7E52E5F1AB20940B /* VoiceTextHandoffStore.swift */,
 			);
@@ -2444,6 +2474,7 @@
 				8D46EFDD9BA187AAD3B6ECA1 /* KeyboardAITests.swift */,
 				40CC09A165A6615AB613AD90 /* KeyboardServiceFallbackTests.swift */,
 				1EED3E1167B76EB91F1811E3 /* SpaceVoicePanelTests.swift */,
+				DD8CD9D35F7E2216C118FCB4 /* VoicePunctuationTests.swift */,
 				6A1A614C1102F8D726E39906 /* VoiceSessionTests.swift */,
 			);
 			path = voice;
@@ -2454,6 +2485,8 @@
 			children = (
 				095C484ED3DA6A52CA13FE71 /* Security.framework */,
 				2CEE9A90474563EC951F0E24 /* SherpaOnnxC.xcframework */,
+				BCD363F686437A4F7A0A938F /* Pods_MSIMEApp.framework */,
+				F07CAFD22330D49F32E21B53 /* Pods_MSIMEKeyboardExtension.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -2684,8 +2717,8 @@
 				F9EA923EEA8552CA5B40C156 /* KeyboardTests */,
 				4F0AF611BB68015729427D50 /* licenses */,
 				E1C293D3D42B58A25A5BB2D4 /* licenses */,
+				0D548A5B7FEFD0C0C9363853 /* msime-src */,
 				03F8B35C0D4227CC69308EFB /* Resources */,
-				904729A1862A276CA2F7850E /* msime */,
 				2D0850B6CE243D7108C48DFC /* Services */,
 				9C7D7C31663A12BCDFE90671 /* ServiceTests */,
 				E2F03CE87181BE400AC6C881 /* SharedResources */,
@@ -2697,6 +2730,7 @@
 				E50D9446AC0C0A697D4470BE /* UITests */,
 				695B5F2FA61DA9679715EAEA /* Frameworks */,
 				6D00B944494B7757B6A99FF3 /* Products */,
+				09DD86944BC411F099C392CC /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -3036,8 +3070,6 @@
 				FD1FAECBA6298DF09C21B1D2 /* PBXTargetDependency */,
 			);
 			name = MSIMEDoubaoTransportTests;
-			packageProductDependencies = (
-			);
 			productName = MSIMEDoubaoTransportTests;
 			productReference = CA0AA119D7B8E03394F9B45C /* MSIMEDoubaoTransportTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3046,12 +3078,14 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = EA6CA7CFA57DE24FC1668CF8 /* Build configuration list for PBXNativeTarget "MSIMEApp" */;
 			buildPhases = (
+				245F2DE91985FA0E27D3F6A4 /* [CP] Check Pods Manifest.lock */,
 				EC014FA28FCBAB012020E4E6 /* Sources */,
 				D5C9342F07DAD5511F055CAF /* Resources */,
 				246CF307FB30ACAE3D86131B /* Frameworks */,
 				8C59C4D36C83E1356D0166F1 /* Embed Foundation Extensions */,
 				B0963B4600A70857BDA24483 /* Embed Frameworks */,
 				1261C1093F1558E416A98720 /* Stamp release date */,
+				000101F56C2492E3EC0C9AD1 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -3059,8 +3093,6 @@
 				1C21A4A3C9BC9D6DA65F033B /* PBXTargetDependency */,
 			);
 			name = MSIMEApp;
-			packageProductDependencies = (
-			);
 			productName = MSIMEApp;
 			productReference = 77450C11EF84BEE14C541BED /* MSIMEApp.app */;
 			productType = "com.apple.product-type.application";
@@ -3069,17 +3101,17 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7B611AF86618F9AEAB16721B /* Build configuration list for PBXNativeTarget "MSIMEKeyboardExtension" */;
 			buildPhases = (
+				8A13275A373C49D0BBEA2366 /* [CP] Check Pods Manifest.lock */,
 				78C3F436470369F328796665 /* Sources */,
 				BAA93AC612CB491E35DCFF2D /* Resources */,
 				70C5DE974A67E63BA77D968D /* Frameworks */,
+				7E2F1494E793EA2861F7AD48 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			name = MSIMEKeyboardExtension;
-			packageProductDependencies = (
-			);
 			productName = MSIMEKeyboardExtension;
 			productReference = A09AC0F9BA083FADB67F20C6 /* MSIMEKeyboardExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -3098,8 +3130,6 @@
 				62E99B5412E159EDA6164FD4 /* PBXTargetDependency */,
 			);
 			name = MSIMESharedTests;
-			packageProductDependencies = (
-			);
 			productName = MSIMESharedTests;
 			productReference = 860C897871B78BDA37D8F6CF /* MSIMESharedTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3118,8 +3148,6 @@
 				68C4B84CD26FD5F4E219E67D /* PBXTargetDependency */,
 			);
 			name = MSIMEKeyboardTests;
-			packageProductDependencies = (
-			);
 			productName = MSIMEKeyboardTests;
 			productReference = 8247FADFDC65265DAB0ABB43 /* MSIMEKeyboardTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3136,8 +3164,6 @@
 			dependencies = (
 			);
 			name = MSIMEKeyboardTestHost;
-			packageProductDependencies = (
-			);
 			productName = MSIMEKeyboardTestHost;
 			productReference = 2F50522701A0D6A3455AA353 /* MSIMEKeyboardTestHost.app */;
 			productType = "com.apple.product-type.application";
@@ -3154,8 +3180,6 @@
 				07B86242ED4BD13EF6A13688 /* PBXTargetDependency */,
 			);
 			name = MSIMEClientUITests;
-			packageProductDependencies = (
-			);
 			productName = MSIMEClientUITests;
 			productReference = 43376A1462AEF84BB7C4E3A9 /* MSIMEClientUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -3172,8 +3196,6 @@
 			dependencies = (
 			);
 			name = MSIMEServiceTests;
-			packageProductDependencies = (
-			);
 			productName = MSIMEServiceTests;
 			productReference = D2D08A7917CFE9663E9E57D3 /* MSIMEServiceTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3189,8 +3211,6 @@
 			dependencies = (
 			);
 			name = MSIMEDoubaoTransport;
-			packageProductDependencies = (
-			);
 			productName = MSIMEDoubaoTransport;
 			productReference = 391403CFE82802FB8570F86A /* MSIMEDoubaoTransport.framework */;
 			productType = "com.apple.product-type.framework";
@@ -3316,7 +3336,7 @@
 				D01D3BD63697B467209A4EE9 /* Assets.xcassets in Resources */,
 				5DEF6271B362D6938DEEFF7A /* ECDICT-MIT.txt in Resources */,
 				EEDABC563F556FDBBE40A504 /* GoogleSignIn-Dependencies.txt in Resources */,
-				B3D1199B76D5DF485F20A3BF /* LICENSE in Resources */,
+				5782F1FCADFEDFBFC546D44F /* LICENSE in Resources */,
 				301F0BC99740BCF9A6676CDB /* LaunchScreen.storyboard in Resources */,
 				7EB33C5330748EE93BA3A1DB /* MLKit-Dependencies.txt in Resources */,
 				84B7B0B173F1C93261D00BFC /* MLKit-NOTICES.txt in Resources */,
@@ -3353,6 +3373,23 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		000101F56C2492E3EC0C9AD1 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		1261C1093F1558E416A98720 /* Stamp release date */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -3372,6 +3409,67 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "bash \"$SRCROOT/scripts/stamp-release-date.sh\"";
+		};
+		245F2DE91985FA0E27D3F6A4 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-MSIMEApp-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		7E2F1494E793EA2861F7AD48 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		8A13275A373C49D0BBEA2366 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-MSIMEKeyboardExtension-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -3755,6 +3853,8 @@
 				0D17506BB8BEC3EB3F238962 /* ViewRequestTask.swift in Sources */,
 				D1EBC8A919403FF7EC801495 /* VocabularyReviewStore.swift in Sources */,
 				E40B14CB5026FF3469F20AA3 /* VocabularyReviewTests.swift in Sources */,
+				4A005D5F79456928A07D4C24 /* VoicePunctuation.swift in Sources */,
+				6C58630DBF87AB11678E31C5 /* VoicePunctuationTests.swift in Sources */,
 				FD33C3E42D48C4BF366EC00E /* VoiceSessionChannel.swift in Sources */,
 				AC2E477B10D66D04DACA2442 /* VoiceSessionTests.swift in Sources */,
 				63D1F52ED890530466D31FF3 /* VoiceTextHandoffStore.swift in Sources */,
@@ -3953,6 +4053,7 @@
 				624FA42ADFF223A018E177D5 /* UsageReporting.swift in Sources */,
 				084235F917F2BD09C9D4741A /* VerificationCodePolicy.swift in Sources */,
 				BB202272F3C0066F21159C19 /* VocabularyReviewStore.swift in Sources */,
+				B5DF5B1CCDCB38C25B3EC2A7 /* VoicePunctuation.swift in Sources */,
 				15AF6D3B3DB28ED27AE2EFC3 /* VoiceSessionChannel.swift in Sources */,
 				A11C9C468B2FEBEC20527576 /* VoiceTextHandoffStore.swift in Sources */,
 				4310AB5D1DAD95B897EA8C38 /* WubiCodeHintPreference.swift in Sources */,
@@ -4182,6 +4283,7 @@
 				AB82A31F6FBFD8A281B70A75 /* VerificationCodePolicyTests.swift in Sources */,
 				29F8B1C831FF4EF97BEE120C /* VocabularyReviewStore.swift in Sources */,
 				E683506A5EC1CB0A68260C80 /* VoiceProviderCatalog.swift in Sources */,
+				04039D799FE765B9B58F4BF2 /* VoicePunctuation.swift in Sources */,
 				2FBF23FC984850789DFBC449 /* VoiceSessionChannel.swift in Sources */,
 				BC22DA9B3FE192BAB9121B39 /* VoiceTextHandoffStore.swift in Sources */,
 				39B33B25456804C4D2036A2B /* VoiceTextHandoffTests.swift in Sources */,
@@ -4533,6 +4635,7 @@
 				BFD417BB1989C1BBF616297A /* VoicePolishPrompt.cpp in Sources */,
 				A801B56779A10DAFFB19E8E6 /* VoicePolishServiceView.swift in Sources */,
 				8E5AB164E335A2052D8C38FE /* VoiceProviderCatalog.swift in Sources */,
+				F6FFE3224DEAC4AA31C4407C /* VoicePunctuation.swift in Sources */,
 				432D7F28B9A689636CD74837 /* VoiceRecorder.swift in Sources */,
 				E79710D1FE6C484D6E0C2B63 /* VoiceSessionChannel.swift in Sources */,
 				E07B9C232FA2C667E6FFDF7F /* VoiceSessionService.swift in Sources */,
@@ -4793,6 +4896,7 @@
 		};
 		5AF12B4B57CD48C3EB29BDB6 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4841BBE98CAB6FE7BE4B0757 /* Pods-MSIMEApp.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconSky AppIconDusk AppIconVermilion";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -4832,7 +4936,7 @@
 					"-framework",
 					UIKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.msime.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rayc.corvid;
 				PRODUCT_NAME = MSIMEApp;
 				PROVISIONING_PROFILE_SPECIFIER = "$(MSIME_IOS_APP_PROFILE)";
 				SDKROOT = iphoneos;
@@ -4950,10 +5054,14 @@
 		};
 		AB0CEF9C61B9356129BF0552 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 24DC366C61E515EACF6900A7 /* Pods-MSIMEKeyboardExtension.release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = KeyboardExtension/Resources/MSIMEKeyboardExtension.entitlements;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = HandwritingInputViewFallback.swift;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "HandwritingInputView.swift HandwritingDownloadSession.m";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
+					HandwritingInputView.swift,
+					HandwritingDownloadSession.m,
+				);
 				INFOPLIST_FILE = KeyboardExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -4968,7 +5076,7 @@
 					"-lc++",
 					"-lsqlite3",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.msime.ios.keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rayc.corvid.keyboard;
 				PRODUCT_NAME = MSIMEKeyboardExtension;
 				PROVISIONING_PROFILE_SPECIFIER = "$(MSIME_IOS_KEYBOARD_PROFILE)";
 				SDKROOT = iphoneos;
@@ -5053,6 +5161,7 @@
 		};
 		BE4BB53300377418DB6E2313 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8274C41D8163EECB3C53AD3B /* Pods-MSIMEApp.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconSky AppIconDusk AppIconVermilion";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -5092,7 +5201,7 @@
 					"-framework",
 					UIKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.msime.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rayc.corvid;
 				PRODUCT_NAME = MSIMEApp;
 				PROVISIONING_PROFILE_SPECIFIER = "$(MSIME_IOS_APP_PROFILE)";
 				SDKROOT = iphoneos;
@@ -5171,10 +5280,14 @@
 		};
 		F2DD63377134879A36260F7D /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = ADB965BAD8824F9D03FDBFDD /* Pods-MSIMEKeyboardExtension.debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = KeyboardExtension/Resources/MSIMEKeyboardExtension.entitlements;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = HandwritingInputViewFallback.swift;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "HandwritingInputView.swift HandwritingDownloadSession.m";
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
+					HandwritingInputView.swift,
+					HandwritingDownloadSession.m,
+				);
 				INFOPLIST_FILE = KeyboardExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -5189,7 +5302,7 @@
 					"-lc++",
 					"-lsqlite3",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.msime.ios.keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rayc.corvid.keyboard;
 				PRODUCT_NAME = MSIMEKeyboardExtension;
 				PROVISIONING_PROFILE_SPECIFIER = "$(MSIME_IOS_KEYBOARD_PROFILE)";
 				SDKROOT = iphoneos;
