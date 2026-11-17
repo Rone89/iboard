@@ -127,9 +127,14 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
   }
 }
 
-/// 滑行时跟着手指画在键盘上的轨迹：强调色、约 4pt 宽的平滑折线，抬手后淡出。不接触摸，也不进无障碍树。
+/// 滑行时跟着手指画在键盘上的轨迹：1:1 复刻 Y 键盘的 `SwipeTrailView`
+/// （几何见 `SwipeTrailGeometry`，自 GlideKeyboard MIT 移植）——单一
+/// `CAShapeLayer`、固定半透明灰填充、无描边、随明暗不变。抬手淡出冻结帧。
+/// 不接触摸，也不进无障碍树。
 final class GlideTrailView: UIView {
   private let shape = CAShapeLayer()
+
+  private(set) var geometry = SwipeTrailGeometry()
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -137,68 +142,66 @@ final class GlideTrailView: UIView {
     isAccessibilityElement = false
     accessibilityElementsHidden = true
     accessibilityIdentifier = "glideTrail"
-    shape.fillColor = nil
-    shape.lineWidth = 4
-    shape.lineCap = .round
-    shape.lineJoin = .round
+    // 参照初始化：UIColor(white: 0.66, alpha: 0.32)，从不改变。
+    shape.fillColor = UIColor(white: 0.66, alpha: 0.32).cgColor
+    shape.strokeColor = nil
+    shape.fillRule = .nonZero
     layer.addSublayer(shape)
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  /// 是否正画着一条轨迹（淡出中的也算）。
-  var hasTrail: Bool { shape.path != nil }
-
-  func draw(_ samples: [GlideTyping.Sample], color: UIColor) {
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    shape.removeAllAnimations()
-    shape.opacity = 1
+  override func layoutSubviews() {
+    super.layoutSubviews()
     shape.frame = bounds
-    shape.strokeColor = color.resolvedColor(with: traitCollection).cgColor
-    shape.path = Self.path(through: samples.map { CGPoint(x: $0.x, y: $0.y) })
-    CATransaction.commit()
   }
 
-  /// 抬手后淡出再清空；淡出途中开始新的一笔时 `draw` 会把它直接换掉。
+  /// 是否正画着一条轨迹（淡出中的也算）。
+  var hasTrail: Bool { !geometry.isEmpty }
+
+  /// `color` 为调用点兼容保留、不使用：参照的填充固定为灰，明暗一致
+  /// （GlideKeyboard 移植时保留了同样的参照特征）。每个采样进几何后按
+  /// 参照裁剪重建色带；<2pt 的密采样被丢弃，超过 150pt 的旧尾巴滑出窗口。
+  func draw(_ samples: [GlideTyping.Sample], color: UIColor) {
+    geometry.reset()
+    for sample in samples { geometry.append(CGPoint(x: sample.x, y: sample.y)) }
+    redraw()
+  }
+
+  /// 抬手后重画一次冻结帧再淡出：透明度 1→0、0.4s easeOut、动画键 "fade"，
+  /// 模型透明度立即置 0。淡出途中开始新的一笔时 `draw` 会把动画移走。
   func fadeOut() {
-    guard shape.path != nil else { return }
-    CATransaction.begin()
-    CATransaction.setCompletionBlock { [weak self] in
-      guard let self, self.shape.opacity == 0 else { return }
-      self.shape.path = nil
-    }
+    guard !geometry.isEmpty else { return }
+    redraw()
     let fade = CABasicAnimation(keyPath: "opacity")
-    fade.fromValue = shape.presentation()?.opacity ?? 1
+    fade.fromValue = 1
     fade.toValue = 0
-    fade.duration = 0.2
+    fade.duration = 0.4
+    fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+    fade.isRemovedOnCompletion = false
+    fade.fillMode = .forwards
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
     shape.opacity = 0
-    shape.add(fade, forKey: "fade")
     CATransaction.commit()
+    shape.add(fade, forKey: "fade")
   }
 
   /// 立刻清空，不做动画（滑行被系统打断时）。
   func clear() {
+    shape.removeAnimation(forKey: "fade")
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    shape.removeAllAnimations()
+    shape.opacity = 1
     shape.path = nil
     CATransaction.commit()
+    geometry.reset()
   }
 
-  /// 经过各点中点的二次曲线：折线的每个拐角都被磨圆，首尾仍落在第一个和最后一个点上。
-  static func path(through points: [CGPoint]) -> CGPath? {
-    guard let first = points.first else { return nil }
-    let path = UIBezierPath()
-    path.move(to: first)
-    guard points.count > 2 else {
-      path.addLine(to: points[points.count - 1])
-      return path.cgPath
-    }
-    for index in 1..<(points.count - 1) {
-      let control = points[index], next = points[index + 1]
-      path.addQuadCurve(to: CGPoint(x: (control.x + next.x) / 2, y: (control.y + next.y) / 2), controlPoint: control)
-    }
-    path.addLine(to: points[points.count - 1])
-    return path.cgPath
+  /// 重建色带路径；隐式动画关闭，色带不在采样之间漂移。
+  private func redraw() {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    shape.path = geometry.path()
+    CATransaction.commit()
   }
 }

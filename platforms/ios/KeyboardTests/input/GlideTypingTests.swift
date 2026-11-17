@@ -180,15 +180,19 @@ final class GlideTypingTests: XCTestCase {
     XCTAssertEqual(points.last?[2], (5_999 * 4.17).rounded())
   }
 
-  func testTrailPathRunsFromTheFirstPointToTheLast() throws {
-    XCTAssertNil(GlideTrailView.path(through: []))
-    let points = [CGPoint(x: 10, y: 10), CGPoint(x: 60, y: 30), CGPoint(x: 110, y: 10), CGPoint(x: 160, y: 40)]
-    let path = try XCTUnwrap(GlideTrailView.path(through: points))
-    XCTAssertEqual(path.currentPoint, points[3])
-    let box = path.boundingBoxOfPath
-    XCTAssertEqual(box.minX, 10, accuracy: 0.01)
-    XCTAssertEqual(box.maxX, 160, accuracy: 0.01)
-    XCTAssertNotNil(GlideTrailView.path(through: Array(points.prefix(2))))
+  /// 轨迹视图的色带由 `SwipeTrailGeometry` 承担（几何断言在
+  /// SwipeTrailGeometryTests）；这里只看视图的生命周期：有采样即算有轨迹，
+  /// clear 后归零。
+  func testTrailViewTracksGeometryPresence() {
+    let trail = GlideTrailView(frame: CGRect(x: 0, y: 0, width: 400, height: 300))
+    XCTAssertFalse(trail.hasTrail)
+    trail.draw([GlideTyping.Sample(x: 10, y: 10, milliseconds: 0),
+                GlideTyping.Sample(x: 60, y: 30, milliseconds: 30),
+                GlideTyping.Sample(x: 110, y: 10, milliseconds: 60),
+                GlideTyping.Sample(x: 160, y: 40, milliseconds: 90)], color: .red)
+    XCTAssertTrue(trail.hasTrail)
+    trail.clear()
+    XCTAssertFalse(trail.hasTrail)
   }
 
   // MARK: - 会话
