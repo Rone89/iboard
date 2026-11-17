@@ -490,7 +490,6 @@
 		646DDE728B4C323C5CBBE572 /* BackendBoundedFileReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C644723BF97EB5CE275847 /* BackendBoundedFileReader.swift */; };
 		6485CD16F8FFD10148A63A9A /* MLKitStatsOptOutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA9AEEAB03B1005888107217 /* MLKitStatsOptOutTests.swift */; };
 		6492F138DE521AC5055F184B /* KeyboardSkinTrialTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 685BE6AFE6198B61D33EB140 /* KeyboardSkinTrialTests.swift */; };
-		64F600CAA2C5BEF285FEAE51 /* Pods_MSIMEKeyboardExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FE854CAF0FE6388B16819595 /* Pods_MSIMEKeyboardExtension.framework */; };
 		655BEA06FCC1FDC1F311CFD1 /* AppThemePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12E4A4E6D498517749D67839 /* AppThemePalette.swift */; };
 		659CCE2CA825D0FF09328626 /* ScrollEdgeEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA2E218C83BD4492D3233B5 /* ScrollEdgeEffects.swift */; };
 		65A5520FAFE161C34F8C842B /* BackendRustSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95C75B24716202A8D4ABCF61 /* BackendRustSessionStore.swift */; };
@@ -996,7 +995,6 @@
 		D4445A28B692C02D06750C10 /* InputSchemeLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60243E75D7C3BED247FAF7EE /* InputSchemeLabels.swift */; };
 		D45B9A1F1DE875832AB72B04 /* CustomThemeCandidateSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5634B081FC6ABBB98C23F4D7 /* CustomThemeCandidateSection.swift */; };
 		D45EB26792BA47A6717D7E09 /* DictionarySnapshotQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B65B316B421B3B207226096 /* DictionarySnapshotQueue.swift */; };
-		D460869CB3D7D15C29CE8E94 /* Pods_MSIMEApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 79A0502A29E02671B9AE4DA8 /* Pods_MSIMEApp.framework */; };
 		D4AB61039A0C861574C33411 /* AISkinServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 380144EA98A8648F53897AE8 /* AISkinServiceTests.swift */; };
 		D5363845C0499AC17DBC75CB /* CloudClipboardRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61012216361C7060D0B5D98 /* CloudClipboardRelay.swift */; };
 		D55E7A3806BA9534AF6E0705 /* DoubaoStaleOpenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99043029DF1A1518FA9296E9 /* DoubaoStaleOpenTests.swift */; };
@@ -1326,7 +1324,6 @@
 		18C398D5E9F0FF3D876F2391 /* DictionarySyncPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySyncPolicy.swift; sourceTree = "<group>"; };
 		18EB48D354D07B2AD46ECB31 /* CloudDictionaryTransferTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDictionaryTransferTests.swift; sourceTree = "<group>"; };
 		191AB35B3CA2D670F7300C33 /* SentenceAssociationSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceAssociationSettingsTests.swift; sourceTree = "<group>"; };
-		19313F335D74E82EDC91B302 /* Pods-MSIMEKeyboardExtension.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEKeyboardExtension.release.xcconfig"; path = "Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension.release.xcconfig"; sourceTree = "<group>"; };
 		19551104ADF98FBAE38A0C8F /* ViewRequestGenerationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewRequestGenerationTests.swift; sourceTree = "<group>"; };
 		1A17C6C604B27FD55632171E /* KeyboardStickerCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardStickerCatalogTests.swift; sourceTree = "<group>"; };
 		1A5447CB7E52E5F1AB20940B /* VoiceTextHandoffStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTextHandoffStore.swift; sourceTree = "<group>"; };
@@ -1347,7 +1344,6 @@
 		1F20B02F929E235778145090 /* python-pinyin-MIT.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "python-pinyin-MIT.txt"; sourceTree = "<group>"; };
 		1FC3FD90AEB79B885350DC86 /* TouchOneHandedSidePanelPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchOneHandedSidePanelPreference.swift; sourceTree = "<group>"; };
 		1FECD77FD58C6D535217A3B2 /* SharedPreferenceBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPreferenceBinding.swift; sourceTree = "<group>"; };
-		203DC9851A0C0FD2CDD0EEAB /* Pods-MSIMEKeyboardExtension.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEKeyboardExtension.debug.xcconfig"; path = "Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension.debug.xcconfig"; sourceTree = "<group>"; };
 		216D8833B005F351FF4DEA8D /* PersonalDictionaryScelImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalDictionaryScelImportTests.swift; sourceTree = "<group>"; };
 		21A8065AC801100136169DF2 /* VoicePause.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePause.swift; sourceTree = "<group>"; };
 		22B00BF172EF20CF2DA5EC53 /* DiagnosticLogSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogSettingsView.swift; sourceTree = "<group>"; };
@@ -1539,7 +1535,6 @@
 		77D126F41531500C21D7851D /* DesignInfoBubbleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignInfoBubbleTests.swift; sourceTree = "<group>"; };
 		7844D67F1C0AEF26F1DF1E8D /* CommonPhrasesRequestStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonPhrasesRequestStateTests.swift; sourceTree = "<group>"; };
 		7987ED59A86BCCC48CAE3C16 /* IOSCloudSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSCloudSettings.swift; sourceTree = "<group>"; };
-		79A0502A29E02671B9AE4DA8 /* Pods_MSIMEApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MSIMEApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A88CE15A172F9A54B2186B3 /* BackendSnapshotClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendSnapshotClient.swift; sourceTree = "<group>"; };
 		7A96144FAFD463E1EA64B913 /* KeyboardGeometrySettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardGeometrySettingsTests.swift; sourceTree = "<group>"; };
 		7AEC648B8DF5B836576B34E5 /* TypingStatistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingStatistics.swift; sourceTree = "<group>"; };
@@ -1827,11 +1822,9 @@
 		F2134ADB15FD507683C832FF /* SkinCommunityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinCommunityTests.swift; sourceTree = "<group>"; };
 		F21D593F5C1B1CFF5F5472C3 /* CommunityBlockedAuthorsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityBlockedAuthorsView.swift; sourceTree = "<group>"; };
 		F3223CD85934FCF0DF98B2D0 /* ClipboardHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHistoryTests.swift; sourceTree = "<group>"; };
-		F39708B95B793D9FF88F7B73 /* Pods-MSIMEApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEApp.debug.xcconfig"; path = "Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp.debug.xcconfig"; sourceTree = "<group>"; };
 		F3A4C31464531A1674DE5675 /* librime-octagram-BSD-3-Clause.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "librime-octagram-BSD-3-Clause.txt"; sourceTree = "<group>"; };
 		F4F0B158DC06CDC79157E149 /* sound-packs */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "sound-packs"; path = "../../target/ios/sound-packs"; sourceTree = SOURCE_ROOT; };
 		F5267A642A062ED2B0D892A6 /* KeySoundPackPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeySoundPackPolicy.swift; sourceTree = "<group>"; };
-		F5BF82C1F106ED7516E7E057 /* Pods-MSIMEApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEApp.release.xcconfig"; path = "Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp.release.xcconfig"; sourceTree = "<group>"; };
 		F63EAB6A92E9F05D12FA4811 /* rime-wubi86-jidian-Apache-2.0.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "rime-wubi86-jidian-Apache-2.0.txt"; sourceTree = "<group>"; };
 		F6DAB2E686FB2D17A3C176F4 /* CloudDictionaryApplyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDictionaryApplyView.swift; sourceTree = "<group>"; };
 		F7C36B0249387E896711FACF /* HelpcodeChoicePolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpcodeChoicePolicyTests.swift; sourceTree = "<group>"; };
@@ -1847,7 +1840,6 @@
 		FCFFA6968C2114DD29D1B4C1 /* OnboardingChoices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingChoices.swift; sourceTree = "<group>"; };
 		FD9FA2AA31325228FFBDEEEE /* CloudClipboardDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudClipboardDriver.swift; sourceTree = "<group>"; };
 		FE6226DE71CF70E28A4EC61D /* InputLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputLanguageTests.swift; sourceTree = "<group>"; };
-		FE854CAF0FE6388B16819595 /* Pods_MSIMEKeyboardExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MSIMEKeyboardExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF3ED60154586A3CB9CCD107 /* KeyboardSkinBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardSkinBackgroundView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -1866,7 +1858,6 @@
 			files = (
 				829EEFF40B5139C0677D1E3C /* Security.framework in Frameworks */,
 				1E07C3CDA499858B400E0F57 /* SherpaOnnxC.xcframework in Frameworks */,
-				D460869CB3D7D15C29CE8E94 /* Pods_MSIMEApp.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1891,7 +1882,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				D37685BD149F3C46A55FDC88 /* Security.framework in Frameworks */,
-				64F600CAA2C5BEF285FEAE51 /* Pods_MSIMEKeyboardExtension.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2473,8 +2463,6 @@
 			children = (
 				095C484ED3DA6A52CA13FE71 /* Security.framework */,
 				2CEE9A90474563EC951F0E24 /* SherpaOnnxC.xcframework */,
-				79A0502A29E02671B9AE4DA8 /* Pods_MSIMEApp.framework */,
-				FE854CAF0FE6388B16819595 /* Pods_MSIMEKeyboardExtension.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -2718,7 +2706,6 @@
 				E50D9446AC0C0A697D4470BE /* UITests */,
 				695B5F2FA61DA9679715EAEA /* Frameworks */,
 				6D00B944494B7757B6A99FF3 /* Products */,
-				E3CDFFD4113C976F5E356BF7 /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -2936,18 +2923,6 @@
 			path = SharedResources;
 			sourceTree = "<group>";
 		};
-		E3CDFFD4113C976F5E356BF7 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				F39708B95B793D9FF88F7B73 /* Pods-MSIMEApp.debug.xcconfig */,
-				F5BF82C1F106ED7516E7E057 /* Pods-MSIMEApp.release.xcconfig */,
-				203DC9851A0C0FD2CDD0EEAB /* Pods-MSIMEKeyboardExtension.debug.xcconfig */,
-				19313F335D74E82EDC91B302 /* Pods-MSIMEKeyboardExtension.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
 		E50D9446AC0C0A697D4470BE /* UITests */ = {
 			isa = PBXGroup;
 			children = (
@@ -3070,6 +3045,8 @@
 				FD1FAECBA6298DF09C21B1D2 /* PBXTargetDependency */,
 			);
 			name = MSIMEDoubaoTransportTests;
+			packageProductDependencies = (
+			);
 			productName = MSIMEDoubaoTransportTests;
 			productReference = CA0AA119D7B8E03394F9B45C /* MSIMEDoubaoTransportTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3078,14 +3055,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = EA6CA7CFA57DE24FC1668CF8 /* Build configuration list for PBXNativeTarget "MSIMEApp" */;
 			buildPhases = (
-				1AB5E2347671B9620D6B0AF1 /* [CP] Check Pods Manifest.lock */,
 				EC014FA28FCBAB012020E4E6 /* Sources */,
 				D5C9342F07DAD5511F055CAF /* Resources */,
 				246CF307FB30ACAE3D86131B /* Frameworks */,
 				8C59C4D36C83E1356D0166F1 /* Embed Foundation Extensions */,
 				B0963B4600A70857BDA24483 /* Embed Frameworks */,
 				1261C1093F1558E416A98720 /* Stamp release date */,
-				67D40D2A9B89AAB3FCF274F1 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -3093,6 +3068,8 @@
 				1C21A4A3C9BC9D6DA65F033B /* PBXTargetDependency */,
 			);
 			name = MSIMEApp;
+			packageProductDependencies = (
+			);
 			productName = MSIMEApp;
 			productReference = 77450C11EF84BEE14C541BED /* MSIMEApp.app */;
 			productType = "com.apple.product-type.application";
@@ -3101,17 +3078,17 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7B611AF86618F9AEAB16721B /* Build configuration list for PBXNativeTarget "MSIMEKeyboardExtension" */;
 			buildPhases = (
-				FEF7EBB1CA7C0145A7A0C7AA /* [CP] Check Pods Manifest.lock */,
 				78C3F436470369F328796665 /* Sources */,
 				BAA93AC612CB491E35DCFF2D /* Resources */,
 				70C5DE974A67E63BA77D968D /* Frameworks */,
-				92E65BA7B41C364CD993EDE7 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			name = MSIMEKeyboardExtension;
+			packageProductDependencies = (
+			);
 			productName = MSIMEKeyboardExtension;
 			productReference = A09AC0F9BA083FADB67F20C6 /* MSIMEKeyboardExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -3130,6 +3107,8 @@
 				62E99B5412E159EDA6164FD4 /* PBXTargetDependency */,
 			);
 			name = MSIMESharedTests;
+			packageProductDependencies = (
+			);
 			productName = MSIMESharedTests;
 			productReference = 860C897871B78BDA37D8F6CF /* MSIMESharedTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3148,6 +3127,8 @@
 				68C4B84CD26FD5F4E219E67D /* PBXTargetDependency */,
 			);
 			name = MSIMEKeyboardTests;
+			packageProductDependencies = (
+			);
 			productName = MSIMEKeyboardTests;
 			productReference = 8247FADFDC65265DAB0ABB43 /* MSIMEKeyboardTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3164,6 +3145,8 @@
 			dependencies = (
 			);
 			name = MSIMEKeyboardTestHost;
+			packageProductDependencies = (
+			);
 			productName = MSIMEKeyboardTestHost;
 			productReference = 2F50522701A0D6A3455AA353 /* MSIMEKeyboardTestHost.app */;
 			productType = "com.apple.product-type.application";
@@ -3180,6 +3163,8 @@
 				07B86242ED4BD13EF6A13688 /* PBXTargetDependency */,
 			);
 			name = MSIMEClientUITests;
+			packageProductDependencies = (
+			);
 			productName = MSIMEClientUITests;
 			productReference = 43376A1462AEF84BB7C4E3A9 /* MSIMEClientUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -3196,6 +3181,8 @@
 			dependencies = (
 			);
 			name = MSIMEServiceTests;
+			packageProductDependencies = (
+			);
 			productName = MSIMEServiceTests;
 			productReference = D2D08A7917CFE9663E9E57D3 /* MSIMEServiceTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3211,6 +3198,8 @@
 			dependencies = (
 			);
 			name = MSIMEDoubaoTransport;
+			packageProductDependencies = (
+			);
 			productName = MSIMEDoubaoTransport;
 			productReference = 391403CFE82802FB8570F86A /* MSIMEDoubaoTransport.framework */;
 			productType = "com.apple.product-type.framework";
@@ -3392,84 +3381,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "bash \"$SRCROOT/scripts/stamp-release-date.sh\"";
-		};
-		1AB5E2347671B9620D6B0AF1 /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-MSIMEApp-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		67D40D2A9B89AAB3FCF274F1 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		92E65BA7B41C364CD993EDE7 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		FEF7EBB1CA7C0145A7A0C7AA /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-MSIMEKeyboardExtension-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -4896,7 +4807,6 @@
 		};
 		5AF12B4B57CD48C3EB29BDB6 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F5BF82C1F106ED7516E7E057 /* Pods-MSIMEApp.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconSky AppIconDusk AppIconVermilion";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -5054,14 +4964,10 @@
 		};
 		AB0CEF9C61B9356129BF0552 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 19313F335D74E82EDC91B302 /* Pods-MSIMEKeyboardExtension.release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = KeyboardExtension/Resources/MSIMEKeyboardExtension.entitlements;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = HandwritingInputViewFallback.swift;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
-					HandwritingInputView.swift,
-					HandwritingDownloadSession.m,
-				);
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "HandwritingInputView.swift HandwritingDownloadSession.m";
 				INFOPLIST_FILE = KeyboardExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -5161,7 +5067,6 @@
 		};
 		BE4BB53300377418DB6E2313 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F39708B95B793D9FF88F7B73 /* Pods-MSIMEApp.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconSky AppIconDusk AppIconVermilion";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -5280,14 +5185,10 @@
 		};
 		F2DD63377134879A36260F7D /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 203DC9851A0C0FD2CDD0EEAB /* Pods-MSIMEKeyboardExtension.debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = KeyboardExtension/Resources/MSIMEKeyboardExtension.entitlements;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = HandwritingInputViewFallback.swift;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
-					HandwritingInputView.swift,
-					HandwritingDownloadSession.m,
-				);
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "HandwritingInputView.swift HandwritingDownloadSession.m";
 				INFOPLIST_FILE = KeyboardExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -61,7 +61,7 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: app.msime.ios
             CFBundleTypeRole: Editor
-            CFBundleURLSchemes: [msime]
+            CFBundleURLSchemes: [iboard]
           # Google 登录的回调 scheme，是下面 GIDClientID 倒过来写。
           - CFBundleURLName: app.msime.ios.google
             CFBundleTypeRole: Editor
