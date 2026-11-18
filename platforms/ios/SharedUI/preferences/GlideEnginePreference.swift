@@ -18,10 +18,24 @@ enum GlideEngineChoice: String, CaseIterable {
 
   /// 键盘没暂存词典时 GlideBeam 不可用：设置页隐藏该选项，已存的值照常读回、
   /// 键盘运行时静默回退（`KeyboardViewController.typeGlideWithGlideBeam`）。
+  ///
+  /// 词典只随键盘扩展打包（`glide-engine/` 文件夹引用）：扩展与测试宿主在
+  /// 自己的包里就有；设置 App 没有这一份，查的是**内嵌键盘扩展**的包
+  /// （与按键音效包、输入语言列表同一套读法）。两处都没有才算不可用。
   static var glidebeamAvailable: Bool {
-    Bundle.main.url(forResource: "pinyin", withExtension: "wmcd", subdirectory: "glide-engine") != nil
-      && Bundle.main.url(forResource: "ngrams", withExtension: "wmcn", subdirectory: "glide-engine") != nil
-      && Bundle.main.url(forResource: "glide", withExtension: "wmdict", subdirectory: "glide-engine") != nil
+    if let plugins = Bundle.main.builtInPlugInsURL,
+       let contents = try? FileManager.default.contentsOfDirectory(at: plugins, includingPropertiesForKeys: nil) {
+      let bundles = [Bundle.main] + contents.filter { $0.pathExtension == "appex" }.compactMap(Bundle.init(url:))
+      return bundles.contains(where: Self.hasDictionaries)
+    }
+    return Self.hasDictionaries(Bundle.main)
+  }
+
+  /// 词典三件套是匹配集，三个文件齐才算可用；缺任何一个都按不可用。
+  private static func hasDictionaries(_ bundle: Bundle) -> Bool {
+    bundle.url(forResource: "pinyin", withExtension: "wmcd", subdirectory: "glide-engine") != nil
+      && bundle.url(forResource: "ngrams", withExtension: "wmcn", subdirectory: "glide-engine") != nil
+      && bundle.url(forResource: "glide", withExtension: "wmdict", subdirectory: "glide-engine") != nil
   }
 }
 
