@@ -18,16 +18,26 @@ final class KeyboardSkinTests: XCTestCase {
     }
   }
 
-  /// 只有经典兜底（没有可取季节的应用主题）把背景交给系统底板；跟随系统的季节配色和设计都画自己的背景。
+  /// 原生皮肤、默认「跟随系统」及显式启用系统透底的模板均把背景交给系统 Liquid Glass 底板；其余皮肤和普通自定义设计各自画背景。
   func testOnlyNativeTokensLeaveTheBackgroundToTheSystemBackdrop() throws {
-    XCTAssertEqual(KeyboardTheme.system.drawsNativeBackground, !SeasonKeyboardTokens.isAvailable)
+    XCTAssertTrue(KeyboardTheme.system.drawsNativeBackground)
     XCTAssertEqual(KeyboardTheme.system.palette == nil, !SeasonKeyboardTokens.isAvailable)
-    let design = try XCTUnwrap(CustomKeyboardSkin.templates.first?.1)
-    XCTAssertFalse(KeyboardTheme.designed(design).drawsNativeBackground)
-    XCTAssertNil(KeyboardTheme.designed(design).palette)
+    let nativeLight = try XCTUnwrap(CustomKeyboardSkin.templates.first { $0.0 == "iOS 原生" }?.1)
+    XCTAssertTrue(KeyboardTheme.designed(nativeLight).drawsNativeBackground)
+    let mint = try XCTUnwrap(CustomKeyboardSkin.templates.first { $0.0 == "薄荷晨光" }?.1)
+    XCTAssertFalse(KeyboardTheme.designed(mint).drawsNativeBackground)
+    XCTAssertNil(KeyboardTheme.designed(mint).palette)
+
+    // 兼容早先未带 `usesSystemBackdrop` 字段的旧版「iOS 原生」/「iOS 原生（深色）」存储配置。
+    var legacyNative = nativeLight
+    legacyNative.usesSystemBackdrop = nil
+    XCTAssertTrue(KeyboardTheme.designed(legacyNative).drawsNativeBackground)
+    var legacyDark = try XCTUnwrap(CustomKeyboardSkin.templates.first { $0.0 == "iOS 原生（深色）" }?.1)
+    legacyDark.usesSystemBackdrop = nil
+    XCTAssertTrue(KeyboardTheme.designed(legacyDark).drawsNativeBackground)
   }
 
-  /// 「原生」不跟季节：背景交给系统底板，回车、候选和标识使用柔和水杉绿。
+  /// 「原生」不跟季节：背景交给系统底板，回车、候选和标识使用通过 WCAG 4.5:1 校验的 iOS 原生蓝。
   func testNativeDrawsTheSystemKeyboardAndLeavesTheBackgroundToTheSystemBackdrop() throws {
     selectAppTheme("qiushan")
     XCTAssertTrue(GlobalThemeCatalog.contains(GlobalThemeCatalog.nativeId))
@@ -43,39 +53,44 @@ final class KeyboardSkinTests: XCTestCase {
 
     let light = UITraitCollection(userInterfaceStyle: .light), dark = UITraitCollection(userInterfaceStyle: .dark)
     func hex(_ color: UIColor, _ traits: UITraitCollection) -> UInt32 { packed(color.resolvedColor(with: traits)) }
-    XCTAssertEqual(hex(skin.accent, light), 0x32664B)
-    XCTAssertEqual(hex(skin.accent, dark), 0x8AC4A2)
-    XCTAssertEqual(hex(skin.actionBackground, light), 0x32664B)
-    XCTAssertEqual(hex(skin.actionBackground, dark), 0x8AC4A2)
+    XCTAssertEqual(hex(skin.accent, light), 0x0A5DC8)
+    XCTAssertEqual(hex(skin.accent, dark), 0x8CC2FF)
+    XCTAssertEqual(hex(skin.actionBackground, light), 0x0A5DC8)
+    XCTAssertEqual(hex(skin.actionBackground, dark), 0x8CC2FF)
     XCTAssertEqual(hex(skin.actionForeground, light), 0xFFFFFF)
     XCTAssertEqual(hex(skin.actionForeground, dark), 0x000000)
     XCTAssertEqual(hex(skin.keyForeground, light), 0x000000)
     XCTAssertEqual(skin.accentSoft, SystemKeyboardTokens.accentSoft)
-    // 工具栏 logo 同样使用水杉绿，白色描边仍需清楚。
+    // 工具栏 logo 同样使用系统蓝，白色描边仍需满足 4.5:1 对比度。
     for (traits, percent, card) in [(light, 14.0, UIColor.white), (dark, 22.0, UIColor(red: 0x1C / 255, green: 0x1C / 255, blue: 0x1E / 255, alpha: 1))] {
-      let green = skin.accent.resolvedColor(with: traits)
+      let accentColor = skin.accent.resolvedColor(with: traits)
       XCTAssertGreaterThanOrEqual(CustomKeyboardSkin.contrast(hex(skin.actionForeground, traits), hex(skin.actionBackground, traits)), 4.5)
       XCTAssertGreaterThanOrEqual(CustomKeyboardSkin.contrast(hex(skin.accent, traits), hex(skin.background, traits)), 4.5)
-      XCTAssertEqual(hex(skin.logoCircle, traits), packed(AppThemePalette.mix(green, percent, card)))
-      XCTAssertEqual(hex(skin.logoMark, traits), packed(AppThemePalette.mix(green, traits.userInterfaceStyle == .dark ? 38 : 82, .black)))
+      XCTAssertEqual(hex(skin.logoCircle, traits), packed(AppThemePalette.mix(accentColor, percent, card)))
+      XCTAssertEqual(hex(skin.logoMark, traits), packed(AppThemePalette.mix(accentColor, traits.userInterfaceStyle == .dark ? 38 : 82, .black)))
       XCTAssertGreaterThanOrEqual(CustomKeyboardSkin.contrast(packed(skin.logoMark.resolvedColor(with: traits)), 0xFFFFFF), 4.5)
     }
     XCTAssertNotEqual(hex(skin.logoCircle, light), hex(KeyboardTheme.resolve(GlobalThemeCatalog.systemId, document: [:]).logoCircle, light))
     if #available(iOS 26.0, *) {
-      XCTAssertEqual(hex(skin.keyBackground, light), 0xFFFFFF)
-      XCTAssertEqual(hex(skin.functionKeyBackground, light), 0xFFFFFF)
-      XCTAssertEqual(hex(skin.keyBackground, dark), 0x464646)
-      XCTAssertEqual(hex(skin.functionKeyBackground, dark), 0x464646)
-      XCTAssertEqual(hex(skin.background, light), 0xE2E3E8)
+      XCTAssertEqual(hex(skin.keyBackground, light), 0xFDFEFF)
+      XCTAssertEqual(hex(skin.functionKeyBackground, light), 0xFDFEFF)
+      XCTAssertEqual(hex(skin.keyBackground, dark), 0xFFFFFF)
+      XCTAssertEqual(skin.keyBackground.resolvedColor(with: dark).cgColor.alpha, 0.17, accuracy: 0.005)
+      XCTAssertEqual(skin.functionKeyBackground.resolvedColor(with: dark).cgColor.alpha, 0.17, accuracy: 0.005)
+      XCTAssertEqual(hex(skin.opaqueKeyBackground, dark), 0x434344)
+      XCTAssertEqual(hex(skin.background, light), 0xE1E4E8)
+      XCTAssertEqual(hex(skin.background, dark), 0x1C1C1E)
       XCTAssertFalse(skin.hasShadow)
-      XCTAssertEqual(skin.cornerRadius, UIDevice.current.userInterfaceIdiom == .pad ? 8 : 6)
+      XCTAssertEqual(skin.cornerRadius, 8.5)
     } else {
       XCTAssertEqual(hex(skin.functionKeyBackground, light), 0xABB0BB)
       XCTAssertTrue(skin.hasShadow)
       XCTAssertEqual(hex(skin.keyShadowColor, light), 0x000000)
     }
-    // 跟随系统仍是季节配色。
-    XCTAssertEqual(KeyboardTheme.resolve(GlobalThemeCatalog.systemId, document: [:]).palette, SeasonKeyboardTokens.palette)
+    // 跟随系统保留季节配色用于键帽与强调色，但背板同样交由系统 Liquid Glass 透出。
+    let followSystem = KeyboardTheme.resolve(GlobalThemeCatalog.systemId, document: [:])
+    XCTAssertEqual(followSystem.palette, SeasonKeyboardTokens.palette)
+    XCTAssertTrue(followSystem.drawsNativeBackground)
   }
 
   /// 真实键盘选「原生」后背景只铺一层几乎透明的键盘底色，仍透出系统底板，回车使用水杉绿；附上浅色和深色渲染图。
@@ -243,8 +258,8 @@ final class KeyboardSkinTests: XCTestCase {
       }
     })
 
-    // 其他皮肤不变：面板本来就是不透明的皮肤底色，格子和翻页滚动视图保持无背景。
-    try withKeyboard(GlobalThemeCatalog.systemId, inspect: { _, picker in
+    // 非透底彩色皮肤不变：面板本来就是不透明的皮肤底色，格子和翻页滚动视图保持无背景。
+    try withKeyboard("paper", inspect: { _, picker in
       let skin = KeyboardTheme.current
       XCTAssertFalse(skin.drawsNativeBackground)
       XCTAssertEqual(picker.backgroundColor?.resolvedColor(with: traits), skin.background.resolvedColor(with: traits))
@@ -255,6 +270,21 @@ final class KeyboardSkinTests: XCTestCase {
     }, inspectSymbols: { panel in
       XCTAssertEqual(panel.backgroundColor?.resolvedColor(with: traits), KeyboardTheme.current.background.resolvedColor(with: traits))
       XCTAssertEqual(try XCTUnwrap(descendants(panel).first { $0.accessibilityIdentifier == "symbolGrid" }).backgroundColor?.cgColor.alpha ?? 0, 0)
+    })
+
+    // 「跟随系统」在保留季节配色的同时同样透出系统 Liquid Glass 底板（`nativeBackgroundFill`）。
+    try withKeyboard(GlobalThemeCatalog.systemId, inspect: { controller, picker in
+      let skin = KeyboardTheme.current
+      XCTAssertTrue(skin.drawsNativeBackground)
+      let fill = try XCTUnwrap(picker.backgroundColor).resolvedColor(with: traits)
+      XCTAssertGreaterThan(fill.cgColor.alpha, 0)
+      XCTAssertLessThanOrEqual(fill.cgColor.alpha, KeyboardTheme.nativeBackgroundFillAlpha + 0.0001)
+      let strip = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "candidateStrip" })
+      XCTAssertLessThanOrEqual(strip.backgroundColor?.resolvedColor(with: traits).cgColor.alpha ?? 0, KeyboardTheme.nativeBackgroundFillAlpha + 0.0001)
+    }, inspectSymbols: { panel in
+      let fill = try XCTUnwrap(panel.backgroundColor).resolvedColor(with: traits)
+      XCTAssertGreaterThan(fill.cgColor.alpha, 0)
+      XCTAssertLessThanOrEqual(fill.cgColor.alpha, KeyboardTheme.nativeBackgroundFillAlpha + 0.0001)
     })
   }
 
@@ -295,7 +325,7 @@ final class KeyboardSkinTests: XCTestCase {
     XCTAssertEqual(lightSeason.season, "autumn")
     let skin = KeyboardTheme.resolve(GlobalThemeCatalog.systemId, document: [:])
     XCTAssertEqual(skin.palette, SeasonKeyboardTokens.palette)
-    XCTAssertFalse(skin.drawsNativeBackground)
+    XCTAssertTrue(skin.drawsNativeBackground)
     XCTAssertEqual(skin, KeyboardTheme.resolve(GlobalThemeCatalog.systemId, document: [:]))
 
     let light = UITraitCollection(userInterfaceStyle: .light), dark = UITraitCollection(userInterfaceStyle: .dark)
@@ -983,12 +1013,28 @@ final class KeyboardSkinTests: XCTestCase {
   ///
   /// The selected candidate is held to 3:1 rather than 4.5:1. It is drawn semibold, and it is the design's own pairing: the native light accent `#2C7A4B` on `#D1D4DB` measures 3.5:1 and paper's `#2C7A4B` on `#E6E1D5` 4.0:1 (dc.html L1557-1559, client-core's built-in palettes). The floor still catches a theme that loses the selection outright.
   func testSkinTextContrastInBothAppearances() {
+    // 键帽若带透明叠层（如 iOS 27 深色原生的 17% 白），实际渲染时透出键盘底板，因此先与键盘底色混合后再测对比度。
+    func composited(_ color: UIColor, over backdrop: UIColor, style: UIUserInterfaceStyle) -> UIColor {
+      let traits = UITraitCollection(userInterfaceStyle: style)
+      let fg = color.resolvedColor(with: traits)
+      var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+      fg.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+      guard a1 < 0.999 else { return fg }
+      let bg = backdrop.resolvedColor(with: traits)
+      var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+      bg.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+      let inv = 1 - a1
+      return UIColor(red: r1 * a1 + r2 * inv, green: g1 * a1 + g2 * inv, blue: b1 * a1 + b2 * inv, alpha: 1)
+    }
     for id in GlobalThemeCatalog.ids {
       let skin = KeyboardTheme.resolve(id, document: [:])
       for style in [UIUserInterfaceStyle.light, .dark] {
-        for (name, foreground, background, floor) in [("key", skin.keyForeground, skin.keyBackground, 4.5),
-          ("function", skin.keyForeground, skin.functionKeyBackground, 4.5),
-          ("action", skin.actionForeground, skin.actionBackground, 4.5), ("accent", skin.accent, skin.background, 3)] {
+        for (name, foreground, background, floor) in [
+          ("key", skin.keyForeground, composited(skin.keyBackground, over: skin.background, style: style), 4.5),
+          ("function", skin.keyForeground, composited(skin.functionKeyBackground, over: skin.background, style: style), 4.5),
+          ("action", skin.actionForeground, skin.actionBackground, 4.5),
+          ("accent", skin.accent, skin.background, 3),
+        ] {
           let a = luminance(foreground, style: style), b = luminance(background, style: style)
           XCTAssertGreaterThanOrEqual((max(a, b) + 0.05) / (min(a, b) + 0.05), floor, "\(id) \(style.rawValue) \(name)")
         }

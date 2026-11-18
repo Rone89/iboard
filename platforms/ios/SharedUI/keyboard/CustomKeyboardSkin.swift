@@ -33,6 +33,17 @@ struct CustomKeyboardSkin: Codable, Equatable, Hashable, Sendable {
   var photo: Data?
   var photoShade: Double?
   var photoPosition: Double?
+  /// 为 `true` 时保留键帽与前景色，将键盘底板与候选栏背景交给系统 Liquid Glass 透出。
+  var usesSystemBackdrop: Bool? = nil
+
+  /// 判断是否启用系统透底背板；同时兼容早先未带该字段的旧版 `"iOS 原生"` 与 `"iOS 原生（深色）"` 模板数据。
+  var usesNativeSystemBackdrop: Bool {
+    if let usesSystemBackdrop { return usesSystemBackdrop }
+    guard photo == nil, gradientEnd == nil, pattern == 0 else { return false }
+    let isLegacyLight = background == 0xE1E4E8 && keyBackground == 0xFDFEFF && accent == 0x0A5DC8
+    let isLegacyDark = background == 0x1C1C1E && keyBackground == 0x434344 && accent == 0x8CC2FF
+    return isLegacyLight || isLegacyDark
+  }
 
 
   var normalized: Self {

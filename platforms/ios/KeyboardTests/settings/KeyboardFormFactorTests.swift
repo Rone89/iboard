@@ -39,8 +39,8 @@ final class KeyboardFormFactorTests: XCTestCase {
                    "a phone has no digit row")
     // 更宽的排间距加在键盘总高上，而不是从键高里扣。
     XCTAssertEqual(phone.keyboardHeight(topRow: 50, rowSpacing: 10, landscape: false, handwriting: false), 298)
-    // 26 键使用 44pt 键帽时保留键盘外框高度。
-    XCTAssertEqual(phone.keyboardHeight(topRow: 50, rowSpacing: 11, landscape: false, handwriting: false, letterKeys: true), 301)
+    // 手机竖屏 26 键直接按 45pt 键帽计算紧凑高度（取消 28pt 补偿留白）：2 + 50 + 4 + 4 × 45 + 3 × 11 + 4 = 273。
+    XCTAssertEqual(phone.keyboardHeight(topRow: 50, rowSpacing: 11, landscape: false, handwriting: false, letterKeys: true), 273)
     XCTAssertEqual(phone.keyboardHeight(topRow: 50, rowSpacing: 7, landscape: true, handwriting: false, letterKeys: true),
                    phone.keyboardHeight(topRow: 50, rowSpacing: 7, landscape: true, handwriting: false))
     // 数字行是整整一排键，平板加一排的高度而不是压扁字母。
@@ -95,7 +95,7 @@ final class KeyboardFormFactorTests: XCTestCase {
               space.convert(space.bounds, to: controller.view), height)
     }
     let phone = try layout(tablet: false, width: 393)
-    XCTAssertEqual(phone.height, KeyboardViewController.defaultKeyboardHeight)
+    XCTAssertEqual(phone.height, KeyboardViewController.keyboardHeight(letterKeys: true))
     // 排间距使用当前存储值（出厂默认 11 = iOS 27 系统键盘行距 56 − 键帽 45）；测试宿主的
     // 共享文档可能被同进程更早的测试写进旧值，所以这里断言「布局服从偏好」而不是断言绝对值。
     XCTAssertEqual(phone.space.minY - phone.key.maxY, KeyboardLayoutPreference.rowSpacing, accuracy: 0.5)
@@ -104,7 +104,7 @@ final class KeyboardFormFactorTests: XCTestCase {
     XCTAssertEqual(phone.strip.minY, 2, accuracy: 0.5)
     XCTAssertEqual(phone.strip.minX, 6.67, accuracy: 0.5)
     XCTAssertEqual(phone.strip.maxX, 393 - 6.67, accuracy: 0.5)
-    XCTAssertEqual(phone.space.maxY, phone.height - 18, accuracy: 0.5)
+    XCTAssertEqual(phone.space.maxY, phone.height - KeyboardFormFactor.phone.padding.bottom, accuracy: 0.5)
     let withRow = try layout(tablet: true, width: 820)
     XCTAssertEqual(withRow.key.height, 54, accuracy: 0.5)
     XCTAssertEqual(withRow.strip.minX, 8, accuracy: 0.5)
@@ -209,8 +209,7 @@ final class KeyboardFormFactorTests: XCTestCase {
         ? try key("nineKey1", in: controller)
         : try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == "字母 Q" })
       XCTAssertEqual(first.convert(first.bounds, to: controller.view).minY - strip.convert(strip.bounds, to: controller.view).maxY,
-                     KeyboardFormFactor.phone.topRowGap
-                       + (scheme == .quanpin ? KeyboardFormFactor.phoneLetterVerticalPadding : 0),
+                     KeyboardFormFactor.phone.topRowGap,
                      accuracy: 0.5, "\(scheme)")
     }
   }
@@ -354,7 +353,45 @@ final class KeyboardFormFactorTests: XCTestCase {
     for identifier in ["letterDeleteKey", "returnKey"] {
       XCTAssertFalse(try key(identifier, in: phone).isHidden, identifier)
     }
-    XCTAssertEqual(try key("shiftButton", in: phone).bounds.width, 44, accuracy: 0.5)
+    let phoneKeysWidth = 390 - KeyboardFormFactor.phone.padding.leading - KeyboardFormFactor.phone.padding.trailing
+    let expectedEdge = KeyboardFormFactor.phoneThirdRowEdgeLayout(
+      keysWidth: phoneKeysWidth, keySpacing: CGFloat(KeyboardLayoutPreference.keySpacing))
+    XCTAssertEqual(try key("shiftButton", in: phone).bounds.width, expectedEdge.width, accuracy: 0.5)
+    XCTAssertEqual(try key("letterDeleteKey", in: phone).bounds.width, expectedEdge.width, accuracy: 0.5)
+  }
+
+  /// 手机 26 键三排字母（Q–P、A–L、Z–M）在 SE 320pt、390pt 与 18PM 440pt 屏宽下严格等宽，且 Z–M 与第二排 S–K 纵向 1:1 对齐。
+  @MainActor
+  func testPhoneTwentySixLetterKeysKeepEqualWidthAndVerticalAlignment() throws {
+    enableAllInputSchemes()
+    let previous = InputSchemePreference.scheme
+    defer { InputSchemePreference.scheme = previous }
+    InputSchemePreference.scheme = .quanpin
+    let keySpacing = CGFloat(KeyboardLayoutPreference.keySpacing)
+    for width: CGFloat in [320, 390, 440] {
+      let controller = KeyboardViewController()
+      controller.loadViewIfNeeded()
+      controller.view.frame = CGRect(x: 0, y: 0, width: width, height: KeyboardViewController.keyboardHeight(letterKeys: true))
+      controller.viewWillAppear(false)
+      controller.view.layoutIfNeeded()
+      func frame(letter: String) throws -> CGRect {
+        let view = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == "字母 \(letter)" } as? UIButton)
+        return view.convert(view.bounds, to: controller.view)
+      }
+      let q = try frame(letter: "Q"), p = try frame(letter: "P")
+      let a = try frame(letter: "A"), s = try frame(letter: "S"), k = try frame(letter: "K"), l = try frame(letter: "L")
+      let z = try frame(letter: "Z"), m = try frame(letter: "M")
+      let keysWidth = width - KeyboardFormFactor.phone.padding.leading - KeyboardFormFactor.phone.padding.trailing
+      let expected = KeyboardFormFactor.phoneLetterKeyMetrics(keysWidth: keysWidth, keySpacing: keySpacing).keyWidth
+      let edge = KeyboardFormFactor.phoneThirdRowEdgeLayout(keysWidth: keysWidth, keySpacing: keySpacing)
+      for (name, rect) in [("Q", q), ("P", p), ("A", a), ("L", l), ("Z", z), ("M", m)] {
+        XCTAssertEqual(rect.width, expected, accuracy: 0.5, "\(width)pt \(name)")
+      }
+      XCTAssertEqual(z.minX, s.minX, accuracy: 0.5, "\(width)pt Z 与 S 左对齐")
+      XCTAssertEqual(m.maxX, k.maxX, accuracy: 0.5, "\(width)pt M 与 K 右对齐")
+      XCTAssertEqual(try key("shiftButton", in: controller).bounds.width, edge.width, accuracy: 0.5, "\(width)pt ⇧")
+      XCTAssertEqual(try key("letterDeleteKey", in: controller).bounds.width, edge.width, accuracy: 0.5, "\(width)pt ⌫")
+    }
   }
 
   /// Tab 在组字时对应桌面端的 `navigation.tab` 翻页，默认开。

@@ -7,13 +7,27 @@ enum KeyboardFormFactor: Equatable {
   case phone
   case tablet
 
-  /// 26 键手机竖屏四排字母键的上下补偿留白：每排上下各 3.5pt，把 52pt 的排高压到 iOS 27 系统键盘的
-  /// 45pt 键帽（原设计稿 44pt 时每排 4）。
-  static let phoneLetterVerticalPadding: CGFloat = 14
+  /// 26 键手机竖屏已取消额外上下补偿留白，直接按 45pt 键帽排满以对齐 iOS 27 原生键盘高度。
+  static let phoneLetterVerticalPadding: CGFloat = 0
 
-  /// 26 键手机竖屏有 `rows` 排键时，上下各留的补偿空间。五排时多出的一排也要保持 45pt 键帽。
+  /// 26 键手机竖屏有 `rows` 排键时上下额外补偿空间，目前固定为 `0`。
   static func phoneLetterVerticalPadding(rows: Int) -> CGFloat {
-    CGFloat(rows) * 3.5
+    0
+  }
+
+  /// 手机 26 键第一排（10 键）单颗字母键宽度与水平节距：直接复用共享 `KeyboardGeometry` 计算。
+  static func phoneLetterKeyMetrics(keysWidth: CGFloat, keySpacing: CGFloat) -> (keyWidth: CGFloat, pitch: CGFloat) {
+    KeyboardGeometry.phoneLetterKeyMetrics(keysWidth: keysWidth, keySpacing: keySpacing)
+  }
+
+  /// 手机 26 键第二排（A–L）左右内边距：直接复用共享 `KeyboardGeometry` 计算。
+  static func phoneMiddleRowHorizontalInset(keysWidth: CGFloat, keySpacing: CGFloat) -> CGFloat {
+    KeyboardGeometry.phoneMiddleRowHorizontalInset(keysWidth: keysWidth, keySpacing: keySpacing)
+  }
+
+  /// 手机 26 键第三排（⇧ Z–M ⌫）左右功能键宽度与间距：直接复用共享 `KeyboardGeometry` 计算。
+  static func phoneThirdRowEdgeLayout(keysWidth: CGFloat, keySpacing: CGFloat) -> (width: CGFloat, gap: CGFloat) {
+    KeyboardGeometry.phoneThirdRowEdgeLayout(keysWidth: keysWidth, keySpacing: keySpacing)
   }
 
   static func resolve(
@@ -72,11 +86,8 @@ enum KeyboardFormFactor: Equatable {
     let keyBlock = KeyboardHeightPercent.keyBlockHeight(
       keyHeight: keyHeight(landscape: landscape, handwriting: handwriting, letterKeys: letterKeys),
       rows: rows, rowSpacing: rowSpacing)
-    let standardBlock = KeyboardHeightPercent.keyBlockHeight(
-      keyHeight: keyHeight(landscape: landscape, handwriting: handwriting),
-      rows: rows, rowSpacing: rowSpacing)
-    // 26 键的键帽从 52pt 收紧到 44pt 后，保留原来的键盘外框高度，省下的空间用于键帽高度。
-    let letterHeightCompensation = self == .phone && letterKeys ? standardBlock - keyBlock : 0
+    // 手机竖屏 26 键直接按 45pt 键帽计算紧凑高度，不再加回 52pt 标准键帽多出的 28pt 留白，使键盘总高（约 263pt）与首行位置对齐 iOS 27 原生键盘。
+    let letterHeightCompensation: CGFloat = 0
     return padding.top + topRow + (topRow > 0 ? topRowGap : 0)
       + keyBlock + letterHeightCompensation
       + padding.bottom

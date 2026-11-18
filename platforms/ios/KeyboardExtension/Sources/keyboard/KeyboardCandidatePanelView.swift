@@ -120,7 +120,7 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
     accessibilityIdentifier = "candidatePanel"
     // 在按键区里透出键盘自己的背景，与它所替代的按键下方一样。
     backgroundColor = canvas?.panelLoaded == true ? .clear : palette?.surface
-      ?? (showsHeader && columns == nil ? skin.keyBackground.withAlphaComponent(0.98) : .clear)
+      ?? (showsHeader && columns == nil ? skin.opaqueKeyBackground.withAlphaComponent(0.98) : .clear)
 
     scrollView.translatesAutoresizingMaskIntoConstraints = false
     scrollView.alwaysBounceVertical = false

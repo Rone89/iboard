@@ -511,7 +511,7 @@ final class KeyboardKeyButton: UIButton {
     // 取未经变换的 frame：按键可能已经缩放到一半。
     let key = superview?.convert(untransformedFrame, to: host) ?? convert(bounds, to: host)
     preview.show(title, key: key, wide: KeyPressPreviewView.isWide(key: bounds.width, letter: rowLetterWidth),
-                 fill: skin.keyBackground.resolvedColor(with: traitCollection).withAlphaComponent(1),
+                 fill: skin.opaqueKeyBackground.resolvedColor(with: traitCollection),
                  text: skin.keyForeground.resolvedColor(with: traitCollection),
                  monospaced: skin.usesMonospacedFont)
     pressPreview = preview
@@ -720,12 +720,16 @@ final class CandidateScrollView: UIScrollView {
     super.init(frame: frame)
     delaysContentTouches = false
     disableEdgeEffects()
+    layer.cornerRadius = 8
+    layer.cornerCurve = .continuous
   }
 
   required init?(coder: NSCoder) {
     super.init(coder: coder)
     delaysContentTouches = false
     disableEdgeEffects()
+    layer.cornerRadius = 8
+    layer.cornerCurve = .continuous
   }
 
   override func touchesShouldCancel(in view: UIView) -> Bool {

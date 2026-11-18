@@ -38,7 +38,7 @@ final class KeyboardNineKeyPanelColumns {
   /// `makeKey` 造一个与键区同样外观的功能键：标题、无障碍名称、按下动作。
   init(makeKey: (String, String, @escaping () -> Void) -> UIButton) {
     leading.accessibilityIdentifier = "candidatePanelSpellingColumn"
-    leading.backgroundColor = KeyboardTheme.current.keyBackground.withAlphaComponent(0.5)
+    leading.backgroundColor = KeyboardTheme.current.opaqueKeyBackground.withAlphaComponent(0.5)
     leading.layer.cornerRadius = 8
     leading.clipsToBounds = true
 

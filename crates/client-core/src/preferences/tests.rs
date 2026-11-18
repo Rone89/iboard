@@ -5936,7 +5936,7 @@ fn touch_keyboard_spacing_uses_apple_defaults_bounds_and_legacy_roundtrip() {
     fs::write(store.path(), &bytes).unwrap();
     let loaded = store.load().unwrap();
     assert_eq!(loaded.preferences.touch_key_spacing_tenths, 60);
-    assert_eq!(loaded.preferences.touch_row_spacing_tenths, 70);
+    assert_eq!(loaded.preferences.touch_row_spacing_tenths, 110);
     assert_eq!(loaded.preferences.touch_keyboard_height_adjustment, 0);
     assert!(!loaded.preferences.touch_voice_shortcut);
     assert_eq!(
@@ -5994,7 +5994,7 @@ fn touch_keyboard_spacing_uses_apple_defaults_bounds_and_legacy_roundtrip() {
         ("touch_key_spacing_tenths", 29),
         ("touch_key_spacing_tenths", 61),
         ("touch_row_spacing_tenths", 39),
-        ("touch_row_spacing_tenths", 101),
+        ("touch_row_spacing_tenths", 111),
     ] {
         let mut invalid = saved.preferences.clone();
         match key {

@@ -134,13 +134,14 @@ final class OneHandModeTests: XCTestCase {
 
     let gutter = try view("oneHandGutter", in: controller)
     XCTAssertFalse(gutter.isHidden)
-    let available = controller.view.bounds.width - 6
+    let padding = KeyboardFormFactor.phone.padding
+    let available = controller.view.bounds.width - padding.leading - padding.trailing
     let column = gutter.convert(gutter.bounds, to: controller.view)
     XCTAssertEqual(column.width, available * KeyboardOneHandLayout.gutterRatio, accuracy: 0.5)
-    XCTAssertEqual(column.minX, 3, accuracy: 0.5)
+    XCTAssertEqual(column.minX, padding.leading, accuracy: 0.5)
     let space = try frame("spaceKey", in: controller)
     let delete = try frame("letterDeleteKey", in: controller)
-    XCTAssertEqual(delete.maxX, controller.view.bounds.width - 3, accuracy: 0.5, "the keys reach the right edge")
+    XCTAssertEqual(delete.maxX, controller.view.bounds.width - padding.trailing, accuracy: 0.5, "the keys reach the right edge")
     XCTAssertGreaterThanOrEqual(space.minX, column.maxX)
     let letterQ = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == "字母 Q" })
     XCTAssertEqual(letterQ.convert(letterQ.bounds, to: controller.view).minX, column.maxX + KeyboardOneHandLayout.gap, accuracy: 0.5)
@@ -153,7 +154,9 @@ final class OneHandModeTests: XCTestCase {
     // 中间字母行的半键缩进按变窄后的按键宽度计算。
     let middle = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == "字母 A" }?.superview as? UIStackView)
     XCTAssertEqual(middle.layoutMargins.left,
-                   KeyboardOneHandLayout.keysWidth(available: available, mode: .right) * KeyboardGeometry(keySpacing: 6, rowSpacing: 7).letterInsetRatio,
+                   KeyboardFormFactor.phoneMiddleRowHorizontalInset(
+                     keysWidth: KeyboardOneHandLayout.keysWidth(available: available, mode: .right),
+                     keySpacing: CGFloat(KeyboardLayoutPreference.keySpacing)),
                    accuracy: 0.5)
 
     swap.sendActions(for: .primaryActionTriggered)
@@ -161,8 +164,8 @@ final class OneHandModeTests: XCTestCase {
     XCTAssertEqual(KeyboardLayoutPreference.oneHanded, .left)
     XCTAssertEqual(swap.icon, .oneHandSwapRight)
     let moved = gutter.convert(gutter.bounds, to: controller.view)
-    XCTAssertEqual(moved.maxX, controller.view.bounds.width - 3, accuracy: 0.5)
-    XCTAssertEqual(letterQ.convert(letterQ.bounds, to: controller.view).minX, 3, accuracy: 0.5, "the keys moved to the left edge")
+    XCTAssertEqual(moved.maxX, controller.view.bounds.width - padding.trailing, accuracy: 0.5)
+    XCTAssertEqual(letterQ.convert(letterQ.bounds, to: controller.view).minX, padding.leading, accuracy: 0.5, "the keys moved to the left edge")
     XCTAssertLessThanOrEqual(try frame("letterDeleteKey", in: controller).maxX, moved.minX)
 
     try control("oneHandExit", in: controller).sendActions(for: .primaryActionTriggered)
@@ -191,9 +194,11 @@ final class OneHandModeTests: XCTestCase {
     let controller = makeController()
     let gutter = try view("oneHandGutter", in: controller)
     XCTAssertFalse(gutter.isHidden)
-    XCTAssertEqual(gutter.convert(gutter.bounds, to: controller.view).maxX, controller.view.bounds.width - 3, accuracy: 0.5)
+    let padding = KeyboardFormFactor.phone.padding
+    XCTAssertEqual(gutter.convert(gutter.bounds, to: controller.view).maxX, controller.view.bounds.width - padding.trailing, accuracy: 0.5)
     let menu = try openMenu(in: controller)
-    XCTAssertEqual(menu.convert(menu.bounds, to: controller.view).width, controller.view.bounds.width - 6, accuracy: 0.5,
+    XCTAssertEqual(menu.convert(menu.bounds, to: controller.view).width,
+                   controller.view.bounds.width - padding.leading - padding.trailing, accuracy: 0.5,
                    "panels keep the full width")
     var node: UIView? = gutter
     while let current = node, current.alpha == 1 { node = current.superview }
@@ -322,7 +327,8 @@ final class OneHandModeTests: XCTestCase {
     let floating = tablet(width: 320, compact: true)
     let gutter = try view("oneHandGutter", in: floating)
     XCTAssertTrue(shown(gutter))
-    XCTAssertEqual(gutter.bounds.width, (320 - 6) * KeyboardOneHandLayout.gutterRatio, accuracy: 0.5)
+    let padding = KeyboardFormFactor.phone.padding
+    XCTAssertEqual(gutter.bounds.width, (320 - padding.leading - padding.trailing) * KeyboardOneHandLayout.gutterRatio, accuracy: 0.5)
     XCTAssertFalse(shown(try view("oneHandSideSpacer", in: floating)))
     XCTAssertFalse(shown(try view("oneHandSidePad", in: floating)))
     let phone = makeController()

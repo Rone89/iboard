@@ -222,7 +222,7 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     }
     let qw = try button("fourteenKeyQW", in: controller)
     XCTAssertTrue(shown(qw))
-    XCTAssertEqual(height.constant - initialHeight, readingRowCost)
+    XCTAssertEqual(height.constant, KeyboardViewController.keyboardHeight(separateReadingRow: true))
     XCTAssertEqual(InputSchemePreference.scheme, .shuangpin)
     try tap(["BN", "UI", "GH", "CV"], in: controller)
     XCTAssertTrue(candidates(in: controller).contains { $0.contains("你好") })
@@ -433,7 +433,7 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     }
     let qw = try button("fourteenKeyQW", in: controller)
     XCTAssertTrue(shown(qw))
-    XCTAssertEqual(height.constant - initialHeight, readingRowCost)
+    XCTAssertEqual(height.constant, KeyboardViewController.keyboardHeight(separateReadingRow: true))
     XCTAssertEqual(InputSchemePreference.scheme, .wubi)
     try tap(["QW", "QW"], in: controller)
     XCTAssertTrue(candidates(in: controller).contains { $0.contains("你") }, "\(candidates(in: controller))")
@@ -770,12 +770,12 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     let controller = makeController(width: 390)
     let height = try XCTUnwrap(controller.view.constraints.first { $0.identifier == "keyboardHeight" })
     let twentySix = height.constant
-    XCTAssertEqual(twentySix, KeyboardViewController.defaultKeyboardHeight)
+    XCTAssertEqual(twentySix, KeyboardViewController.keyboardHeight(letterKeys: true))
 
     InputSchemePreference.scheme = .fourteenKey
     controller.viewWillAppear(false)
     controller.view.layoutIfNeeded()
-    XCTAssertEqual(height.constant - twentySix, readingRowCost)
+    XCTAssertEqual(height.constant, KeyboardViewController.keyboardHeight(separateReadingRow: true))
     let reading = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "compositionRow" })
     XCTAssertEqual(reading.bounds.height, KeyboardViewController.readingRowHeight, accuracy: 0.5)
 
@@ -895,10 +895,10 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     controller.view.layoutIfNeeded()
   }
 
-  /// 五笔 14 键的左端键总是「符」，所以按读音行判断是否在组字：空闲时它写「水杉输入法」。
+  /// 五笔 14 键的左端键总是「符」，所以按读音行判断是否在组字：空闲时它写「iBoard」。
   private func wubiComposing(_ controller: KeyboardViewController) -> Bool {
     let title = preedit(in: controller)
-    return !title.isEmpty && title != "水杉输入法"
+    return !title.isEmpty && title != "iBoard"
   }
 
   /// 记下共享文档、方案和五笔布局镜像，返回恢复它们的闭包。

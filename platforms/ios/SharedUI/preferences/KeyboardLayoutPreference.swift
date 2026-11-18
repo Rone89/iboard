@@ -461,4 +461,27 @@ struct KeyboardGeometry: Equatable {
   static func formattedHeightAdjustment(_ value: Double) -> String {
     value > 0 ? "+\(Int(value))" : "\(Int(value))"
   }
+
+  /// 手机 26 键第一排（10 键）单颗字母键宽度与水平节距：全盘三排字母键均以此宽度为准，避免第二、三排字母变宽。
+  static func phoneLetterKeyMetrics(keysWidth: CGFloat, keySpacing: CGFloat) -> (keyWidth: CGFloat, pitch: CGFloat) {
+    let keyWidth = (keysWidth - 9 * keySpacing) / 10
+    return (keyWidth, keyWidth + keySpacing)
+  }
+
+  /// 手机 26 键第二排（A–L，9 键居中且不显示 `;` 时）左右内边距：精确取 `0.5 * pitch`，使 9 键宽度与首排 10 键一致。
+  static func phoneMiddleRowHorizontalInset(keysWidth: CGFloat, keySpacing: CGFloat) -> CGFloat {
+    let (_, pitch) = phoneLetterKeyMetrics(keysWidth: keysWidth, keySpacing: keySpacing)
+    return max(0, pitch * 0.5)
+  }
+
+  /// 手机 26 键第三排（⇧ Z–M ⌫）非分离键盘下左右功能键宽度及与字母间的空白间距：
+  /// 使 `Z..M` 从 `1.5 * pitch` 开始严格等宽对齐 `S..K`，窄屏（如 320pt SE）自动压低功能键宽度以免挤压字母。
+  static func phoneThirdRowEdgeLayout(keysWidth: CGFloat, keySpacing: CGFloat) -> (width: CGFloat, gap: CGFloat) {
+    let (keyWidth, pitch) = phoneLetterKeyMetrics(keysWidth: keysWidth, keySpacing: keySpacing)
+    let slot = max(0, 1.5 * pitch)
+    let rawEdgeWidth = max(42, (keyWidth * 1.21).rounded(.toNearestOrEven))
+    let edgeWidth = max(0, min(rawEdgeWidth, slot - keySpacing))
+    let edgeGap = max(keySpacing, slot - edgeWidth)
+    return (edgeWidth, edgeGap)
+  }
 }

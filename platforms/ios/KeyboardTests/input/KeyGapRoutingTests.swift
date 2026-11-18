@@ -282,4 +282,41 @@ final class KeyGapRoutingTests: XCTestCase {
     }
     XCTAssertEqual(KeyboardViewController.nineKeyHoldDuration, 0.5)
   }
+
+  /// 手机 26 键第三排按 iOS 27 原生布局在 `⇧↔Z` 和 `M↔⌫` 拉开约 15–20pt 间距后，整段空隙仍可无缝路由给左右两侧相邻键，不能产生死区。
+  @MainActor
+  func testPhoneThirdRowEdgeGapsRouteToAdjacentKeysWithNoDeadZone() throws {
+    let previous = InputSchemePreference.scheme
+    defer { InputSchemePreference.scheme = previous }
+    InputSchemePreference.scheme = .quanpin
+    let spacing = CGFloat(KeyboardLayoutPreference.keySpacing)
+    for width: CGFloat in [390, 440] {
+      let controller = KeyboardViewController()
+      controller.loadViewIfNeeded()
+      controller.view.frame = CGRect(x: 0, y: 0, width: width, height: KeyboardViewController.keyboardHeight(letterKeys: true))
+      controller.viewWillAppear(false)
+      controller.view.layoutIfNeeded()
+      let shift = try key("shiftButton", in: controller)
+      let zKey = try key("字母 Z", in: controller)
+      let mKey = try key("字母 M", in: controller)
+      let delete = try key("letterDeleteKey", in: controller)
+      let shiftFrame = frame(shift, in: controller)
+      let zFrame = frame(zKey, in: controller)
+      let mFrame = frame(mKey, in: controller)
+      let deleteFrame = frame(delete, in: controller)
+      XCTAssertGreaterThan(zFrame.minX - shiftFrame.maxX, spacing + 2, "width \(width) 应存在扩宽的 ⇧↔Z 间距")
+      // 跨过 `⇧↔Z` 整条水平间隙（从靠 `⇧` 一侧到正中再到靠 `Z` 一侧）每一点都应命中其中一侧，无死区。
+      let leftMid = (shiftFrame.maxX + zFrame.minX) / 2
+      XCTAssertTrue(hit(CGPoint(x: shiftFrame.maxX + 1, y: zFrame.midY), in: controller) === shift)
+      XCTAssertTrue(hit(CGPoint(x: leftMid - 0.5, y: zFrame.midY), in: controller) === shift)
+      XCTAssertTrue(hit(CGPoint(x: leftMid + 0.5, y: zFrame.midY), in: controller) === zKey)
+      XCTAssertTrue(hit(CGPoint(x: zFrame.minX - 1, y: zFrame.midY), in: controller) === zKey)
+      // 跨过 `M↔⌫` 整条水平间隙同样无死区。
+      let rightMid = (mFrame.maxX + deleteFrame.minX) / 2
+      XCTAssertTrue(hit(CGPoint(x: mFrame.maxX + 1, y: mFrame.midY), in: controller) === mKey)
+      XCTAssertTrue(hit(CGPoint(x: rightMid - 0.5, y: mFrame.midY), in: controller) === mKey)
+      XCTAssertTrue(hit(CGPoint(x: rightMid + 0.5, y: mFrame.midY), in: controller) === delete)
+      XCTAssertTrue(hit(CGPoint(x: deleteFrame.minX - 1, y: mFrame.midY), in: controller) === delete)
+    }
+  }
 }

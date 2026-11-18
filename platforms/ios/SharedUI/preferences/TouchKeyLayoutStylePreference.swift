@@ -548,14 +548,20 @@ enum TouchBottomRowLayout {
     }
   }
 
-  static let layerWeight: CGFloat = 1.25
-  static let symbolsWeight: CGFloat = 1.05
-  static let languageWeight: CGFloat = 1.05
+  /// 手机 26 键与 14/18 键底行权重（对齐 iOS 27 原生左下紧凑功能键、居中舒展空格与 2.25u 回车）。
+  static let layerWeight: CGFloat = 1.15
+  static let symbolsWeight: CGFloat = 1.0
+  static let languageWeight: CGFloat = 1.0
   static let globeWeight: CGFloat = 1
-  static let punctuationWeight: CGFloat = 1
+  static let punctuationWeight: CGFloat = 0.95
   /// 26 键、14 键和 18 键底行的空格与回车。
-  static let spaceWeight: CGFloat = 4
-  static let returnWeight: CGFloat = 1.9
+  static let spaceWeight: CGFloat = 4.3
+  static let returnWeight: CGFloat = 2.25
+  /// 九键底行沿用既有比例（9.15u 框架，与数字层五列及大回车 14% 侧栏严格对齐）。
+  static let nineKeyLayerWeight: CGFloat = 1.25
+  static let nineKeySymbolsWeight: CGFloat = 1.05
+  static let nineKeyLanguageWeight: CGFloat = 1.05
+  static let nineKeyPunctuationWeight: CGFloat = 1
   /// 九键底行的空格与回车；九键双拼字母层的 0 与 符 同宽。
   static let nineKeySpaceWeight: CGFloat = 4.2
   static let nineKeyReturnWeight: CGFloat = 1.6
@@ -597,25 +603,25 @@ enum TouchBottomRowLayout {
   /// 九键字母层（拼音九键、九键双拼、笔画）。标准：符 | 123 | 空格 | 中/英 | 回车，九键双拼在空格后多一个 0；底栏带标点：， 和 。 各从空格让出 1 份；表情键：😀 从空格让出 1.05 份；右侧大回车见 `nineKeyTallReturn`。除右侧大回车外数字层不用这张表。
   static func nineKey(_ style: TouchNineKeyStyle, globe: Bool, zero: Bool = false, language: Bool = true) -> [Key] {
     if style == .tallReturn { return nineKeyTallReturn(globe: globe, zero: zero, language: language) }
-    var keys = [Key(.symbols, symbolsWeight), Key(.layer, layerWeight)]
+    var keys = [Key(.symbols, nineKeySymbolsWeight), Key(.layer, nineKeyLayerWeight)]
     if globe { keys.append(Key(.globe, globeWeight)) }
     switch style {
     case .standard:
       keys.append(Key(.space, nineKeySpaceWeight))
     case .commaPeriod:
-      keys += [Key(.comma, punctuationWeight), Key(.space, nineKeySpaceWeight - 2 * punctuationWeight),
-               Key(.period, punctuationWeight)]
+      keys += [Key(.comma, nineKeyPunctuationWeight), Key(.space, nineKeySpaceWeight - 2 * nineKeyPunctuationWeight),
+               Key(.period, nineKeyPunctuationWeight)]
     case .emoji:
-      keys += [Key(.emoji, symbolsWeight), Key(.space, nineKeySpaceWeight - symbolsWeight)]
+      keys += [Key(.emoji, nineKeySymbolsWeight), Key(.space, nineKeySpaceWeight - nineKeySymbolsWeight)]
     case .tallReturn:
       break
     }
     if zero { keys.append(Key(.zero, zeroWeight)) }
-    return finish(keys, language: language, returnWeight: nineKeyReturnWeight)
+    return finish(keys, language: language, languageWeight: nineKeyLanguageWeight, returnWeight: nineKeyReturnWeight)
   }
 
   /// 九键标准底行不带地球键时的总份额（符 1.05 + 123 1.25 + 空格 4.2 + 中/英 1.05 + 回车 1.6），即整个九键外框的宽度。
-  static let nineKeyFrameWeight: CGFloat = symbolsWeight + layerWeight + nineKeySpaceWeight + languageWeight + nineKeyReturnWeight
+  static let nineKeyFrameWeight: CGFloat = nineKeySymbolsWeight + nineKeyLayerWeight + nineKeySpaceWeight + nineKeyLanguageWeight + nineKeyReturnWeight
   /// 九键外框左侧符号栏和右列各占的宽度：整宽的 14%（`KeyboardGeometry.sidebarRatio`）。
   static let nineKeySideRatio: CGFloat = 0.14
 
@@ -638,7 +644,7 @@ enum TouchBottomRowLayout {
   ///
   /// 数字层（`digits`）照同一框架：符 不动，123 的位置是回到字母层的切换键，空格的位置放 0、占剩下的部分；空格按 iOS 数字层原来的规则留在 0 的右边，与 中/英 同宽。
   static func nineKeyTallReturn(globe: Bool, zero: Bool = false, language: Bool = true, digits: Bool = false) -> [Key] {
-    var middle = [Key(.layer, layerWeight)]
+    var middle = [Key(.layer, nineKeyLayerWeight)]
     if globe { middle.append(Key(.globe, globeWeight)) }
     let fill: Slot = digits ? .zero : .space
     middle.append(Key(fill, 0))
@@ -647,7 +653,7 @@ enum TouchBottomRowLayout {
     } else if zero {
       middle.append(Key(.zero, zeroWeight))
     }
-    if language { middle.append(Key(.language, languageWeight)) }
+    if language { middle.append(Key(.language, nineKeyLanguageWeight)) }
     let side = nineKeySideWeight(globe: globe)
     let gridWeight = nineKeyRowWeight(globe: globe) - 2 * side
     let rest = gridWeight - middle.reduce(0) { $0 + $1.weight }
@@ -660,30 +666,30 @@ enum TouchBottomRowLayout {
   /// `space`（`touch_number_pad_space`）决定 0 和空格的排法：`afterZero`（iOS 原来的排法）如上；`beforeZero` 两键对调，空格占大份、0 与中/英同宽；`rightColumn` 底行没有空格，0 占两键合起来的份额，空格在右列最下面一格（键盘的 `numberPadColumnSpace`）。
   static func nineKeyDigits(globe: Bool, zero: Bool = false, language: Bool = true,
                             space: TouchNumberPadSpace = .afterZero) -> [Key] {
-    var keys = [Key(.symbols, symbolsWeight), Key(.layer, layerWeight)]
+    var keys = [Key(.symbols, nineKeySymbolsWeight), Key(.layer, nineKeyLayerWeight)]
     if globe { keys.append(Key(.globe, globeWeight)) }
-    let wideShare = nineKeySpaceWeight + (zero ? zeroWeight : 0) - zeroWeight + (language ? 0 : languageWeight)
+    let wideShare = nineKeySpaceWeight + (zero ? zeroWeight : 0) - zeroWeight + (language ? 0 : nineKeyLanguageWeight)
     switch space {
     case .afterZero: keys += [Key(.zero, wideShare), Key(.space, zeroWeight)]
     case .beforeZero: keys += [Key(.space, wideShare), Key(.zero, zeroWeight)]
     case .rightColumn: keys.append(Key(.zero, wideShare + zeroWeight))
     }
-    if language { keys.append(Key(.language, languageWeight)) }
+    if language { keys.append(Key(.language, nineKeyLanguageWeight)) }
     keys.append(Key(.returnKey, nineKeyReturnWeight))
     return keys
   }
 
   /// 从九键一族和笔画以外的键面（26 键一族、14/18 键、手写、假名九键、大千，以及英文和本地模式）借来的数字九宫格（返回 |（🌐）| 0 | 空格 | 中/英 | 回车）在空格位置不是 iOS 原来的 `afterZero` 时的份额：返回 1.25、地球键 1、中/英 1.05、回车 1.6 与原来的数字页相同，0 和空格合起来的 5.25 份（隐藏中/英时再加 1.05）按 `space` 分：`beforeZero` 空格在左占大份、0 是 1.05，`rightColumn` 底行只有 0。`afterZero` 仍走原来的约束（不带地球键时与上方五列对齐），不用这张表。
   static func borrowedNumberPad(globe: Bool, language: Bool = true, space: TouchNumberPadSpace) -> [Key] {
-    var keys = [Key(.layer, layerWeight)]
+    var keys = [Key(.layer, nineKeyLayerWeight)]
     if globe { keys.append(Key(.globe, globeWeight)) }
-    let wideShare = nineKeySpaceWeight + (language ? 0 : languageWeight)
+    let wideShare = nineKeySpaceWeight + (language ? 0 : nineKeyLanguageWeight)
     switch space {
     case .afterZero: keys += [Key(.zero, wideShare), Key(.space, zeroWeight)]
     case .beforeZero: keys += [Key(.space, wideShare), Key(.zero, zeroWeight)]
     case .rightColumn: keys.append(Key(.zero, wideShare + zeroWeight))
     }
-    if language { keys.append(Key(.language, languageWeight)) }
+    if language { keys.append(Key(.language, nineKeyLanguageWeight)) }
     keys.append(Key(.returnKey, nineKeyReturnWeight))
     return keys
   }
@@ -719,7 +725,8 @@ enum TouchBottomRowLayout {
   }
 
   /// 补上中/英和回车；隐藏中/英时把它的份额并进空格。
-  private static func finish(_ keys: [Key], language: Bool, returnWeight: CGFloat) -> [Key] {
+  private static func finish(_ keys: [Key], language: Bool, languageWeight: CGFloat = Self.languageWeight,
+                             returnWeight: CGFloat) -> [Key] {
     var keys = keys
     if language {
       keys.append(Key(.language, languageWeight))

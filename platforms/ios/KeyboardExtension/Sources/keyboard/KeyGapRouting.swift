@@ -70,8 +70,14 @@ final class KeyAreaStackView: UIStackView {
     }
     guard !keys.isEmpty else { return hit }
     let frames = keys.map { Self.layoutFrame(of: $0, in: gap) }
+    // 第三排等带自定义宽间距（如 `⇧↔Z`、`M↔⌫`）的横排需要按最大可见间距计算够得着的范围，避免中间出现点击盲区。
+    let visible = gap.arrangedSubviews.filter { !$0.isHidden }
+    let maxCustomSpacing = visible.dropLast()
+      .map { gap.customSpacing(after: $0) }
+      .filter { $0 != UIStackView.spacingUseDefault && $0.isFinite }
+      .max() ?? 0
     let reach = KeyGapRouting.reach(
-      spacing: gap.spacing, axis: gap.axis,
+      spacing: max(gap.spacing, maxCustomSpacing), axis: gap.axis,
       margins: gap.isLayoutMarginsRelativeArrangement ? gap.layoutMargins : nil)
     let local = convert(point, to: gap)
     guard let index = KeyGapRouting.nearest(to: local, in: frames, reach: reach) else { return hit }

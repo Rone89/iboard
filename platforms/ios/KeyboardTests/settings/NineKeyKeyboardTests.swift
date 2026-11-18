@@ -783,12 +783,12 @@ final class NineKeyKeyboardTests: XCTestCase {
 
   func testLayoutSettingsDefaultIndependently() {
     XCTAssertEqual(KeyboardLayoutPreference.keySpacing, 6)
-    XCTAssertEqual(KeyboardLayoutPreference.rowSpacing, 7)
+    XCTAssertEqual(KeyboardLayoutPreference.rowSpacing, 11)
     XCTAssertEqual(KeyboardLayoutPreference.geometry.sidebarRatio, 0.14)
     XCTAssertFalse(KeyboardLayoutPreference.geometry.showsFullKeyboardSymbols)
     KeyboardLayoutPreference.keySpacing = 5
     XCTAssertEqual(KeyboardLayoutPreference.keySpacing, 5)
-    XCTAssertEqual(KeyboardLayoutPreference.rowSpacing, 7)
+    XCTAssertEqual(KeyboardLayoutPreference.rowSpacing, 11)
     KeyboardLayoutPreference.keySpacing = 99
     KeyboardLayoutPreference.rowSpacing = -99
     XCTAssertEqual(KeyboardLayoutPreference.keySpacing, 6)
@@ -919,7 +919,7 @@ final class NineKeyKeyboardTests: XCTestCase {
     controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
     try layoutAtRequestedHeight(controller)
     let letterKey = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == "字母 Q" })
-    XCTAssertEqual(letterKey.bounds.height, 44, accuracy: 0.5)
+    XCTAssertEqual(letterKey.bounds.height, 45, accuracy: 0.5)
     // 英文的数字入口也是数字九宫格，从它的 #+= 进设计稿的符号层，完整验证同一套符号行的份额。
     try button("bottomLanguageKey", in: controller).sendActions(for: .primaryActionTriggered)
     try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
@@ -1474,7 +1474,8 @@ final class NineKeyKeyboardTests: XCTestCase {
       XCTAssertEqual(InputSchemePreference.scheme, .quanpin)
       XCTAssertEqual(try button("schemeButton", in: controller).accessibilityValue, ChineseInputScheme.quanpin.title)
       try layoutAtRequestedHeight(controller)
-      XCTAssertEqual(controller.view.constraints.first { $0.identifier == "keyboardHeight" }?.constant, KeyboardViewController.defaultKeyboardHeight)
+      XCTAssertEqual(controller.view.constraints.first { $0.identifier == "keyboardHeight" }?.constant,
+                     KeyboardViewController.keyboardHeight(letterKeys: true))
       try button("schemeButton", in: controller).sendActions(for: .primaryActionTriggered)
       XCTAssertEqual(try button("schemeCard-quanpin", in: controller).accessibilityValue, "已选中")
       // 高亮的 输入方式 图标关闭它自己的选择器。
@@ -1519,7 +1520,7 @@ final class NineKeyKeyboardTests: XCTestCase {
     XCTAssertFalse(descendants(controller.view).contains { $0 is KeyboardSkinPickerView })
   }
 
-  /// 九键一族切到英文会复用 26 键字母行：键盘外框高度不变，字母区的上下边界也与九宫格重合，不在上下留白。
+  /// 九键一族切到英文会复用 26 键字母行：切回英文后使用手机 26 键原生 45pt 紧凑高度，字母从同一点起排并与下边距对齐。
   func testNineKeyAndEnglishKeepTheSameKeyboardHeight() throws {
     let previous = InputSchemePreference.scheme
     let previousEnabled = InputSchemePreference.enabledSchemes
@@ -1536,18 +1537,16 @@ final class NineKeyKeyboardTests: XCTestCase {
       controller.view.frame = CGRect(x: 0, y: 0, width: 393, height: KeyboardViewController.defaultKeyboardHeight)
       try layoutAtRequestedHeight(controller)
       let frame = { (view: UIView) in view.convert(view.bounds, to: controller.view) }
-      let height = try XCTUnwrap(controller.view.constraints.first { $0.identifier == "keyboardHeight" }).constant
       let gridTop = frame(try button("nineKey1", in: controller)).minY
-      let nineKeyBottom = frame(try button("returnKey", in: controller)).maxY
       try button("bottomLanguageKey", in: controller).sendActions(for: .primaryActionTriggered)
       try layoutAtRequestedHeight(controller)
       let englishHeight = try XCTUnwrap(controller.view.constraints.first { $0.identifier == "keyboardHeight" }).constant
-      XCTAssertEqual(englishHeight, height, accuracy: 0.5, "\(scheme)")
+      XCTAssertEqual(englishHeight, KeyboardViewController.keyboardHeight(letterKeys: true), accuracy: 0.5, "\(scheme)")
       let letter = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == "字母 Q" } as? UIButton)
       XCTAssertEqual(frame(letter).minY, gridTop, accuracy: 0.5, "\(scheme)")
-      XCTAssertEqual(frame(try button("returnKey", in: controller)).maxY, nineKeyBottom, accuracy: 0.5, "\(scheme)")
-      // 四排 52pt 键帽、7pt 排距的高度由四排字母键和 11pt 排距填满。
-      XCTAssertEqual(letter.bounds.height, 52, accuracy: 0.5, "\(scheme)")
+      XCTAssertEqual(frame(try button("returnKey", in: controller)).maxY,
+                     englishHeight - KeyboardFormFactor.phone.padding.bottom, accuracy: 0.5, "\(scheme)")
+      XCTAssertEqual(letter.bounds.height, 45, accuracy: 0.5, "\(scheme)")
     }
   }
 
@@ -2357,9 +2356,18 @@ final class NineKeyKeyboardTests: XCTestCase {
         controller.viewWillAppear(false)
         for symbols in [false, true] {
           if symbols { try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered) }
-          try layoutAtRequestedHeight(controller)
           let paddedLetters = !symbols && ![.nineKey, .nineKeyShuangpin, .stroke, .zhuyin, .fourteenKey, .eighteenKey].contains(scheme)
-          let expectedKeyHeight: CGFloat = paddedLetters ? 44 : reference
+          let expectedKeyHeight: CGFloat = paddedLetters ? 45 : reference
+          controller.view.frame.size.height = KeyboardViewController.keyboardHeight(
+            glossLines: KeyboardViewController.stripGlossLines(scheme: scheme, fullAccess: false, onlineRoute: false),
+            separateReadingRow: [.fourteenKey, .eighteenKey].contains(scheme),
+            letterKeys: paddedLetters)
+          controller.viewWillAppear(false)
+          try layoutAtRequestedHeight(controller)
+          let targetKeyboardHeight = KeyboardViewController.keyboardHeight(
+            glossLines: KeyboardViewController.stripGlossLines(scheme: scheme, fullAccess: false, onlineRoute: false),
+            separateReadingRow: [.fourteenKey, .eighteenKey].contains(scheme),
+            letterKeys: paddedLetters)
           if scheme == .zhuyin && !symbols {
             // The Dachen layout fits four rows of keys above the action row into the same keyboard height, as the system Zhuyin keyboard does, so its rows are shorter than the three letter rows and all of them stay the same height.
             let returnHeight = try button("returnKey", in: controller).bounds.height
@@ -2392,7 +2400,7 @@ final class NineKeyKeyboardTests: XCTestCase {
             XCTAssertFalse(shown(try button("symbolLayerKey0_0", in: controller)), "\(scheme)")
           }
           XCTAssertEqual(controller.view.constraints.first { $0.identifier == "keyboardHeight" }?.constant,
-                         keyboardHeight, "\(scheme)")
+                         targetKeyboardHeight, "\(scheme)")
           if !symbols && [.nineKey, .quanpin].contains(scheme) {
             // 输入方式 自己绘制设计稿的线框图标，不带会被皮肤处理画成键帽的 configuration。
             let selector = try XCTUnwrap(try button("schemeButton", in: controller) as? KeyboardToolbarButton)
@@ -2417,9 +2425,12 @@ final class NineKeyKeyboardTests: XCTestCase {
           XCTAssertEqual(punctuation.isHidden, symbols || [.nineKey, .nineKeyShuangpin, .japaneseNineKey, .stroke].contains(scheme), "\(scheme)")
           if !punctuation.isHidden {
             XCTAssertEqual(punctuation.configuration?.title, scheme.isJapanese ? "、" : scheme.writesAsciiPunctuation ? "," : "，")
-            // 手机 26 键底行按相对空格键的比例分配宽度：， 占一份，空格占四份。
+            // 手机底行按相对空格键的比例分配宽度：手写 1 / 2.4，26 键与 14/18 键为 0.95 / 4.3。
             let space = try button("spaceKey", in: controller)
-            XCTAssertEqual(punctuation.bounds.width, space.bounds.width / KeyboardViewController.phoneSpaceWeight, accuracy: 0.5)
+            let expectedPunctuationWeight: CGFloat = scheme == .handwriting
+              ? KeyboardViewController.handwritingPunctuationWeight / KeyboardViewController.handwritingSpaceWeight
+              : TouchBottomRowLayout.punctuationWeight / KeyboardViewController.phoneSpaceWeight
+            XCTAssertEqual(punctuation.bounds.width, space.bounds.width * expectedPunctuationWeight, accuracy: 0.5)
             XCTAssertGreaterThanOrEqual(space.bounds.width, 79.2)
             let secondary = ![.handwriting, .fourteenKey, .eighteenKey, .zhuyin].contains(scheme)
             XCTAssertEqual(punctuation.menu?.children.count, secondary ? nil : 7)
@@ -2438,8 +2449,11 @@ final class NineKeyKeyboardTests: XCTestCase {
             let m = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == letterLabel("M") } as? UIButton)
             XCTAssertEqual(delete.superview, m.superview)
             XCTAssertGreaterThan(delete.frame.minX, m.frame.maxX)
-            XCTAssertEqual(delete.bounds.width, 44, accuracy: 0.5)
-            XCTAssertEqual(shift.bounds.width, 44, accuracy: 0.5)
+            let expectedEdge = KeyboardFormFactor.phoneThirdRowEdgeLayout(
+              keysWidth: width - KeyboardFormFactor.phone.padding.leading - KeyboardFormFactor.phone.padding.trailing,
+              keySpacing: CGFloat(KeyboardLayoutPreference.keySpacing)).width
+            XCTAssertEqual(delete.bounds.width, expectedEdge, accuracy: 0.5)
+            XCTAssertEqual(shift.bounds.width, expectedEdge, accuracy: 0.5)
             XCTAssertEqual(delete.bounds.height, expectedKeyHeight, accuracy: 0.5)
             XCTAssertLessThanOrEqual(delete.convert(delete.bounds, to: controller.view).maxX, width - KeyboardFormFactor.phone.padding.trailing + 0.5)
             for label in ["Q", "A", "Z", "P", "L", "M"] {
@@ -3947,11 +3961,11 @@ final class NineKeyKeyboardTests: XCTestCase {
     XCTAssertEqual(visible, ["layoutToggleButton"] + globe + ["symbolPanelKey", "spaceKey", "quickPunctuationKey", "bottomLanguageKey", "returnKey"])
     let space = try button("spaceKey", in: controller).bounds.width
     let unit = space / KeyboardViewController.phoneSpaceWeight
-    XCTAssertEqual(try button("symbolPanelKey", in: controller).bounds.width, unit * 1.05, accuracy: 0.5)
+    XCTAssertEqual(try button("symbolPanelKey", in: controller).bounds.width, unit * TouchBottomRowLayout.symbolsWeight, accuracy: 0.5)
     XCTAssertEqual(try button("symbolPanelKey", in: controller).configuration?.title, "符")
-    XCTAssertEqual(try button("layoutToggleButton", in: controller).bounds.width, unit * 1.25, accuracy: 0.5)
-    XCTAssertEqual(try button("bottomLanguageKey", in: controller).bounds.width, unit * 1.05, accuracy: 0.5)
-    XCTAssertEqual(try button("returnKey", in: controller).bounds.width, unit * 1.9, accuracy: 0.5)
+    XCTAssertEqual(try button("layoutToggleButton", in: controller).bounds.width, unit * TouchBottomRowLayout.layerWeight, accuracy: 0.5)
+    XCTAssertEqual(try button("bottomLanguageKey", in: controller).bounds.width, unit * TouchBottomRowLayout.languageWeight, accuracy: 0.5)
+    XCTAssertEqual(try button("returnKey", in: controller).bounds.width, unit * TouchBottomRowLayout.returnWeight, accuracy: 0.5)
     // 123 和 中 用 15pt medium 字重。
     for id in ["layoutToggleButton", "bottomLanguageKey"] {
       let transformer = try XCTUnwrap(try button(id, in: controller).configuration?.titleTextAttributesTransformer, id)
@@ -3968,9 +3982,9 @@ final class NineKeyKeyboardTests: XCTestCase {
     XCTAssertNotNil(comma.onCornerHint)
     XCTAssertEqual(comma.cornerHint, ".")
     XCTAssertFalse(comma.swipesCornerHint)
-    // 句点多占一道键距，各键按同一份额略窄；逗号仍与 123 保持 1 : 1.25。
-    let englishUnit = try button("layoutToggleButton", in: controller).bounds.width / 1.25
-    XCTAssertEqual(comma.bounds.width, englishUnit, accuracy: 0.5)
+    // 句点多占一道键距，各键按同一份额略窄；逗号与 123 仍严格按标点与图层键比例。
+    let englishUnit = try button("layoutToggleButton", in: controller).bounds.width / TouchBottomRowLayout.layerWeight
+    XCTAssertEqual(comma.bounds.width, englishUnit * TouchBottomRowLayout.punctuationWeight, accuracy: 0.5)
     XCTAssertEqual(englishUnit, unit, accuracy: 1)
 
     // 英文的 123 打开数字九宫格，底行是 ABC |（🌐）| 0 | 空格 | 中/英 | 回车，⌫ 在右列；#+= 层自带底行，⌫ 在该层第三行。
@@ -4037,15 +4051,15 @@ final class NineKeyKeyboardTests: XCTestCase {
         "英文底行的句点紧挨空格左边、逗号紧挨空格右边（\(Int(width))pt）")
       XCTAssertEqual(try button("bottomPeriodKey", in: controller).configuration?.title, ".")
       XCTAssertEqual(try button("quickPunctuationKey", in: controller).configuration?.title, ",")
-      // 句点与逗号同宽，123、符、中、回车保持中文 26 键的份额，空格让出一份。
-      let unit = try button("layoutToggleButton", in: controller).bounds.width / 1.25
-      XCTAssertEqual(try button("bottomPeriodKey", in: controller).bounds.width, unit, accuracy: 0.5)
-      XCTAssertEqual(try button("quickPunctuationKey", in: controller).bounds.width, unit, accuracy: 0.5)
-      XCTAssertEqual(try button("symbolPanelKey", in: controller).bounds.width, unit * 1.05, accuracy: 0.5)
-      XCTAssertEqual(try button("bottomLanguageKey", in: controller).bounds.width, unit * 1.05, accuracy: 0.5)
-      XCTAssertEqual(try button("returnKey", in: controller).bounds.width, unit * 1.9, accuracy: 0.5)
+      // 句点与逗号同宽，123、符、中、回车保持中文 26 键的份额，空格让出一份标点权重。
+      let unit = try button("layoutToggleButton", in: controller).bounds.width / TouchBottomRowLayout.layerWeight
+      XCTAssertEqual(try button("bottomPeriodKey", in: controller).bounds.width, unit * TouchBottomRowLayout.punctuationWeight, accuracy: 0.5)
+      XCTAssertEqual(try button("quickPunctuationKey", in: controller).bounds.width, unit * TouchBottomRowLayout.punctuationWeight, accuracy: 0.5)
+      XCTAssertEqual(try button("symbolPanelKey", in: controller).bounds.width, unit * TouchBottomRowLayout.symbolsWeight, accuracy: 0.5)
+      XCTAssertEqual(try button("bottomLanguageKey", in: controller).bounds.width, unit * TouchBottomRowLayout.languageWeight, accuracy: 0.5)
+      XCTAssertEqual(try button("returnKey", in: controller).bounds.width, unit * TouchBottomRowLayout.returnWeight, accuracy: 0.5)
       XCTAssertEqual(try button("spaceKey", in: controller).bounds.width,
-                     unit * (KeyboardViewController.phoneSpaceWeight - 1), accuracy: 0.5)
+                     unit * KeyboardViewController.englishPhoneSpaceWeight, accuracy: 0.5)
       // 切回中文：句点键收起，26 键中文底行与九键底行恢复原样。
       try button("bottomLanguageKey", in: controller).sendActions(for: .primaryActionTriggered)
       window.layoutIfNeeded()
@@ -4074,7 +4088,7 @@ final class NineKeyKeyboardTests: XCTestCase {
     let comma = try XCTUnwrap(try button("quickPunctuationKey", in: controller) as? KeyboardKeyButton)
     try XCTUnwrap(comma.onCornerHint)("。")
     controller.view.layoutIfNeeded()
-    XCTAssertEqual(preedit.configuration?.title, "水杉输入法")
+    XCTAssertEqual(preedit.configuration?.title, "iBoard")
     try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
     XCTAssertTrue(comma.isHidden)
     XCTAssertNil(comma.cornerHint)

@@ -80,22 +80,28 @@ enum SystemKeyboardTokens {
     return false
   }
 
-  static let background = drawsLiquidGlassKeyboard ? adaptiveColor(0xE2E3E8, 0x222223) : NativeKeyboardTokens.background
-  static let key = drawsLiquidGlassKeyboard ? adaptiveColor(0xFFFFFF, 0x464646) : NativeKeyboardTokens.key
+  static let background = drawsLiquidGlassKeyboard ? adaptiveColor(0xE1E4E8, 0x1C1C1E) : NativeKeyboardTokens.background
+  /// iOS 27 Liquid Glass 键盘键帽：浅色使用官方 `#FDFEFF`，深色使用 17% 白色半透明叠层以透出底层毛玻璃。
+  static let key = drawsLiquidGlassKeyboard
+    ? UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.17) : rgbColor(0xFDFEFF) }
+    : NativeKeyboardTokens.key
   static let functionKey = drawsLiquidGlassKeyboard ? key : NativeKeyboardTokens.functionKey
-  /// iPhone 上量得约 6pt；iPad 没有量过，按经典取值比例（5 比 7）放大。
-  static var cornerRadius: CGFloat { UIDevice.current.userInterfaceIdiom == .pad ? 8 : 6 }
-  /// 原生皮肤以低饱和水杉绿强调回车、候选和激活状态，不跟季节。
-  static let accent = adaptiveColor(0x32664B, 0x8AC4A2)
-  /// 水杉绿填充上的文字：浅色用白色，深色用黑色。
+  /// iOS 27 起系统与 iPad 键帽圆角统一为 8.5pt 连续曲率圆角；经典系统维持旧比例。
+  static var cornerRadius: CGFloat {
+    if drawsLiquidGlassKeyboard { return 8.5 }
+    return UIDevice.current.userInterfaceIdiom == .pad ? 8 : 6
+  }
+  /// 原生皮肤在 iOS 27 对齐系统蓝（已通过浅/深色背景 WCAG 4.5:1 对比度校验），不跟季节。
+  static let accent = adaptiveColor(0x0A5DC8, 0x8CC2FF)
+  /// 系统蓝填充上的文字：浅色用白色，深色用黑色。
   static let onAccent = adaptiveColor(0xFFFFFF, 0x000000)
-  static let accentSoft = adaptiveColor(0x32664B, 0x8AC4A2, lightAlpha: 0.14, darkAlpha: 0.26)
-  /// 工具栏 logo 的圆底：水杉绿混入系统卡片底，不跟季节。
+  static let accentSoft = adaptiveColor(0x0A5DC8, 0x8CC2FF, lightAlpha: 0.14, darkAlpha: 0.26)
+  /// 工具栏 logo 的圆底：系统蓝混入系统卡片底，不跟季节。
   static let logoCircle = UIColor { traits in
     let dark = traits.userInterfaceStyle == .dark
     return AppThemePalette.mix(accent.resolvedColor(with: traits), dark ? 22 : 14, rgbColor(dark ? 0x1C1C1E : 0xFFFFFF))
   }
-  /// 圆底里的 logo 图形使用深绿，保留白色折线描边的对比度。
+  /// 圆底里的 logo 图形使用深蓝，保留白色折线描边的对比度。
   static let logoMark = UIColor { traits in
     AppThemePalette.mix(accent.resolvedColor(with: traits), traits.userInterfaceStyle == .dark ? 38 : 82, .black)
   }

@@ -139,8 +139,28 @@ struct KeyboardTheme: Equatable {
   var isNative: Bool { id == GlobalThemeCatalog.nativeId }
   /// 原生皮肤在 iOS 26 起画的扁平按键：字母键和功能键同色、没有底边阴影、圆角更大。
   private var drawsLiquidGlassKeys: Bool { isNative && SystemKeyboardTokens.drawsLiquidGlassKeyboard }
-  /// 键盘是否用系统 token 绘制、把背景交给系统底板：原生皮肤总是如此；其他主题只有经典兜底（没有解析出的配色、没有设计，也没有可用于跟随系统季节配色的应用主题）如此。iOS 26 有时会在第三方键盘上方、扩展窗口之外画出一条系统自己的键盘底板，扩展画什么都盖不住它。使用原生 token 的键盘让背景几乎透明（只铺一层 `nativeBackgroundFill`），同一块底板就能透出来，那一条看上去就成了键盘的一部分。
-  var drawsNativeBackground: Bool { palette == nil && design == nil }
+  /// 键盘是否把背景交给系统底板：原生皮肤、默认「跟随系统」（`design == nil`）、经典兜底，以及显式或按模板签名启用系统透底的自定义设计都为 `true`。
+  /// iOS 26/27 会在第三方键盘窗口之外绘制系统 Liquid Glass 毛玻璃底板；让扩展背景只铺一层 `nativeBackgroundFill` 即可无缝透出系统毛玻璃同时保留触摸命中。
+  var drawsNativeBackground: Bool {
+    if let design { return design.usesNativeSystemBackdrop }
+    return palette == nil || id == GlobalThemeCatalog.systemId
+  }
+
+  /// 需要不透明底色（或在其上二次调透明度）时的按键底色：当 `keyBackground` 为半透明叠层（如 iOS 27 深色原生 17% 白）时，
+  /// 先与 `background` 做 alpha 预混再返回，避免 `.withAlphaComponent(1)` 直接把它变成刺眼的纯白。
+  var opaqueKeyBackground: UIColor {
+    UIColor { traits in
+      let key = keyBackground.resolvedColor(with: traits)
+      var kr: CGFloat = 0, kg: CGFloat = 0, kb: CGFloat = 0, ka: CGFloat = 0
+      key.getRed(&kr, green: &kg, blue: &kb, alpha: &ka)
+      guard ka < 0.999 else { return key }
+      let back = background.resolvedColor(with: traits)
+      var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+      back.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+      let inv = 1 - ka
+      return UIColor(red: kr * ka + br * inv, green: kg * ka + bg * inv, blue: kb * ka + bb * inv, alpha: 1)
+    }
+  }
 
   /// `nativeBackgroundFill` 的透明度。系统按什么判定「这里有扩展的内容」没有定论：#7682 的真机观察更像是按带内容的图层边界（整格图像透明的边缘也能点），而不是按像素透明度；1% 是在两种判定下都保险的取值，按像素判定时 8 位合成后约 2.55/255，量化后仍不为 0。真机验收之前不要往下调。
   static let nativeBackgroundFillAlpha: CGFloat = 0.01

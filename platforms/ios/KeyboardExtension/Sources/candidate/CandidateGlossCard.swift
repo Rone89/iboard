@@ -156,7 +156,7 @@ final class CandidateGlossCardView: UIView {
     commitButton = Self.actionButton(CandidateGlossCardContent.commitTitle, filled: true, skin: skin)
     super.init(frame: .zero)
     accessibilityIdentifier = "candidateGlossCard"
-    backgroundColor = skin.keyBackground.withAlphaComponent(0.98)
+    backgroundColor = skin.opaqueKeyBackground.withAlphaComponent(0.98)
 
     titleLabel.text = CandidateGlossCardContent.title
     titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)

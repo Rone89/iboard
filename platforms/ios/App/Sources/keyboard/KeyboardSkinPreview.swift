@@ -224,13 +224,18 @@ struct KeyboardSkinPreview: View {
       }.frame(maxHeight: .infinity)
     } else {
       VStack(spacing: layout.rowSpacing) {
+        let keyGap: CGFloat = 5
+        let middleInset = KeyboardGeometry.phoneMiddleRowHorizontalInset(keysWidth: Self.keysWidth, keySpacing: keyGap)
+        let edge = KeyboardGeometry.phoneThirdRowEdgeLayout(keysWidth: Self.keysWidth, keySpacing: keyGap)
         if layer.numberRow { numberRow }
         row(Array("qwertyuiop").map(String.init), hints: letterHints ? Array("1234567890").map(String.init) : [])
-        row(Array("asdfghjkl").map(String.init)).padding(.horizontal, 376 * layout.letterInsetRatio)
-        HStack(spacing: 5) {
-          key("⇧", function: true).frame(width: 38)
+        row(Array("asdfghjkl").map(String.init)).padding(.horizontal, middleInset)
+        HStack(spacing: 0) {
+          key("⇧", function: true).frame(width: edge.width)
+          Spacer(minLength: 0).frame(width: edge.gap)
           row(Array("zxcvbnm").map(String.init))
-          key("⌫", function: true).frame(width: 38)
+          Spacer(minLength: 0).frame(width: edge.gap)
+          key("⌫", function: true).frame(width: edge.width)
         }
       }.frame(maxHeight: .infinity)
     }

@@ -22,6 +22,7 @@ extension CustomKeyboardSkin {
         skin.monospaced = false
         skin.keyShape = .rounded
         skin.keyMaterial = .flat
+        skin.usesSystemBackdrop = true
         return skin
       }()),
       ("iOS 原生（深色）", {
@@ -38,6 +39,7 @@ extension CustomKeyboardSkin {
         skin.monospaced = false
         skin.keyShape = .rounded
         skin.keyMaterial = .flat
+        skin.usesSystemBackdrop = true
         return skin
       }()),
       // 薄荷晨光（client-core 的 TouchKeyboardSkinDesign::mint_morning），曾是触屏键盘新装的默认皮肤。

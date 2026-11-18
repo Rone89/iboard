@@ -372,7 +372,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private weak var tabletReturnKey: UIButton?
   private weak var rightShiftButton: UIButton?
   private weak var letterDeleteKey: UIButton?
-  /// 左侧 ⇧ 的宽度：手机上 44pt，iPad 上按设计稿为 1.4 个键宽。
+  /// 手机 26 键第三排（⇧ Z–M ⌫）最后一个字母键与右端 ⌫ 宽度约束，随 `keysWidth` 实时计算并保持 `Z..M` 等宽对齐。
+  private weak var phoneThirdRowLastLetter: UIButton?
+  private var phoneDeleteWidth: NSLayoutConstraint?
+  /// 左侧 ⇧ 的宽度：手机上随 `phoneThirdRowEdgeLayout` 自适应计算，iPad 上按设计稿为 1.4 个键宽。
   private var phoneShiftWidth: NSLayoutConstraint?
   private var tabletShiftWidth: NSLayoutConstraint?
   private weak var spaceButton: UIButton?
@@ -751,13 +754,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// Tests and host layout consumers use this contract so the default gloss row stays accounted for.
   static func keyboardHeight(
     _ formFactor: KeyboardFormFactor = .phone, landscape: Bool = false, handwriting: Bool = false,
-    numberRow: Bool = false, glossLines: Int? = nil, separateReadingRow: Bool = false, phoneNumberRow: Bool = false
+    numberRow: Bool = false, glossLines: Int? = nil, separateReadingRow: Bool = false, letterKeys: Bool = false,
+    phoneNumberRow: Bool = false
   ) -> CGFloat {
     let lines = glossLines ?? configuredGlossLines(fullAccess: false, onlineRoute: false)
     return formFactor.keyboardHeight(
       topRow: topRowHeight(glossLines: lines, separateReadingRow: separateReadingRow),
       rowSpacing: CGFloat(KeyboardLayoutPreference.rowSpacing),
-      landscape: landscape, handwriting: handwriting, numberRow: numberRow, phoneNumberRow: phoneNumberRow)
+      landscape: landscape, handwriting: handwriting, numberRow: numberRow,
+      letterKeys: letterKeys, phoneNumberRow: phoneNumberRow)
   }
   /// 手机竖屏键盘：`keyboardHeight()`。
   static var defaultKeyboardHeight: CGFloat { keyboardHeight() }
@@ -932,8 +937,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
+  override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+    super.traitCollectionDidChange(previousTraitCollection)
+    if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+      // 强制更新主题 palette 和视图渲染
+      self.view.setNeedsDisplay()
+      // 触发布局重绘
+      self.updateKeyboardLayout()
+    }
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
+    
+    // 注入调试断言
+    print("Debug: skin.drawsNativeBackground = \(skinBackdrop.drawsNativeBackground)")
+    print("Debug: view.backgroundColor = \(String(describing: view.backgroundColor))")
+    
+    // 原代码...
     registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitHorizontalSizeClass.self]) {
       (controller: KeyboardViewController, previous: UITraitCollection) in controller.refreshTraits(previous)
     }
@@ -2124,7 +2145,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     nineKeyContainer.spacing = 6
     let sidebar = UIView()
     sidebar.accessibilityIdentifier = "nineKeySidebar"
-    sidebar.backgroundColor = KeyboardTheme.current.keyBackground.withAlphaComponent(0.5)
+    sidebar.backgroundColor = KeyboardTheme.current.opaqueKeyBackground.withAlphaComponent(0.5)
     sidebar.layer.cornerRadius = 8
     punctuationStack.axis = .vertical
     punctuationStack.distribution = .fillEqually
@@ -3619,8 +3640,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       // 让 Shift 和删除键容易按到；七个字母在两者之间均分。iPad 键盘把 ⌫ 移到第一排，所以它的宽度约束低于 required，让 stack view 能在这里把它隐藏。
       let shift = row.arrangedSubviews[0]
       let keys = Array(row.arrangedSubviews.dropFirst().dropLast())
+      phoneThirdRowLastLetter = keys.last as? UIButton
       let deleteWidth = delete.widthAnchor.constraint(equalToConstant: Self.phoneLetterEdgeWidth)
       deleteWidth.priority = .init(999)
+      phoneDeleteWidth = deleteWidth
       let shiftWidth = shift.widthAnchor.constraint(equalToConstant: Self.phoneLetterEdgeWidth)
       phoneShiftWidth = shiftWidth
       tabletShiftWidth = shift.widthAnchor.constraint(equalTo: keys[0].widthAnchor, multiplier: TabletLetterLayout.shiftWeight)
@@ -4364,14 +4387,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     ]
     let phoneSpace = Self.phoneSpaceWeight
     phoneActionWidths = [
-      weight(nineKeySymbolsButton, 1.05, space: phoneSpace, optional: true),
-      weight(layoutToggle, 1.25, space: phoneSpace),
-      weight(language, 1.05, space: phoneSpace),
-      weight(globe, 1, space: phoneSpace, optional: true),
+      weight(nineKeySymbolsButton, TouchBottomRowLayout.symbolsWeight, space: phoneSpace, optional: true),
+      weight(layoutToggle, TouchBottomRowLayout.layerWeight, space: phoneSpace),
+      weight(language, TouchBottomRowLayout.languageWeight, space: phoneSpace),
+      weight(globe, TouchBottomRowLayout.globeWeight, space: phoneSpace, optional: true),
       weight(delete, 1, space: phoneSpace, optional: true),
-      weight(punctuation, 1, space: phoneSpace, optional: true),
-      weight(period, 1, space: phoneSpace, optional: true),
-      weight(enter, 1.9, space: phoneSpace),
+      weight(punctuation, TouchBottomRowLayout.punctuationWeight, space: phoneSpace, optional: true),
+      weight(period, TouchBottomRowLayout.punctuationWeight, space: phoneSpace, optional: true),
+      weight(enter, TouchBottomRowLayout.returnWeight, space: phoneSpace),
     ]
     let tabletSpace = TabletLetterLayout.spaceWeight
     tabletActionWidths = [
@@ -4385,18 +4408,28 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     func expandedWidths(spaceWeight: CGFloat, entries: [(UIView, CGFloat, Bool)]) -> [NSLayoutConstraint] {
       entries.map { key, value, optional in weight(key, value, space: spaceWeight, optional: optional) }
     }
-    phoneExpandedSpaceWidths = expandedWidths(spaceWeight: phoneSpace + 1.05, entries: [
-      (nineKeySymbolsButton, 1.05, true), (layoutToggle, 1.25, false), (globe, 1, true), (delete, 1, true),
-      (punctuation, 1, true), (period, 1, true), (enter, 1.9, false),
+    phoneExpandedSpaceWidths = expandedWidths(spaceWeight: phoneSpace + TouchBottomRowLayout.languageWeight, entries: [
+      (nineKeySymbolsButton, TouchBottomRowLayout.symbolsWeight, true),
+      (layoutToggle, TouchBottomRowLayout.layerWeight, false),
+      (globe, TouchBottomRowLayout.globeWeight, true),
+      (delete, 1, true),
+      (punctuation, TouchBottomRowLayout.punctuationWeight, true),
+      (period, TouchBottomRowLayout.punctuationWeight, true),
+      (enter, TouchBottomRowLayout.returnWeight, false),
     ])
     let englishSpace = Self.englishPhoneSpaceWeight
     let englishEntries: [(UIView, CGFloat, Bool)] = [
-      (nineKeySymbolsButton, 1.05, true), (layoutToggle, 1.25, false), (globe, 1, true),
-      (punctuation, 1, true), (period, 1, true), (enter, 1.9, false),
+      (nineKeySymbolsButton, TouchBottomRowLayout.symbolsWeight, true),
+      (layoutToggle, TouchBottomRowLayout.layerWeight, false),
+      (globe, TouchBottomRowLayout.globeWeight, true),
+      (punctuation, TouchBottomRowLayout.punctuationWeight, true),
+      (period, TouchBottomRowLayout.punctuationWeight, true),
+      (enter, TouchBottomRowLayout.returnWeight, false),
     ]
     phoneEnglishActionWidths = expandedWidths(spaceWeight: englishSpace, entries: englishEntries)
-      + [weight(language, 1.05, space: englishSpace)]
-    phoneEnglishExpandedSpaceWidths = expandedWidths(spaceWeight: englishSpace + 1.05, entries: englishEntries)
+      + [weight(language, TouchBottomRowLayout.languageWeight, space: englishSpace)]
+    phoneEnglishExpandedSpaceWidths = expandedWidths(
+      spaceWeight: englishSpace + TouchBottomRowLayout.languageWeight, entries: englishEntries)
     let handwritingSpace = Self.handwritingSpaceWeight
     let handwritingEntries: [(UIView, CGFloat, Bool)] = [
       (layoutToggle, Self.handwritingLayerWeight, false), (globe, 1, true),
@@ -4425,10 +4458,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return row
   }
 
-  /// 手机 26 键底行上空格键的弹性权重；其他键的权重都相对它来算。
-  static let phoneSpaceWeight: CGFloat = 4
-  /// 英文 26 键底行在空格左边多放一个句点（份额 1），这一份从空格里让出，123、符、逗号、中/英、回车保持中文 26 键的宽度。与 Android `KeyboardActionRow.DESIGN_ENGLISH_SPACE_WEIGHT`、HarmonyOS `ENGLISH_SPACE_SHARE` 相同。
-  static let englishPhoneSpaceWeight: CGFloat = phoneSpaceWeight - 1
+  /// 手机 26 键底行上空格键的弹性权重（同步 `TouchBottomRowLayout.spaceWeight`）；其他键的权重都相对它来算。
+  static let phoneSpaceWeight: CGFloat = TouchBottomRowLayout.spaceWeight
+  /// 英文 26 键底行在空格左边多放一个句点，从空格里让出 `TouchBottomRowLayout.punctuationWeight`，使 123、符、逗号、中/英、回车保持中文 26 键宽度。
+  static let englishPhoneSpaceWeight: CGFloat = phoneSpaceWeight - TouchBottomRowLayout.punctuationWeight
   /// 手写底行 123 |（地球键 1）| ， | 空格 | 。 | 中 | 重写 | ⌫ | 回车 的弹性权重，三个移动端相同（Android `KeyboardActionRow.HANDWRITING_*_WEIGHT`、HarmonyOS `HANDWRITING_*_SHARE`，`scripts/test-mobile-handwriting-pad-parity.py` 比对）。空格从 4 让到 2.4、回车从 1.9 让到 1.6（与九键底行的回车相同），腾出「重写」和 ⌫ 的位置：320pt 宽时 ， 。 约 25pt，与 26 键字母键相当，空格仍放得下麦克风和「手写」。
   static let handwritingLayerWeight: CGFloat = 1.25
   static let handwritingPunctuationWeight: CGFloat = 1
@@ -6854,22 +6887,64 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func updateLetterRowInsets() {
-    guard letterRowViews.count > 1, let row = letterRowViews[1] as? UIStackView else { return }
-    // 手机的中间一排两侧各缩进半个键，显示 `;` 键时（微软双拼、粤语双拼的中文模式，见 `showsSemicolonKey`）用它填上这块空位，`;` 藏起来时缩进回来；iPad 的中间一排缩进 2.5% 开始，以回车结尾（`TabletLetterLayout`）。
-    // 这个比例按按键区域本身的宽度计算，单手模式会把它收窄（iPad 单手时收到手机大小的一块里的按键宽度），键盘调整收窄整块键盘时也跟着窄；键面形态决定是 iPad 的缩进还是手机的半键缩进。
+    let layout = KeyboardLayoutPreference.geometry
     let keysWidth = KeyboardOneHandLayout.keysWidth(
       available: keyRowWidth, mode: appliedOneHanded ?? .off, formFactor: formFactor)
-    let margins: UIEdgeInsets
-    if keyFaceFormFactor == .tablet {
-      margins = UIEdgeInsets(top: 0, left: keysWidth * TabletLetterLayout.middleRowLeadingInset, bottom: 0, right: 0)
-    } else {
-      let inset: CGFloat = KeyboardLayoutPreference.geometry.centeredLetters && !showsSemicolonKey
-        ? keysWidth * CGFloat(KeyboardLayoutPreference.geometry.letterInsetRatio) : 0
-      margins = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
+    if letterRowViews.count > 1, let row = letterRowViews[1] as? UIStackView {
+      // 手机的中间一排在居中且不显示 `;` 时，左右各缩进 `0.5 * pitch`，使 9 键与首排 10 键严格等宽；
+      // `;` 显示时用它填上空位；iPad 的中间一排缩进 2.5% 开始，以回车结尾（`TabletLetterLayout`）。
+      let margins: UIEdgeInsets
+      if keyFaceFormFactor == .tablet {
+        margins = UIEdgeInsets(top: 0, left: keysWidth * TabletLetterLayout.middleRowLeadingInset, bottom: 0, right: 0)
+      } else {
+        let inset: CGFloat = layout.centeredLetters && !showsSemicolonKey && keysWidth > 0
+          ? KeyboardFormFactor.phoneMiddleRowHorizontalInset(keysWidth: keysWidth, keySpacing: layout.keySpacing)
+          : 0
+        margins = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
+      }
+      if row.layoutMargins != margins || !row.isLayoutMarginsRelativeArrangement {
+        row.isLayoutMarginsRelativeArrangement = true
+        row.layoutMargins = margins
+        if row.bounds.width > 0 { row.layoutIfNeeded() }
+      }
     }
-    if row.layoutMargins != margins {
-      row.isLayoutMarginsRelativeArrangement = true
-      row.layoutMargins = margins
+    if letterRowViews.count > 2, let thirdRow = letterRowViews[2] as? UIStackView,
+       let shift = shiftButton, let mButton = phoneThirdRowLastLetter {
+      // 手机非分离式 26 键第三排让 `⇧`/`⌫` 取自 `phoneThirdRowEdgeLayout`，并给 `⇧↔Z` 和 `M↔⌫` 加 `edgeGap`，
+      // 使 `Z..M` 精准落入与 `S..K` 对齐的 7 格中央并保持全盘 26 字母完全等宽；平板与分离式键盘恢复默认键距。
+      let useAlignedEdges = keyFaceFormFactor == .phone && !splitKeyboardShown && keysWidth > 9 * layout.keySpacing
+      let targetWidth: CGFloat
+      let targetGap: CGFloat
+      if useAlignedEdges {
+        let edge = KeyboardFormFactor.phoneThirdRowEdgeLayout(keysWidth: keysWidth, keySpacing: layout.keySpacing)
+        targetWidth = edge.width
+        targetGap = edge.gap
+      } else {
+        targetWidth = Self.phoneLetterEdgeWidth
+        targetGap = UIStackView.spacingUseDefault
+      }
+      var changed = false
+      if let shiftWidth = phoneShiftWidth, abs(shiftWidth.constant - targetWidth) > 0.01 {
+        shiftWidth.constant = targetWidth
+        changed = true
+      }
+      if let deleteWidth = phoneDeleteWidth, abs(deleteWidth.constant - targetWidth) > 0.01 {
+        deleteWidth.constant = targetWidth
+        changed = true
+      }
+      func applyCustomSpacing(_ view: UIView) {
+        let current = thirdRow.customSpacing(after: view)
+        let same = targetGap == UIStackView.spacingUseDefault
+          ? current == UIStackView.spacingUseDefault
+          : current != UIStackView.spacingUseDefault && abs(current - targetGap) <= 0.01
+        if !same {
+          thirdRow.setCustomSpacing(targetGap, after: view)
+          changed = true
+        }
+      }
+      applyCustomSpacing(shift)
+      applyCustomSpacing(mButton)
+      if changed, thirdRow.bounds.width > 0 { thirdRow.layoutIfNeeded() }
     }
   }
 
@@ -7558,7 +7633,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       constraints += single.map { $0.widthAnchor.constraint(equalTo: digit.widthAnchor) }
     } else {
       let row = TouchBottomRowLayout.borrowedNumberPad(globe: key.globe, language: !hidesLanguage, space: space)
-      let layerWeight = TouchBottomRowLayout.layerWeight
+      let layerWeight = TouchBottomRowLayout.nineKeyLayerWeight
       constraints = row.compactMap { item -> NSLayoutConstraint? in
         guard item.slot != .layer, let view = actionRowKey(item.slot) else { return nil }
         let constraint = view.widthAnchor.constraint(equalTo: toggle.widthAnchor, multiplier: item.weight / layerWeight)
@@ -7617,6 +7692,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         width.phone.isActive = true
       }
     }
+    updateLetterRowInsets()
   }
 
   /// 屏幕上当前界面画哪种底行。
@@ -9812,6 +9888,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func decorateKey(_ button: UIButton) {
     button.addTarget(self, action: #selector(prepareKeyFeedback), for: .touchDown)
+    button.layer.cornerCurve = .continuous
     if button.window == nil { keySkinNeedsWindowPass = true }
     let skin = KeyboardTheme.current
     guard var configuration = button.configuration else { return }
@@ -10523,9 +10600,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// The top row sits straight on the keyboard in the design (dc.html `mobCands`, the 48px row); the desktop palette brings its own surface, and a keyboard design keeps a veil of its key fill so the candidates stay legible over a photo or pattern.
   static func stripBackground(_ skin: KeyboardTheme, palette: CandidatePalette?) -> UIColor {
     if let palette { return palette.surface }
+    // 把背景交给系统底板的皮肤（「原生」、「跟随系统」及启用系统透底的自定义模板）始终优先返回几乎透明的
+    // `nativeBackgroundFill`，避免被自定义设计分支盖上一层 0.6 透明度的色条；同时留 1% 填充维持触摸命中（#10173）。
+    if skin.drawsNativeBackground { return skin.nativeBackgroundFill }
     if skin.design != nil { return skin.keyBackground.withAlphaComponent(0.6) }
-    // 把背景交给系统底板的皮肤也不留完全透明：候选栏自己带一层几乎看不出的底色，从它上面起手的触摸才有落点（#10173）。
-    return skin.drawsNativeBackground ? skin.nativeBackgroundFill : .clear
+    return .clear
   }
 
   /// 给键盘换上 `KeyboardTheme.current`。`onlyIfChanged` 时（每次出现由 `viewWillAppear` 调用），皮肤和 trait 都与上一次换装相同、也没有按键在窗口外建过，就跳过重画背景、重走整棵按键树重设每个按键的配置这些重活；按键状态相关的更新（回车、方案键、工具栏、候选条）照常做。视图不在窗口里时只看皮肤：trait 还没定，在窗口外走的一遍也只会留下标记让 `viewIsAppearing` 再走一遍，这两项交给它判断。
@@ -10567,12 +10646,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// 换装里的重活：键盘背景、整棵按键树和回车键的配置。每个按键重设一遍配置，设计皮肤还要重画每个按键表面，键盘图片或花纹的背景整块重画。
   private func recolorKeys(_ skin: KeyboardTheme) {
     // 把背景交给系统底板时不是完全透明，而是铺一层几乎看不出的 `nativeBackgroundFill`，按键之间的空白也带内容（#10173）。只铺这一层不够：#7682 里背后不透明的根视图没让透明按钮收到触摸，所以面板、网格、格子和候选栏各自也铺一层，见 `nativeBackgroundFill`。
-    view.backgroundColor = skin.drawsNativeBackground ? skin.nativeBackgroundFill : skin.background
+    view.backgroundColor = skin.drawsNativeBackground ? .clear : skin.background
     skinBackdrop.skin = skin
     // 只在这里改，不改 KeyboardSkinBackgroundView：App 里的皮肤预览背后没有系统底板。底板关了交互，它这一层对系统命中是否有用不确定，铺上只是多一层保险，也是键盘自己的底色。
     if skin.drawsNativeBackground { skinBackdrop.backgroundColor = skin.nativeBackgroundFill }
     // 候选在这个滚动视图里左右滑；原生皮肤下它自己也带一层内容，从候选之间的空白起手的滑动才有收触摸的视图。
-    candidateScrollView.backgroundColor = skin.drawsNativeBackground ? skin.nativeBackgroundFill : .clear
+    candidateScrollView.backgroundColor = .clear
     func recolor(_ node: UIView) {
       if let button = node as? UIButton, var configuration = button.configuration {
         if configuration.background.customView is SkinKeySurfaceView || (configuration.background.backgroundColor?.cgColor.alpha ?? 0) > 0 {
@@ -10590,7 +10669,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       if node.accessibilityIdentifier == "nineKeySidebar" || node.accessibilityIdentifier == "candidateStrip" {
         node.backgroundColor = node.accessibilityIdentifier == "candidateStrip"
           ? currentStripBackground(skin)
-          : skin.keyBackground.withAlphaComponent(0.6)
+          : skin.opaqueKeyBackground.withAlphaComponent(0.6)
       }
       if let label = node as? UILabel, label.accessibilityIdentifier == "keyNumberHint" { label.textColor = skin.secondary }
       node.subviews.forEach { recolor($0) }
