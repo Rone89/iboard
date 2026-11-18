@@ -341,6 +341,8 @@ private struct LicenseNotice: Identifiable {
   private static let all = [
     // 本应用和键盘扩展里拼音词库的 rime-ice 数据都按 GPL-3.0 分发，排在第一项。
     LicenseNotice(file: "LICENSE", title: "iBoard", detail: "基于水杉输入法（msime）与拼音词库 · GPL-3.0", fileExtension: ""),
+    LicenseNotice(file: "GlideEngine-LICENSE", title: "GlideBeam 滑行引擎", detail: "来自 GlideKeyboard · MIT", fileExtension: ".txt"),
+    LicenseNotice(file: "GlideEngine-NOTICE", title: "GlideBeam 词典数据", detail: "滑行与拼音词库来源 · CC BY-SA 4.0 等", fileExtension: ".txt"),
     LicenseNotice(file: "MLKit-NOTICES", title: "Google ML Kit", detail: "手写识别 · 第三方声明"),
     LicenseNotice(file: "MLKit-Dependencies", title: "ML Kit 依赖组件", detail: "手写识别 · 依赖清单"),
     LicenseNotice(file: "GoogleSignIn-Dependencies", title: "Google Sign-In", detail: "Google 登录 · Apache-2.0"),

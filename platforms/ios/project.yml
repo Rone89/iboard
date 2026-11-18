@@ -105,6 +105,11 @@ targets:
       # 通过 Google 登录用的 GoogleSignIn 及其依赖（CocoaPods 生成的 Pods-MSIMEApp 致谢文件，均为 Apache-2.0）。
       - path: SharedResources/GoogleSignIn-Dependencies.txt
         buildPhase: resources
+      # GlideBeam 滑行引擎（GlideKeyboard，MIT）与其词典数据来源（CC BY-SA 4.0 等）的许可与致谢，见 stage-glide-engine.sh 的来源说明。
+      - path: SharedResources/GlideEngine-LICENSE.txt
+        buildPhase: resources
+      - path: SharedResources/GlideEngine-NOTICE.txt
+        buildPhase: resources
       # Licences of the embedded SherpaOnnxC.xcframework below: sherpa-onnx (Apache-2.0) and the ONNX Runtime linked into it (MIT), plus the notices ONNX Runtime carries for what it bundles, shared with the desktops.
       - path: SharedResources/VoiceRuntime-NOTICES.txt
         buildPhase: resources
@@ -297,6 +302,12 @@ targets:
         buildPhase: resources
         type: folder
         optional: true
+      # Staged by stage-glide-engine.sh：GlideKeyboard（MIT）的 GlideBeam 滑行词典三件套
+      # （匹配集，SHA-256 锁在该脚本里）。未暂存时「GlideBeam」滑行引擎选项静默回退到水杉引擎。
+      - path: ../../target/ios/glide-engine
+        buildPhase: resources
+        type: folder
+        optional: true
       # Staged by stage-resources.sh beside EngineResources, where host-api looks for the Cantonese and Zhuyin dictionaries; empty when none were built or fetched, and those schemes are then not offered.
       - path: ../../target/ios/language-dictionaries
         buildPhase: resources
@@ -339,7 +350,15 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/KeyboardExtension/Sources/core/MetasequoiaKeyboard-Bridging-Header.h"
         EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]: HandwritingInputViewFallback.swift
         EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]: HandwritingInputView.swift HandwritingDownloadSession.m
+        # 只有链接了 -lglide_ios_bridge 的目标（本扩展与 MSIMEKeyboardTests）定义它：
+        # KeyboardExtension/Sources 也被 MSIMEApp 与 MSIMESharedTests 编译（预览与共享测试），
+        # 那两处不链滑行库，桥与调用点按这个条件编译出去。
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: GLIDE_ENGINE_LINKED
         OTHER_LDFLAGS:
+          # GlideBeam 滑行引擎（GlideKeyboard MIT 移植）。两个 Rust 静态库可共存
+          # （2026-11-18 链接探针验证）；宿主库都在 $(inherited)/-lsqlite3 之前，
+          # 避免绑到系统 SQLite。
+          - "-lglide_ios_bridge"
           - "-lmsime_host_api"
           - "$(inherited)"
           - "-lc++"
@@ -358,6 +377,11 @@ targets:
         type: folder
       # Staged by stage-resources.sh, empty unless offline gloss dictionaries were given to it.
       - path: ../../target/ios/offline-glosses
+        buildPhase: resources
+        type: folder
+        optional: true
+      # Staged by stage-glide-engine.sh：滑行引擎词典，GlideEngineTests 用它做 nihao 轨迹自检。
+      - path: ../../target/ios/glide-engine
         buildPhase: resources
         type: folder
         optional: true
@@ -465,6 +489,12 @@ targets:
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/MSIMEKeyboardTestHost.app/MSIMEKeyboardTestHost"
         BUNDLE_LOADER: "$(TEST_HOST)"
         OTHER_LDFLAGS:
+          # GlideBeam 滑行引擎（GlideKeyboard MIT 移植）。两个 Rust 静态库可共存
+          # （2026-11-18 链接探针验证）；宿主库都在 $(inherited)/-lsqlite3 之前，
+          # 避免绑到系统 SQLite。
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: GLIDE_ENGINE_LINKED
+        OTHER_LDFLAGS:
+          - "-lglide_ios_bridge"
           - "-lmsime_host_api"
           - "$(inherited)"
           - "-lc++"

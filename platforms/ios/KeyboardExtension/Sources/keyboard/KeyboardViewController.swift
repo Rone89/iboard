@@ -1867,6 +1867,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       guard let self, let root else { return }
       glideActive = true
       updateKeyHitSuppression()
+      // 选了 GlideBeam 就趁起手到抬手这一两秒预热词典；未就绪的第一笔会回退水杉引擎。
+      #if GLIDE_ENGINE_LINKED
+      if GlideEnginePreference.choice == .glidebeam { GlideBeamEngine.shared.prepare() }
+      #endif
       root.bringSubviewToFront(glideTrail)
     }
     glideGesture.onMoved = { [weak self] samples in
@@ -1956,11 +1960,42 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// 抬手：把这一笔交给 Engine，回应像轻点字母键那样渲染。Engine 不处理（方案或模式不对、解不出音节）时丢掉这一笔，一个键也不输入。
   private func typeGlide(_ samples: [GlideTyping.Sample], frames: [CGRect]) {
     synchronizeInputSchemePreference()
+    // 滑行引擎选 GlideBeam 时先试它；引擎未就绪（刚切过来第一笔）或解不出
+    // 读音时回退水杉引擎的滑行，两条路共用同一条轨迹渲染。桥只在链接了
+    // -lglide_ios_bridge 的目标里编入（App 预览与 SharedTests 不链它）。
+    #if GLIDE_ENGINE_LINKED
+    if GlideEnginePreference.choice == .glidebeam, typeGlideWithGlideBeam(samples, frames: frames) { return }
+    #endif
     guard glideTypingArmed, let request = GlideTyping.request(frames: frames, samples: samples, bilingual: bilingualGlideEnabled) else { return }
     let snapshot = session.glide(request)
     guard snapshot.isHandled else { return }
     render(snapshot)
   }
+
+  /// GlideBeam（GlideKeyboard MIT 移植）解码：轨迹 → 拼音读音 → 逐字母喂进
+  /// 水杉会话组字——与逐键输入同一入口，候选栏、词库与学习照常工作。返回
+  /// 是否成功接手；失败时调用点回落到 `session.glide`。
+  #if GLIDE_ENGINE_LINKED
+  private func typeGlideWithGlideBeam(_ samples: [GlideTyping.Sample], frames: [CGRect]) -> Bool {
+    guard glideTypingArmed else { return false }
+    GlideBeamEngine.shared.prepare()
+    let letterCodes = GlideTyping.letters.compactMap { $0.asciiValue }.map(UInt32.init)
+    guard let reading = GlideBeamEngine.shared.decodeReading(samples: samples, letters: letterCodes, frames: frames),
+          !reading.isEmpty, reading.utf8.allSatisfy({ (97...122).contains($0) }) else { return false }
+    var submitted = true
+    for (index, letter) in reading.enumerated() {
+      let isFinal = index == reading.count - 1
+      let accepted = session.enqueueCharacter(String(letter), completion: { [weak self] snapshot in
+        guard isFinal, let self else { return }
+        guard snapshot.isHandled else { return }
+        render(snapshot)
+      })
+      submitted = submitted && accepted
+      if !accepted { break }
+    }
+    return submitted
+  }
+  #endif
 
   /// 字母键此刻是不是 26 键双拼：中文模式、双拼方案、不画 14/18 键网格、不在本地模式。
   private var typesShuangpinLetters: Bool { isChineseMode && usesShuangpin && !usesLetterGrid && !isInLocalMode }

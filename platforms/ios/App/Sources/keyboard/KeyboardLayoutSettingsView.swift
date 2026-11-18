@@ -23,6 +23,7 @@ struct KeyboardLayoutSettingsView: View {
   /// 「大屏单手时侧边显示数字键盘」（共享偏好 `touch_one_handed_side_panel`），取自共享文档。
   @State private var oneHandSidePad = TouchOneHandedSidePanelPreference.load() == .numberPad
   @State private var glideTyping = KeyboardLayoutPreference.glideTyping
+  @State private var glideEngine = GlideEnginePreference.choice
   @State private var bilingualGlide = KeyboardLayoutPreference.bilingualGlide
   @State private var cursorSwipe = KeyboardLayoutPreference.cursorSwipe
   @State private var swipeSymbols = KeyboardLayoutPreference.swipeSymbols
@@ -405,6 +406,20 @@ struct KeyboardLayoutSettingsView: View {
                       }))
       .accessibilityIdentifier("appGlideTypingSwitch")
       DesignDivider()
+      // GlideBeam 词典未随扩展暂存（stage-glide-engine.sh 没跑）时不显示这一行：只列水杉引擎的选择没有意义。
+      if GlideEngineChoice.glidebeamAvailable {
+        DesignSelectRow(title: "滑行引擎", info: "全拼 26 键滑行时把轨迹交给哪个解码器。GlideBeam 来自开源项目 GlideKeyboard（MIT），把轨迹解成拼音读音，之后照常由水杉组字。",
+                        options: GlideEngineChoice.allCases.map {
+                          DesignOption(title: $0.title, value: $0, identifier: "glideEngine-\($0.rawValue)")
+                        },
+                        selection: Binding(get: { glideEngine }, set: { choice in
+                          glideEngine = choice
+                          GlideEnginePreference.choice = choice
+                        }),
+                        sheetTitle: "滑行引擎", identifier: "appGlideEnginePicker")
+        .disabled(!glideTyping)
+        DesignDivider()
+      }
       DesignToggleRow(title: "中英混合滑行", info: "在全拼 26 键上滑行，同时提供中文和英文候选，无需切换中英文。中英文均可连续多笔组字，点击候选、空格或回车选择当前候选；下一笔和语言边界不会自动确认。",
                       enabled: glideTyping,
                       isOn: Binding(get: { bilingualGlide }, set: { enabled in

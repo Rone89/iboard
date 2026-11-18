@@ -1,0 +1,66 @@
+# Third-party notices
+
+GlideKeyboard is an independent project. It is not affiliated with, endorsed
+by, or sponsored by the WM Keyboard authors.
+
+## WM Keyboard (MIT)
+
+- Upstream: https://github.com/wasi-master/wmkeyboard
+- Pinned commit: `4ff85504c5ce9d55210d4d0574e5fcd40f0bbe10`
+- Reused components: `native/wm-engine` glide/GlideBeam decoder, packed-trie
+  word dictionary, fuzzy matching and CJK pinyin conversion. The Android/JNI
+  front end is not used. The Rust engine is compiled into a static XCFramework
+  and called through the small C ABI in `Rust/ios-bridge`.
+- License: MIT. Full text: `Resources/LICENSES/WMKeyboard-MIT.txt`.
+
+## English word-frequency seed
+
+`app/dictionaries-src/en.txt` from WM Keyboard, derived from OpenSubtitles 2018
+counts distributed by hermitdave/FrequencyWords (CC BY-SA 4.0). GlideKeyboard
+filters the seed to valid ASCII lowercase words and repacks it as `en.txt`.
+The packaged copy remains a derivative and is distributed under CC BY-SA 4.0.
+Full license text: `Resources/LICENSES/CC-BY-SA-4.0.txt`.
+
+## Chinese pinyin and conversion data
+
+`pinyin_v2.tsv` and `pinyin_ngrams.tsv` from
+https://github.com/wasi-master/wmkeyboard-data (commit fetched at build time,
+verified by SHA-256). The data repository attributes the pinyin readings to
+CC-CEDICT and word frequencies to OpenSubtitles 2018 / FrequencyWords, both
+CC BY-SA 4.0. The ngram pack additionally uses the Leipzig Corpora Collection
+(zho-cn_web_2015 and zho_news_2020), credited to D. Goldhahn, T. Eckart and
+U. Quasthoff, under CC BY 4.0: https://wortschatz.uni-leipzig.de/ and
+https://creativecommons.org/licenses/by/4.0/. GlideKeyboard compiles them into `pinyin.wmcd`, `ngrams.wmcn` and
+`glide.wmdict`; these are derivatives distributed under CC BY-SA 4.0.
+The glide trie additionally contains algorithmically generated A-不-A pinyin
+spellings derived from single-character readings in the same CC BY-SA data;
+the generator is `Rust/shared/glide_patterns.rs`. From Build 36 it also derives
+bounded multi-character-token + single-character-token readings supported by
+real ngram pairs in the same pinned data. Existing trie frequencies are preserved;
+only the glide index is expanded, while conversion still uses the original tables.
+From Build 45, an additional pass derives 1...4 + 1...4 character token pairs
+(up to six characters total) with at least 1,000 recorded pair occurrences.
+New spellings use min(token frequencies, pair count) / 16, at least one;
+legacy-derived spellings are committed first so their weights cannot be raised.
+The same source attribution and CC BY-SA 4.0 terms apply to these derivatives.
+No new external word list is bundled for these features. Derivation rules and
+validation are documented in `docs/CHINESE_PHRASE_EXPANSION.md` and
+`docs/BUILD45_COMPOUND_EXPANSION.md`.
+
+Corresponding source for the data derivatives: the upstream TSV files plus the
+build scripts in `Scripts/fetch-chinese-data.sh`,
+`Scripts/compile-chinese-data.sh` and `Scripts/prepare-keyboard.sh`.
+Verification hashes are recorded in those scripts and in
+`docs/CHINESE_GLIDE_VALIDATION.md`.
+
+## Rust dependencies
+
+See `docs/RUST_DEPENDENCIES.md` for the locked package list and declared SPDX
+licenses. The main transitive families are ICU4X (Unicode-3.0),
+serde/serde_json (MIT OR Apache-2.0), miniz_oxide (MIT OR Zlib OR
+Apache-2.0), memchr (Unlicense OR MIT) and smallvec (MIT OR Apache-2.0).
+
+## Apple
+
+Apple, iOS, Xcode and UIKit are trademarks of Apple Inc. This project uses
+public Apple frameworks only and is not affiliated with Apple.
