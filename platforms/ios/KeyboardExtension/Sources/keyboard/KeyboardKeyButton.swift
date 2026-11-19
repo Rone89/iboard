@@ -216,6 +216,9 @@ final class KeyboardKeyButton: UIButton {
       resetPressFeedback()
       removePressPreview()
       resetCornerHint()
+      holdVariantShown = false
+      holdVariantBar?.removeFromSuperview()
+      holdVariantBar = nil
       _ = nineKeySwipe.finish()
       restoreNineKeySwipeFace()
       touchDownLocation = nil
@@ -263,6 +266,13 @@ final class KeyboardKeyButton: UIButton {
   var cornerHintSwipesEitherWay = false
   /// 按住是否输入角标。为假时角标只靠滑动输入，按住留给按键自己的长按菜单（`menu`），例如 14 键「长空格」的逗号：上滑或下滑输入句号，长按仍打开常用标点。
   var holdsCornerHint = true
+
+  /// 长按弹出的变体（`KeyboardLetterVariants`）：非空时长按不再直出角标，而是弹出变体条（`KeyboardHoldVariantBar`），滑动选中、松手上屏。nil 或空时长按行为不变，与角标共用同一条按住计时。
+  var holdVariants: [String]?
+  /// 松手时输入选中的变体。触发它的触摸被取消而不是正常结束，所以按键自身的动作不会再执行一次。
+  var onHoldVariant: ((String) -> Void)?
+  private var holdVariantBar: KeyboardHoldVariantBar?
+  private var holdVariantShown = false
 
   /// UIKit 默认的长按时长，与九键长按用的半秒相同；Android 等的是系统的长按超时。
   static let cornerHintHoldDelay: TimeInterval = 0.5
@@ -363,13 +373,23 @@ final class KeyboardKeyButton: UIButton {
       MainActor.assumeIsolated {
         // 滑出按键的手指不再算按住，对应 Android 检查 `isPressed()`。
         guard let self, self.isTracking, self.isHighlighted, !self.cornerHintTriggered, let hint = self.cornerHint else { return }
-        self.triggerCornerHint(hint)
+        if let variants = self.holdVariants, !variants.isEmpty {
+          self.beginHoldVariants(variants)
+        } else {
+          self.triggerCornerHint(hint)
+        }
       }
     }
     return began
   }
 
   override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+    // 变体条已弹出：高亮手指下的变体，不再判角标滑动。跳过 UIControl 自己的跟踪更新，
+    // 高亮保持按住的样子（气泡不消失），由这一支和 touchesMoved 手动接管。
+    if holdVariantShown {
+      updateHoldVariantSelection(at: touch.location(in: nil))
+      return true
+    }
     if let digit = nineKeySwipeDigit, nineKeySwipe.gesture == .none, let mode = nineKeySwipeMode?(),
        let decided = nineKeySwipe.move(y: touch.location(in: nil).y, mode: mode, hasLetters: nineKeySwipeHasLetters) {
       beginNineKeySwipe(decided, digit: digit)
@@ -391,6 +411,11 @@ final class KeyboardKeyButton: UIButton {
   }
 
   override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+    // 变体条已弹出：只更新高亮，不给 UIControl 更新高亮的机会（手指已不在按键上）。
+    if holdVariantShown {
+      if let touch = touches.first { updateHoldVariantSelection(at: touch.location(in: nil)) }
+      return
+    }
     // 判出九键滑动之后这次触摸不再是点按：键停在判出时的样子（输入数字时保持按下，弹出字母时松开），不随手指进出按键变化。
     guard nineKeySwipe.gesture == .none else { return }
     super.touchesMoved(touches, with: event)
@@ -403,6 +428,10 @@ final class KeyboardKeyButton: UIButton {
   }
 
   private func endTouches(_ touches: Set<UITouch>, with event: UIEvent?) {
+    if holdVariantShown {
+      endHoldVariants(touches, with: event)
+      return
+    }
     let swiped = nineKeySwipe.finish()
     if swiped != .none {
       // 和角标一样取消而不是结束这次触摸，按键自己的点按不会再触发；还原键面之后再上屏，上屏引起的重画看到的是原来的键面。
@@ -429,6 +458,7 @@ final class KeyboardKeyButton: UIButton {
 
   override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
     // 触摸被滑行输入、横滑移光标或长按接管，或被系统取消时，什么也不输入；已经换成数字的键面还原。
+    dismissHoldVariants()
     _ = nineKeySwipe.finish()
     restoreNineKeySwipeFace()
     resetCornerHint()
@@ -493,6 +523,69 @@ final class KeyboardKeyButton: UIButton {
     cornerHintHold = nil
     cornerHintTriggered = false
     previewTitleOverride = nil
+  }
+
+  // MARK: - 长按变体（原生键盘的长按弹出）
+
+  /// 按住满 `cornerHintHoldDelay` 且这个键有变体时弹出变体条：与放大气泡同层（键盘根视图），条在气泡上方。
+  private func beginHoldVariants(_ variants: [String]) {
+    guard let host = pressPreviewHost else { return }
+    holdVariantShown = true
+    let bar = holdVariantBar ?? KeyboardHoldVariantBar()
+    if bar.superview !== host {
+      bar.removeFromSuperview()
+      host.addSubview(bar)
+    }
+    bar.frame = host.bounds
+    let key = superview?.convert(untransformedFrame, to: host) ?? convert(bounds, to: host)
+    let skin = KeyboardTheme.current
+    bar.show(variants, keyFrame: key, in: host.bounds,
+             fill: skin.opaqueKeyBackground.resolvedColor(with: traitCollection),
+             text: skin.keyForeground.resolvedColor(with: traitCollection))
+    holdVariantBar = bar
+  }
+
+  /// 手指挪动时高亮所在变体，气泡跟着换成它；离开条上时清掉高亮、气泡回到键面。
+  private func updateHoldVariantSelection(at point: CGPoint) {
+    guard holdVariantShown, let bar = holdVariantBar, let variants = holdVariants else { return }
+    let index = bar.selectedIndex(inLocalPoint: bar.convert(point, from: nil))
+    bar.set(selected: index)
+    previewTitleOverride = index.flatMap { variants.indices.contains($0) ? variants[$0] : nil }
+  }
+
+  /// 变体条上的松手：选中了变体就取消这次触摸并交给 `onHoldVariant`；滑回原键松手输入这个键本身
+  /// （与原生键盘一致）；其余什么也不输入。三条路都不再触发角标。
+  private func endHoldVariants(_ touches: Set<UITouch>, with event: UIEvent?) {
+    let selected = holdVariantBar?.selected
+    let backOnKey = touches.first.map { point(inside: convert($0.location(in: nil), from: nil), with: nil) } ?? false
+    holdVariantShown = false
+    holdVariantBar?.removeFromSuperview()
+    holdVariantBar = nil
+    resetCornerHint()
+    if let selected, let variants = holdVariants, variants.indices.contains(selected) {
+      isHighlighted = false
+      super.touchesCancelled(touches, with: event)
+      touchDownLocation = nil
+      onHoldVariant?(variants[selected])
+    } else if backOnKey {
+      // 气泡已回到键面标题、高亮仍是按住的样子：松手照常触发点按。
+      super.touchesEnded(touches, with: event)
+      touchDownLocation = nil
+    } else {
+      isHighlighted = false
+      super.touchesCancelled(touches, with: event)
+      touchDownLocation = nil
+    }
+  }
+
+  /// 变体条还没收尾时触摸被取消（滑行输入、横滑移光标或系统接管）：收掉条，什么也不输入。
+  private func dismissHoldVariants() {
+    guard holdVariantShown else { return }
+    holdVariantShown = false
+    holdVariantBar?.removeFromSuperview()
+    holdVariantBar = nil
+    resetCornerHint()
+    isHighlighted = false
   }
 
   private func updatePressPreview() {
@@ -663,8 +756,8 @@ final class KeyPressPreviewView: UIView {
     label.frame = geometry.head.insetBy(dx: 4, dy: 2)
   }
 
-  /// 上方圆角为 `topRadius`、下方圆角为 `bottomRadius` 的圆角矩形。
-  private static func path(_ rect: CGRect) -> CGPath {
+  /// 上方圆角为 `topRadius`、下方圆角为 `bottomRadius` 的圆角矩形。不是 private：长按变体条（`KeyboardHoldVariantBar`）画同一条形。
+  static func path(_ rect: CGRect) -> CGPath {
     let limit = min(rect.width, rect.height) / 2
     let top = min(topRadius, limit), bottom = min(bottomRadius, limit)
     let path = UIBezierPath()

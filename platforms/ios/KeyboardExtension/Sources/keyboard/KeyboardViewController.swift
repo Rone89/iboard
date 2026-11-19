@@ -3621,6 +3621,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         self?.countKeyPress(TypingKeyID.character(text))
         self?.insertSymbolLayerLiteral(hint)
       }
+      // 长按变体条选中的字母：同样记一次按键、字面上屏（结束组字再写出），键面按模式在 updateLetterCaseControls 里换成拼音声调或英文变音表。
+      (button as? KeyboardKeyButton)?.onHoldVariant = { [weak self] variant in
+        self?.countKeyPress(TypingKeyID.character(text))
+        self?.insertSymbolLayerLiteral(variant)
+      }
       applyLetterFont(to: button)
       letterButtons.append((button: button, lowercase: text, hint: attachHintLabel(to: button),
                             corner: attachCornerHintLabel(to: button)))
@@ -5247,7 +5252,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       localMode: currentLocalMode, entersHelpcode: entersHelpcode,
       casedLetters: typesCasedLetters, korean: typesKorean,
       swipeSymbols: swipeSymbolsEnabled, shuangpinHints: shuangpinKeyHintsEnabled,
-      cornerHints: letterCornerHintsEnabled)
+      cornerHints: letterCornerHintsEnabled, letterGridShown: usesLetterGrid)
     guard appliedLetterCaseInputs != inputs else { return }
     appliedLetterCaseInputs = inputs
     // 中文模式的字母键面画大写（与搜狗、微信、百度、豆包的拼音 26 键一致），输入的仍是小写拼写；英文模式画小写，只有下一键真的会输入大写时键面才变大写：英文的 Shift 或大写锁定，组字中的辅助码 Shift（无障碍标签里也会体现，并以大写辅助码交给 Engine），以及越南语和藏文区分大小写的字母（它们按 Shift 画大小写，不跟中文模式画大写）。日语罗马字照日文键盘的惯例画小写；本地输入模式（英文补全、Unicode、快捷短语等）按字面输入，也画小写。
@@ -5258,6 +5263,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let usesUppercase = shifted || (isChineseMode && !casedLetters && !inputScheme.isJapanese && !inLocalMode)
     let korean = typesKorean
     let koreanShifted = korean && letterCaseState != .lowercase
+    // 长按变体只属于手机上的拼音 26 键和英文 26 键（`KeyboardLetterVariants.alphabet`）；其他模式为 nil，长按照旧直出角标。
+    let holdAlphabet = KeyboardLetterVariants.alphabet(
+      chinese: isChineseMode, scheme: inputScheme, letterGridShown: usesLetterGrid,
+      localMode: inLocalMode, phoneIdiom: traitCollection.userInterfaceIdiom == .phone)
     for (button, lowercase, hintLabel, cornerLabel) in letterButtons {
       // 角标符号属于所有模式和方案下的 QWERTY 字母键面，与 Android 的 `standardLetters` 一致；韩文字母键面没有，微软双拼的 `;` 也没有。
       // 「显示字母键角标」关掉时只藏起这一行，`cornerHint` 照旧交给按键，长按和滑动照样输入它（#10587）。
@@ -5267,6 +5276,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       (button as? KeyboardKeyButton)?.cornerHint = corner
       (button as? KeyboardKeyButton)?.swipesCornerHint = swipeSymbolsEnabled
       (button as? KeyboardKeyButton)?.cornerHintSwipeDirection = swipeSymbolsDirection
+      (button as? KeyboardKeyButton)?.holdVariants = holdAlphabet
+        .flatMap { KeyboardLetterVariants.variants(for: lowercase, alphabet: $0) }
       // Korean draws the jamo each key types, with the doubled consonants and extra vowels while Shift is on.
       if korean, let jamo = DubeolsikKeyLayout.keycap(for: lowercase, shifted: koreanShifted) {
         if var configuration = button.configuration {
@@ -7027,6 +7038,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let swipeSymbols: Bool
     let shuangpinHints: Bool
     let cornerHints: Bool
+    /// 长按变体跟着「是不是 26 键字母页」变：画 14/18 键字母网格时变体要收回，放进输入里让键面更新不跳过它。
+    let letterGridShown: Bool
   }
 
   private struct SpellingStripInputs: Equatable {

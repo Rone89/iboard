@@ -64,6 +64,7 @@
 		0BC6B1DF3B24C3357B538EB8 /* BackendCandidateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F8DF30A61A7F6604ED4032 /* BackendCandidateClient.swift */; };
 		0BCC57FF3E2CB9CC3C3C6B1C /* OpenCC-Apache-2.0.txt in Resources */ = {isa = PBXBuildFile; fileRef = DAC83802853B57ACCD2EE104 /* OpenCC-Apache-2.0.txt */; };
 		0BD1F00F1D2A7A58E0150CB8 /* GeneratedKeyboardSkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC587235772F54E138C05322 /* GeneratedKeyboardSkin.swift */; };
+		0C23B3E162AED4863DA974F5 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 225D196A57A288F360D425DA /* LICENSE */; };
 		0C64366D8235DB74722CDF2B /* TauriPersonalDictionaryBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F9E503D2C75695EE14BD53 /* TauriPersonalDictionaryBridge.swift */; };
 		0C7581B2FA1570AE118946C6 /* GlobalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0CE1B2A79B2393496CDEF85 /* GlobalTheme.swift */; };
 		0D17506BB8BEC3EB3F238962 /* ViewRequestTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92E50A290AB024B282CC04E /* ViewRequestTask.swift */; };
@@ -197,7 +198,6 @@
 		29328C4C3B27F612B74637B4 /* IOSCloudDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D8B85A610A0F839A008BCA /* IOSCloudDictionary.swift */; };
 		293C0B2096D5DE0C4ED9A063 /* latex-symbols-MIT.txt in Resources */ = {isa = PBXBuildFile; fileRef = CA0B53BA15FA6E4C05491272 /* latex-symbols-MIT.txt */; };
 		29DA165AE48415CE50E7CBBB /* KeyboardFunctionTileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 617BB66BF42B0C7BF0F66CBE /* KeyboardFunctionTileView.swift */; };
-		29E36C5428B8FE9925BBA1F9 /* Pods_MSIMEKeyboardExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1725F091388383288C9C0CB6 /* Pods_MSIMEKeyboardExtension.framework */; };
 		29F8B1C831FF4EF97BEE120C /* VocabularyReviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B331DBB6B11BEAFDA5BA11C /* VocabularyReviewStore.swift */; };
 		2A22F6EA9E95766A931E74DD /* HandwritingInputViewFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB16ED43E02A5C32A83690FE /* HandwritingInputViewFallback.swift */; };
 		2A6342FBC293B4ADBD39A5A5 /* BackendLocalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC601D4D0CBF4CCD8B1D39FA /* BackendLocalStore.swift */; };
@@ -552,7 +552,6 @@
 		700183FCED3A471BFF991B5B /* librime-octagram-BSD-3-Clause.txt in Resources */ = {isa = PBXBuildFile; fileRef = F3A4C31464531A1674DE5675 /* librime-octagram-BSD-3-Clause.txt */; };
 		702EE96E7A6894EE394EC8B0 /* SharedThemeTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C1FF3113D3D2E64FBF8F3D /* SharedThemeTestSupport.swift */; };
 		70676AFFCF880A7935F01E09 /* CloudSyncStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2FCBDD503ED38EAEC810296 /* CloudSyncStateTests.swift */; };
-		70A2D0772F2BB29E49E732C1 /* Pods_MSIMEApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BCE810E0F4B3843300563D83 /* Pods_MSIMEApp.framework */; };
 		70C791105C228EA6C641DED5 /* WAVPCMExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF406F60D186354E48767AFB /* WAVPCMExtractor.swift */; };
 		7109101AE8AC956AC27E6737 /* OneHandModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48AB1E7A5D30BF8A8B9B3AD6 /* OneHandModeTests.swift */; };
 		715E61CBD3FDE4157CEA272E /* BackendCandidateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F8DF30A61A7F6604ED4032 /* BackendCandidateClient.swift */; };
@@ -565,6 +564,7 @@
 		7285E0002B9E3121A7C6C530 /* IOSResourcePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E8B4297D68CF9B8E393590 /* IOSResourcePacks.swift */; };
 		735B9D1415054201EF2DE465 /* CandidateMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62B836D28DBED9680F0BBDD3 /* CandidateMarker.swift */; };
 		7372464D0CD6E7EFF971991C /* AISkinService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C593401E864A58F7F8763D1 /* AISkinService.swift */; };
+		73E5B7F241FBA96277147693 /* KeyboardHoldVariantBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 583E0F2E41B0CA748DE24246 /* KeyboardHoldVariantBar.swift */; };
 		744083A88319CC99A12E2F4F /* CandidateSkinPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = C186E95B0AA530AEE976FBFC /* CandidateSkinPreview.swift */; };
 		748385D2DC54ACE7E8734612 /* CandidateOptionsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590B68DFD15993A10C53B739 /* CandidateOptionsSettingsView.swift */; };
 		74BE0588F22AC03907246D97 /* CloudClipboardRelayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D622E7FD204548CB23F2E05C /* CloudClipboardRelayTests.swift */; };
@@ -748,7 +748,6 @@
 		9ABC2673F7D3F6C436AE9987 /* FrequencyAdjustmentPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3AB2A5BF965499D6D662031 /* FrequencyAdjustmentPreference.swift */; };
 		9ACE0DC36EDD7CCE4AF24E0C /* DesignOptionSheetMetricsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11B59005D14976A2EDA1777 /* DesignOptionSheetMetricsTests.swift */; };
 		9B729E1F857AF2846DADF491 /* DoubaoVoiceCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7FE5DEC53AAC548F03142BC /* DoubaoVoiceCoordinator.swift */; };
-		9BAB3E48E6761DD7030BDDFD /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 3028E8EB9EC6AFE8F5079BBA /* LICENSE */; };
 		9BACEE61639CE8ED2D9D4451 /* DesignKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 460A90066E261D34294ABDB8 /* DesignKit.swift */; };
 		9BD7CBD509ED5034E8CD7389 /* TouchPointTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 175E188ABD5A2A7946B49B67 /* TouchPointTests.swift */; };
 		9C7921803D4AE13BC8E86D93 /* OnlineCandidateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB0EAE607F7545FA0769CF9 /* OnlineCandidateProvider.swift */; };
@@ -767,6 +766,7 @@
 		9FCB94755C66BAFB19B16C2D /* KeyboardVoicePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85BAC20261DD7AC0622794B /* KeyboardVoicePanelView.swift */; };
 		9FE4BE5C4811D515E75A1F41 /* HandwritingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CEB8B53A49EDD3D2311452 /* HandwritingTests.swift */; };
 		9FF19F82463BDCA86C32D4C1 /* CandidateGlossPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EEF14442D510EC1782EB7C3 /* CandidateGlossPreference.swift */; };
+		A00608C61F397ADB4E145106 /* HoldVariantsScreenshotUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A13D613B242774853241F99 /* HoldVariantsScreenshotUITests.swift */; };
 		A0A310E3CE7E03C79FC57FEC /* CandidatePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0710E1673ED0BB707E0297B3 /* CandidatePalette.swift */; };
 		A0A3CCBC627F583A8898C167 /* KeyboardAdjustOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1766E5D98BB601D58ADFCB02 /* KeyboardAdjustOverlay.swift */; };
 		A11C9C468B2FEBEC20527576 /* VoiceTextHandoffStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A5447CB7E52E5F1AB20940B /* VoiceTextHandoffStore.swift */; };
@@ -812,6 +812,7 @@
 		AAF9055D3EF61B3E962C8F9B /* DictionarySnapshotWorkerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC8D760D00ADE2D08AE7A18B /* DictionarySnapshotWorkerTests.swift */; };
 		AAFC70170C5B8BF3B145F28E /* CandidateOptionsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590B68DFD15993A10C53B739 /* CandidateOptionsSettingsView.swift */; };
 		AB58DE8F279652392E7C5D5D /* PersonalDictionaryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00E85789EA19D3907FAA0C8A /* PersonalDictionaryStoreTests.swift */; };
+		AB81A702EE8B0D15809BBC17 /* KeyboardHoldVariantBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 583E0F2E41B0CA748DE24246 /* KeyboardHoldVariantBar.swift */; };
 		AB82A31F6FBFD8A281B70A75 /* VerificationCodePolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E458895F904999F03A6A88F /* VerificationCodePolicyTests.swift */; };
 		AB8E1B417432DE61CBB64EFF /* ViewRequestTaskTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB78FF7812EC435D05E8FFC8 /* ViewRequestTaskTests.swift */; };
 		AC098C8E31A217080EFE8F5B /* AppAppearancePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98498F1E1231D37B96B2E7AB /* AppAppearancePreference.swift */; };
@@ -1092,6 +1093,7 @@
 		E3E039CE4FA6BAD6A85483EF /* SharedPreferenceBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FECD77FD58C6D535217A3B2 /* SharedPreferenceBinding.swift */; };
 		E408DAE28A4E8CB4B42C2872 /* LocalModeSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D380F60212DADCCC4AC34A5C /* LocalModeSettingsTests.swift */; };
 		E40B14CB5026FF3469F20AA3 /* VocabularyReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0228A730ED4ACC32CF149FF /* VocabularyReviewTests.swift */; };
+		E42432CB982B06437868E356 /* KeyboardHoldVariantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33E729CECF80700DD557D7B5 /* KeyboardHoldVariantsTests.swift */; };
 		E46D4A24879DB32CFDFEE336 /* KeyboardPressAnimationCleanup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9F57BB015415B3C7B59217 /* KeyboardPressAnimationCleanup.swift */; };
 		E48AECD443F2DC680D107DAD /* KeyboardBottomHintLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBE032E843D100A642EA40F /* KeyboardBottomHintLabel.swift */; };
 		E48CAB08948264CC00812918 /* CandidateCanvasAssets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17741BB1CD90F04310170CA8 /* CandidateCanvasAssets.swift */; };
@@ -1153,6 +1155,7 @@
 		F297FEFE35FF7DE8D5C593F7 /* TranslationProviderSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D877D6A4E98C4CAED197AC82 /* TranslationProviderSettingsView.swift */; };
 		F30091B95C6FFDBDD233B375 /* CloudClipboardRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61012216361C7060D0B5D98 /* CloudClipboardRelay.swift */; };
 		F32E97F86CA340F56FA8E59F /* CompositionCaretPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68D0F07A3F356D22DD94A230 /* CompositionCaretPolicy.swift */; };
+		F47F8616DA7B55076872E3F9 /* KeyboardHoldVariantBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 583E0F2E41B0CA748DE24246 /* KeyboardHoldVariantBar.swift */; };
 		F4A3C9831D610982B364D1A1 /* DictionarySync.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F4D8094BA848D8A66031A0 /* DictionarySync.swift */; };
 		F4B02286F91A2A5C078B307E /* KeyboardBrand.png in Resources */ = {isa = PBXBuildFile; fileRef = 998740623BE3E698150DCE1E /* KeyboardBrand.png */; };
 		F4C6D8BBE789AFD2B12AD84D /* EmailSuffixPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820E0D71CB5FF1C35CF579B1 /* EmailSuffixPolicyTests.swift */; };
@@ -1306,6 +1309,7 @@
 		098F3E7B257AD9D72906A6FB /* BackendRustAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendRustAccount.swift; sourceTree = "<group>"; };
 		09ADCCD7226D6D9037DF7D6F /* KeyboardClipboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardClipboardView.swift; sourceTree = "<group>"; };
 		0A10B89FD2F8F0388A8C6878 /* LoginConsentPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginConsentPolicyTests.swift; sourceTree = "<group>"; };
+		0A13D613B242774853241F99 /* HoldVariantsScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldVariantsScreenshotUITests.swift; sourceTree = "<group>"; };
 		0A376B038D8B2BE88A7BDA2B /* KeyboardDictionarySync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDictionarySync.swift; sourceTree = "<group>"; };
 		0A83D8DED0888156567425AF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		0BA0F6652DC4817F9B83399B /* AppNotices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNotices.swift; sourceTree = "<group>"; };
@@ -1333,7 +1337,6 @@
 		13BF4B42BD974D823F751219 /* AppThemePaletteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppThemePaletteTests.swift; sourceTree = "<group>"; };
 		15474D225733D73279968DB8 /* PluginCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginCatalog.swift; sourceTree = "<group>"; };
 		172570D49F6C82AF6C33FFE9 /* KeyboardLayoutSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLayoutSettingsView.swift; sourceTree = "<group>"; };
-		1725F091388383288C9C0CB6 /* Pods_MSIMEKeyboardExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MSIMEKeyboardExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		175E188ABD5A2A7946B49B67 /* TouchPointTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchPointTests.swift; sourceTree = "<group>"; };
 		1766E5D98BB601D58ADFCB02 /* KeyboardAdjustOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAdjustOverlay.swift; sourceTree = "<group>"; };
 		17741BB1CD90F04310170CA8 /* CandidateCanvasAssets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateCanvasAssets.swift; sourceTree = "<group>"; };
@@ -1366,6 +1369,7 @@
 		1FECD77FD58C6D535217A3B2 /* SharedPreferenceBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPreferenceBinding.swift; sourceTree = "<group>"; };
 		216D8833B005F351FF4DEA8D /* PersonalDictionaryScelImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalDictionaryScelImportTests.swift; sourceTree = "<group>"; };
 		21A8065AC801100136169DF2 /* VoicePause.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePause.swift; sourceTree = "<group>"; };
+		225D196A57A288F360D425DA /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		22B00BF172EF20CF2DA5EC53 /* DiagnosticLogSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogSettingsView.swift; sourceTree = "<group>"; };
 		22B07522F2ED6088AD7E8B8E /* WubiCodeHintPreferenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WubiCodeHintPreferenceTests.swift; sourceTree = "<group>"; };
 		22D630ABE061BC4F6C621106 /* IOSResourcePackDownload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSResourcePackDownload.swift; sourceTree = "<group>"; };
@@ -1402,13 +1406,13 @@
 		2FC111167E62A20358E28312 /* AIProviderCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderCatalogTests.swift; sourceTree = "<group>"; };
 		2FED55ACBEABB84672AFC0A6 /* EngineResources */ = {isa = PBXFileReference; lastKnownFileType = folder; name = EngineResources; path = ../../target/ios/EngineResources; sourceTree = SOURCE_ROOT; };
 		300E2BFE36234A0329486BB3 /* VoicePauseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePauseTests.swift; sourceTree = "<group>"; };
-		3028E8EB9EC6AFE8F5079BBA /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		306B951F716B9FAD3F702B19 /* VoiceRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecorder.swift; sourceTree = "<group>"; };
 		3111E1460F4C7D4E41011912 /* NoticeBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoticeBanner.swift; sourceTree = "<group>"; };
 		318BFBC157DA8A1948925326 /* HandwritingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandwritingSettingsView.swift; sourceTree = "<group>"; };
 		32CA0509FDC33EB78B2E316B /* PersonalWordbookStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalWordbookStore.swift; sourceTree = "<group>"; };
 		32D4D354FEFD88EABBB73877 /* KeyboardSchemePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardSchemePickerView.swift; sourceTree = "<group>"; };
 		33592DBFB8317D57E3C2CA80 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		33E729CECF80700DD557D7B5 /* KeyboardHoldVariantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHoldVariantsTests.swift; sourceTree = "<group>"; };
 		3462BAF96C0E1973D185D9E4 /* KeyboardMemoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardMemoryTests.swift; sourceTree = "<group>"; };
 		3475664D4AABD6174BA766CB /* EighteenKeySwipeGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EighteenKeySwipeGesture.swift; sourceTree = "<group>"; };
 		34A6F51105668FCABFE6BB75 /* PluginDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginDetailView.swift; sourceTree = "<group>"; };
@@ -1459,7 +1463,6 @@
 		4AF3EE61C4694E8D450EDD47 /* PluginLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginLibrary.swift; sourceTree = "<group>"; };
 		4AFE0A14F6F996427CD894BE /* VoiceLanguageCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceLanguageCatalog.swift; sourceTree = "<group>"; };
 		4BA92C5A35ED33AEFD30AF0B /* CrashDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashDiagnostics.swift; sourceTree = "<group>"; };
-		4C28C76FF7264BC38B85243B /* Pods-MSIMEKeyboardExtension.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEKeyboardExtension.debug.xcconfig"; path = "Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension.debug.xcconfig"; sourceTree = "<group>"; };
 		4C2C5B473825FD259C6CC8E7 /* world-clock-NOTICE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "world-clock-NOTICE.txt"; sourceTree = "<group>"; };
 		4C8905783044E11C88CCC6A7 /* NumberPadJianpinSlashTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumberPadJianpinSlashTests.swift; sourceTree = "<group>"; };
 		4D125B353EBC926D95C46617 /* LocalModeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalModeSettingsView.swift; sourceTree = "<group>"; };
@@ -1487,6 +1490,7 @@
 		565EC1253FB1509446408155 /* SkinCommunityAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkinCommunityAPI.swift; sourceTree = "<group>"; };
 		574E6D9379A517BF9C5CEB82 /* SpaceCursorMovement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceCursorMovement.swift; sourceTree = "<group>"; };
 		5819BA25B6709171AD0CD6BB /* DictionarySnapshotBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionarySnapshotBridgeTests.swift; sourceTree = "<group>"; };
+		583E0F2E41B0CA748DE24246 /* KeyboardHoldVariantBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHoldVariantBar.swift; sourceTree = "<group>"; };
 		58DD5E4F93A789A62BE1842D /* KeyboardMorePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardMorePickerView.swift; sourceTree = "<group>"; };
 		58FA4200E8A4B07CEFC31B28 /* KeyboardLayoutTables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLayoutTables.swift; sourceTree = "<group>"; };
 		590B68DFD15993A10C53B739 /* CandidateOptionsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateOptionsSettingsView.swift; sourceTree = "<group>"; };
@@ -1579,12 +1583,10 @@
 		82618C844A1985076A84B3CF /* NineKeySidebarPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NineKeySidebarPreference.swift; sourceTree = "<group>"; };
 		8287109EE6C4EB060ACDFD01 /* CandidateFontSizeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateFontSizeTests.swift; sourceTree = "<group>"; };
 		83C5BB90CF0932462B49BF08 /* LocalSpeechModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSpeechModelStore.swift; sourceTree = "<group>"; };
-		84A1A730FEEB7620C6C5A339 /* Pods-MSIMEApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEApp.release.xcconfig"; path = "Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp.release.xcconfig"; sourceTree = "<group>"; };
 		84C84616F00768E7DA4291F4 /* KeyboardChatHistoryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardChatHistoryPolicy.swift; sourceTree = "<group>"; };
 		84E0EA58776B85E03854D05F /* OnboardingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingUITests.swift; sourceTree = "<group>"; };
 		8533E1086A730724620640B3 /* rerank-model-Apache-2.0.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "rerank-model-Apache-2.0.txt"; sourceTree = "<group>"; };
 		85767C9258553C6420A8C955 /* VerificationCodePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationCodePolicy.swift; sourceTree = "<group>"; };
-		85F908D603DC4E1BEC9293D0 /* Pods-MSIMEKeyboardExtension.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEKeyboardExtension.release.xcconfig"; path = "Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension.release.xcconfig"; sourceTree = "<group>"; };
 		860C897871B78BDA37D8F6CF /* MSIMESharedTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MSIMESharedTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8676538B161A4A29B7E0B73D /* OnboardingChoicesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingChoicesTests.swift; sourceTree = "<group>"; };
 		874FE91F05D7569EE19499A6 /* WelcomeFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeFlowView.swift; sourceTree = "<group>"; };
@@ -1702,7 +1704,6 @@
 		B958F722D77F264EB1AF5490 /* DoubaoHostFrameCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubaoHostFrameCodec.swift; sourceTree = "<group>"; };
 		BA1FE7CB15B9A5A9BCD3C244 /* offline-glosses */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "offline-glosses"; path = "../../target/ios/offline-glosses"; sourceTree = SOURCE_ROOT; };
 		BAFFAD7862417E1ED7B2FE00 /* BackendAccountSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendAccountSession.swift; sourceTree = "<group>"; };
-		BCE810E0F4B3843300563D83 /* Pods_MSIMEApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_MSIMEApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD11D99530807021B657EBC3 /* VoiceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSettingsView.swift; sourceTree = "<group>"; };
 		BD3DBCF0D07C27E981A74FA1 /* AccountCodeLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCodeLoginView.swift; sourceTree = "<group>"; };
 		BDA6F08A3BB18BD9F6143D60 /* BoundedFileReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundedFileReaderTests.swift; sourceTree = "<group>"; };
@@ -1798,7 +1799,6 @@
 		DAC83802853B57ACCD2EE104 /* OpenCC-Apache-2.0.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OpenCC-Apache-2.0.txt"; sourceTree = "<group>"; };
 		DB19D5E11787887C1A08FCEE /* UsageReportingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageReportingTests.swift; sourceTree = "<group>"; };
 		DB6AAAD4396BCADF6B7494DD /* AppServicesBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServicesBridge.swift; sourceTree = "<group>"; };
-		DBBBC9740E2372BC0C02511E /* Pods-MSIMEApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MSIMEApp.debug.xcconfig"; path = "Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp.debug.xcconfig"; sourceTree = "<group>"; };
 		DC9C93E2840EF49E51D19C81 /* QQLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QQLinksView.swift; sourceTree = "<group>"; };
 		DD529A5680B55F96705E74E4 /* KeyboardPanelButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardPanelButtonStyle.swift; sourceTree = "<group>"; };
 		DD5484BB43341C14418BF640 /* SystemSpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSpeechRecognizer.swift; sourceTree = "<group>"; };
@@ -1890,7 +1890,6 @@
 			files = (
 				829EEFF40B5139C0677D1E3C /* Security.framework in Frameworks */,
 				1E07C3CDA499858B400E0F57 /* SherpaOnnxC.xcframework in Frameworks */,
-				70A2D0772F2BB29E49E732C1 /* Pods_MSIMEApp.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1915,7 +1914,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				D37685BD149F3C46A55FDC88 /* Security.framework in Frameworks */,
-				29E36C5428B8FE9925BBA1F9 /* Pods_MSIMEKeyboardExtension.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2102,15 +2100,6 @@
 			);
 			name = Services;
 			path = App/Services;
-			sourceTree = "<group>";
-		};
-		32951D6F6471B3BAB5BFF0DB /* iboard */ = {
-			isa = PBXGroup;
-			children = (
-				3028E8EB9EC6AFE8F5079BBA /* LICENSE */,
-			);
-			name = iboard;
-			path = ../..;
 			sourceTree = "<group>";
 		};
 		34CBBA590282076F8226ED2F /* account */ = {
@@ -2438,6 +2427,7 @@
 				6127ECD9DDBE583947F95958 /* JapaneseNineKeyTests.swift */,
 				B4E0504938047C50A29C4222 /* KeyboardBottomHintTests.swift */,
 				C30CB2AE35E87F5DE80C72DE /* KeyboardCursorSwipeTests.swift */,
+				33E729CECF80700DD557D7B5 /* KeyboardHoldVariantsTests.swift */,
 				3BB15E61581E05671073DC68 /* KeyboardHostContextTests.swift */,
 				9C8022874BAD6A46E9F82250 /* KeyGapRoutingTests.swift */,
 				7B3D2E7C8BEA6FFB550DAE5B /* KeyPressFeedbackTests.swift */,
@@ -2499,8 +2489,6 @@
 			children = (
 				095C484ED3DA6A52CA13FE71 /* Security.framework */,
 				2CEE9A90474563EC951F0E24 /* SherpaOnnxC.xcframework */,
-				BCE810E0F4B3843300563D83 /* Pods_MSIMEApp.framework */,
-				1725F091388383288C9C0CB6 /* Pods_MSIMEKeyboardExtension.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -2587,6 +2575,7 @@
 				1021E0816F83EFD2537CFB63 /* KeyboardEmojiPickerView.swift */,
 				D27FEBB5B52158F2A8914726 /* KeyboardFormFactor.swift */,
 				617BB66BF42B0C7BF0F66CBE /* KeyboardFunctionTileView.swift */,
+				583E0F2E41B0CA748DE24246 /* KeyboardHoldVariantBar.swift */,
 				B063B1760382A73A3B650384 /* KeyboardIconPaths.swift */,
 				D22544622BDEADB0149155DF /* KeyboardInputContext.swift */,
 				5BD26F465BA4C55F35689C05 /* KeyboardInputView.swift */,
@@ -2730,7 +2719,7 @@
 				009DD9AB7F0BE71A005EF3E3 /* backend */,
 				47F926116D64E29111FDF6F6 /* backend-ui */,
 				208C6AE8B03301167575E550 /* EngineResources */,
-				32951D6F6471B3BAB5BFF0DB /* iboard */,
+				C62B2AF181F96F39EA5CC7A1 /* ios-key-hold-variants */,
 				F19345D3A38528A43B829790 /* KeyboardTestHost */,
 				F9EA923EEA8552CA5B40C156 /* KeyboardTests */,
 				4F0AF611BB68015729427D50 /* licenses */,
@@ -2747,7 +2736,6 @@
 				E50D9446AC0C0A697D4470BE /* UITests */,
 				695B5F2FA61DA9679715EAEA /* Frameworks */,
 				6D00B944494B7757B6A99FF3 /* Products */,
-				C6E61831088EFFD0F42F0770 /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -2887,16 +2875,13 @@
 			path = candidate;
 			sourceTree = "<group>";
 		};
-		C6E61831088EFFD0F42F0770 /* Pods */ = {
+		C62B2AF181F96F39EA5CC7A1 /* ios-key-hold-variants */ = {
 			isa = PBXGroup;
 			children = (
-				DBBBC9740E2372BC0C02511E /* Pods-MSIMEApp.debug.xcconfig */,
-				84A1A730FEEB7620C6C5A339 /* Pods-MSIMEApp.release.xcconfig */,
-				4C28C76FF7264BC38B85243B /* Pods-MSIMEKeyboardExtension.debug.xcconfig */,
-				85F908D603DC4E1BEC9293D0 /* Pods-MSIMEKeyboardExtension.release.xcconfig */,
+				225D196A57A288F360D425DA /* LICENSE */,
 			);
-			name = Pods;
-			path = Pods;
+			name = "ios-key-hold-variants";
+			path = ../..;
 			sourceTree = "<group>";
 		};
 		C8681C40139ACB776847B056 /* input */ = {
@@ -2983,6 +2968,7 @@
 		E50D9446AC0C0A697D4470BE /* UITests */ = {
 			isa = PBXGroup;
 			children = (
+				0A13D613B242774853241F99 /* HoldVariantsScreenshotUITests.swift */,
 				C69EFF90CAC95D7C6B3158B1 /* KeyboardExtensionEditorUITests.swift */,
 				84E0EA58776B85E03854D05F /* OnboardingUITests.swift */,
 				4D269E12065A116211377894 /* PluginsUITests.swift */,
@@ -3102,6 +3088,8 @@
 				FD1FAECBA6298DF09C21B1D2 /* PBXTargetDependency */,
 			);
 			name = MSIMEDoubaoTransportTests;
+			packageProductDependencies = (
+			);
 			productName = MSIMEDoubaoTransportTests;
 			productReference = CA0AA119D7B8E03394F9B45C /* MSIMEDoubaoTransportTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3110,14 +3098,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = EA6CA7CFA57DE24FC1668CF8 /* Build configuration list for PBXNativeTarget "MSIMEApp" */;
 			buildPhases = (
-				6E07B1060A5D9A9CBC1F597E /* [CP] Check Pods Manifest.lock */,
 				EC014FA28FCBAB012020E4E6 /* Sources */,
 				D5C9342F07DAD5511F055CAF /* Resources */,
 				246CF307FB30ACAE3D86131B /* Frameworks */,
 				8C59C4D36C83E1356D0166F1 /* Embed Foundation Extensions */,
 				B0963B4600A70857BDA24483 /* Embed Frameworks */,
 				1261C1093F1558E416A98720 /* Stamp release date */,
-				10B078515B6E405CCCF7759D /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -3125,6 +3111,8 @@
 				1C21A4A3C9BC9D6DA65F033B /* PBXTargetDependency */,
 			);
 			name = MSIMEApp;
+			packageProductDependencies = (
+			);
 			productName = MSIMEApp;
 			productReference = 77450C11EF84BEE14C541BED /* MSIMEApp.app */;
 			productType = "com.apple.product-type.application";
@@ -3133,17 +3121,17 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7B611AF86618F9AEAB16721B /* Build configuration list for PBXNativeTarget "MSIMEKeyboardExtension" */;
 			buildPhases = (
-				E5BCC301C38195C3AB5B3C6E /* [CP] Check Pods Manifest.lock */,
 				78C3F436470369F328796665 /* Sources */,
 				BAA93AC612CB491E35DCFF2D /* Resources */,
 				70C5DE974A67E63BA77D968D /* Frameworks */,
-				634BB948A5ACBA91A6A743AF /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			name = MSIMEKeyboardExtension;
+			packageProductDependencies = (
+			);
 			productName = MSIMEKeyboardExtension;
 			productReference = A09AC0F9BA083FADB67F20C6 /* MSIMEKeyboardExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -3162,6 +3150,8 @@
 				62E99B5412E159EDA6164FD4 /* PBXTargetDependency */,
 			);
 			name = MSIMESharedTests;
+			packageProductDependencies = (
+			);
 			productName = MSIMESharedTests;
 			productReference = 860C897871B78BDA37D8F6CF /* MSIMESharedTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3180,6 +3170,8 @@
 				68C4B84CD26FD5F4E219E67D /* PBXTargetDependency */,
 			);
 			name = MSIMEKeyboardTests;
+			packageProductDependencies = (
+			);
 			productName = MSIMEKeyboardTests;
 			productReference = 8247FADFDC65265DAB0ABB43 /* MSIMEKeyboardTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3196,6 +3188,8 @@
 			dependencies = (
 			);
 			name = MSIMEKeyboardTestHost;
+			packageProductDependencies = (
+			);
 			productName = MSIMEKeyboardTestHost;
 			productReference = 2F50522701A0D6A3455AA353 /* MSIMEKeyboardTestHost.app */;
 			productType = "com.apple.product-type.application";
@@ -3212,6 +3206,8 @@
 				07B86242ED4BD13EF6A13688 /* PBXTargetDependency */,
 			);
 			name = MSIMEClientUITests;
+			packageProductDependencies = (
+			);
 			productName = MSIMEClientUITests;
 			productReference = 43376A1462AEF84BB7C4E3A9 /* MSIMEClientUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -3228,6 +3224,8 @@
 			dependencies = (
 			);
 			name = MSIMEServiceTests;
+			packageProductDependencies = (
+			);
 			productName = MSIMEServiceTests;
 			productReference = D2D08A7917CFE9663E9E57D3 /* MSIMEServiceTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -3243,6 +3241,8 @@
 			dependencies = (
 			);
 			name = MSIMEDoubaoTransport;
+			packageProductDependencies = (
+			);
 			productName = MSIMEDoubaoTransport;
 			productReference = 391403CFE82802FB8570F86A /* MSIMEDoubaoTransport.framework */;
 			productType = "com.apple.product-type.framework";
@@ -3372,7 +3372,7 @@
 				D11F257913BB5E15FCF0AD30 /* GlideEngine-LICENSE.txt in Resources */,
 				806B1E94E80B6C34A5B1B4C0 /* GlideEngine-NOTICE.txt in Resources */,
 				EEDABC563F556FDBBE40A504 /* GoogleSignIn-Dependencies.txt in Resources */,
-				9BAB3E48E6761DD7030BDDFD /* LICENSE in Resources */,
+				0C23B3E162AED4863DA974F5 /* LICENSE in Resources */,
 				301F0BC99740BCF9A6676CDB /* LaunchScreen.storyboard in Resources */,
 				7EB33C5330748EE93BA3A1DB /* MLKit-Dependencies.txt in Resources */,
 				84B7B0B173F1C93261D00BFC /* MLKit-NOTICES.txt in Resources */,
@@ -3409,23 +3409,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		10B078515B6E405CCCF7759D /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MSIMEApp/Pods-MSIMEApp-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		1261C1093F1558E416A98720 /* Stamp release date */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -3446,67 +3429,6 @@
 			shellPath = /bin/sh;
 			shellScript = "bash \"$SRCROOT/scripts/stamp-release-date.sh\"";
 		};
-		634BB948A5ACBA91A6A743AF /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MSIMEKeyboardExtension/Pods-MSIMEKeyboardExtension-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		6E07B1060A5D9A9CBC1F597E /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-MSIMEApp-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		E5BCC301C38195C3AB5B3C6E /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-MSIMEKeyboardExtension-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -3522,6 +3444,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A00608C61F397ADB4E145106 /* HoldVariantsScreenshotUITests.swift in Sources */,
 				2ECC03615A3ED0B3CF4C0A2A /* KeyboardExtensionEditorUITests.swift in Sources */,
 				7F0BC1EC35ED9E3F7B3042B1 /* OnboardingUITests.swift in Sources */,
 				9257842FF7B0E46AA3C29326 /* PluginsUITests.swift in Sources */,
@@ -3756,6 +3679,8 @@
 				C2CB553744B01ABD94DD5CB4 /* KeyboardFormFactorTests.swift in Sources */,
 				E15199BB0F735699CB8E4775 /* KeyboardFunctionTileView.swift in Sources */,
 				3985E045FA7B6C519947593D /* KeyboardGeometrySettingsTests.swift in Sources */,
+				73E5B7F241FBA96277147693 /* KeyboardHoldVariantBar.swift in Sources */,
+				E42432CB982B06437868E356 /* KeyboardHoldVariantsTests.swift in Sources */,
 				9E0381D3221F42A873EF6D7D /* KeyboardHostContext.swift in Sources */,
 				1B6ABD7BABEA7BF2AFB3AA65 /* KeyboardHostContextTests.swift in Sources */,
 				8EA282D8FB2169A558CAA4E0 /* KeyboardIconPaths.swift in Sources */,
@@ -4026,6 +3951,7 @@
 				18BE688A999BD4CB8DD1A7E1 /* KeyboardFeedbackPreference.swift in Sources */,
 				A8392344B9710B81B05C264A /* KeyboardFormFactor.swift in Sources */,
 				29DA165AE48415CE50E7CBBB /* KeyboardFunctionTileView.swift in Sources */,
+				F47F8616DA7B55076872E3F9 /* KeyboardHoldVariantBar.swift in Sources */,
 				061F43BAE200D7A52386EE8D /* KeyboardHostContext.swift in Sources */,
 				727D9B3DC719BB2D9914C91D /* KeyboardIconPaths.swift in Sources */,
 				B43B0B725FE05BA0550DAF6E /* KeyboardInputContext.swift in Sources */,
@@ -4250,6 +4176,7 @@
 				D6BBF4223A927E43E81F1565 /* KeyboardFeedbackPreference.swift in Sources */,
 				0B6241EF3EA43ACB93152F49 /* KeyboardFormFactor.swift in Sources */,
 				5F8B5FF983EE2A60A29DF4C8 /* KeyboardFunctionTileView.swift in Sources */,
+				AB81A702EE8B0D15809BBC17 /* KeyboardHoldVariantBar.swift in Sources */,
 				C81D3994E97BE7448B48360C /* KeyboardHostContext.swift in Sources */,
 				FF54B8AC64127407336F27E6 /* KeyboardIconPaths.swift in Sources */,
 				1FAF4CB2FDE974C0FD476E7E /* KeyboardInputContext.swift in Sources */,
@@ -4944,7 +4871,6 @@
 		};
 		5AF12B4B57CD48C3EB29BDB6 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 84A1A730FEEB7620C6C5A339 /* Pods-MSIMEApp.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconSky AppIconDusk AppIconVermilion";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -5104,14 +5030,10 @@
 		};
 		AB0CEF9C61B9356129BF0552 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 85F908D603DC4E1BEC9293D0 /* Pods-MSIMEKeyboardExtension.release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = KeyboardExtension/Resources/MSIMEKeyboardExtension.entitlements;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = HandwritingInputViewFallback.swift;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
-					HandwritingInputView.swift,
-					HandwritingDownloadSession.m,
-				);
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "HandwritingInputView.swift HandwritingDownloadSession.m";
 				INFOPLIST_FILE = KeyboardExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -5213,7 +5135,6 @@
 		};
 		BE4BB53300377418DB6E2313 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DBBBC9740E2372BC0C02511E /* Pods-MSIMEApp.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconForest AppIconSky AppIconDusk AppIconVermilion";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -5334,14 +5255,10 @@
 		};
 		F2DD63377134879A36260F7D /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4C28C76FF7264BC38B85243B /* Pods-MSIMEKeyboardExtension.debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = KeyboardExtension/Resources/MSIMEKeyboardExtension.entitlements;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphoneos*]" = HandwritingInputViewFallback.swift;
-				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = (
-					HandwritingInputView.swift,
-					HandwritingDownloadSession.m,
-				);
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=iphonesimulator*]" = "HandwritingInputView.swift HandwritingDownloadSession.m";
 				INFOPLIST_FILE = KeyboardExtension/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
