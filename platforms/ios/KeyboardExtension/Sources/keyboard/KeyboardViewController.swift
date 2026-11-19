@@ -949,12 +949,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    
-    // 注入调试断言
-    print("Debug: skin.drawsNativeBackground = \(skinBackdrop.drawsNativeBackground)")
-    print("Debug: view.backgroundColor = \(String(describing: view.backgroundColor))")
-    
-    // 原代码...
+
     registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitHorizontalSizeClass.self]) {
       (controller: KeyboardViewController, previous: UITraitCollection) in controller.refreshTraits(previous)
     }
