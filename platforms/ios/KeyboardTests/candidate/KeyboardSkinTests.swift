@@ -116,14 +116,13 @@ final class KeyboardSkinTests: XCTestCase {
       let skin = KeyboardTheme.current
       XCTAssertTrue(skin.isNative)
       let traits = UITraitCollection(userInterfaceStyle: style)
-      // 不是完全透明（那样空白处的触摸送不到扩展，#10173），但透明度不超过 `nativeBackgroundFillAlpha`，系统底板照样透出来。
+      // 根视图本身完全透明以避免双重叠加系统底板；`skinBackdrop` 铺一层不超过 `nativeBackgroundFillAlpha` 的键盘底色，保持系统底板透出与空白处命中。
+      XCTAssertEqual(controller.view.backgroundColor?.resolvedColor(with: traits).cgColor.alpha ?? 0, 0)
       let backdrop = try XCTUnwrap(descendants(controller.view).first { $0 is KeyboardSkinBackgroundView })
-      for surface in [controller.view!, backdrop] {
-        let fill = try XCTUnwrap(surface.backgroundColor).resolvedColor(with: traits)
-        XCTAssertGreaterThan(fill.cgColor.alpha, 0)
-        XCTAssertLessThanOrEqual(fill.cgColor.alpha, KeyboardTheme.nativeBackgroundFillAlpha + 0.0001)
-        XCTAssertEqual(packed(fill), packed(skin.background.resolvedColor(with: traits)), "填充用键盘自己的底色")
-      }
+      let fill = try XCTUnwrap(backdrop.backgroundColor).resolvedColor(with: traits)
+      XCTAssertGreaterThan(fill.cgColor.alpha, 0)
+      XCTAssertLessThanOrEqual(fill.cgColor.alpha, KeyboardTheme.nativeBackgroundFillAlpha + 0.0001)
+      XCTAssertEqual(packed(fill), packed(skin.background.resolvedColor(with: traits)), "填充用键盘自己的底色")
       let enter = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "returnKey" } as? UIButton)
       XCTAssertEqual(enter.configuration?.background.backgroundColor?.resolvedColor(with: traits), skin.actionBackground.resolvedColor(with: traits))
       XCTAssertEqual(enter.layer.shadowOpacity, skin.hasShadow ? 1 : 0)
@@ -234,10 +233,10 @@ final class KeyboardSkinTests: XCTestCase {
         XCTAssertEqual(packed(fill), expected, "\(name) 用键盘自己的底色", file: file, line: line)
       }
       let tree = descendants(controller.view)
-      assertOwnFill(controller.view, "根视图")
+      XCTAssertEqual(controller.view.backgroundColor?.resolvedColor(with: traits).cgColor.alpha ?? 0, 0, "根视图保持透明不遮挡系统底板")
       assertOwnFill(try XCTUnwrap(tree.first { $0 is KeyboardSkinBackgroundView }), "底板")
       assertOwnFill(try XCTUnwrap(tree.first { $0.accessibilityIdentifier == "candidateStrip" }), "候选栏")
-      assertOwnFill(try XCTUnwrap(tree.first { $0 is CandidateScrollView }), "候选滚动视图")
+      XCTAssertEqual(try XCTUnwrap(tree.first { $0 is CandidateScrollView }).backgroundColor?.resolvedColor(with: traits).cgColor.alpha ?? 0, 0, "候选滚动视图保持透明不重复叠底色")
       assertOwnFill(picker, "功能面板")
       assertOwnFill(try XCTUnwrap(descendants(picker).first { $0 is UIScrollView }), "功能面板的翻页滚动视图")
       let tiles = descendants(picker).compactMap { $0 as? KeyboardFunctionTileView }

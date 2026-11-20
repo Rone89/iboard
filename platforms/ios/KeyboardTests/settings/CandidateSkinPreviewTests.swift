@@ -87,7 +87,7 @@ final class CandidateSkinPreviewTests: XCTestCase {
     view.apply(CandidateSkinPreview.Snapshot(palette: palette, canvas: nil))
     func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(descendants) }
     let labels = descendants(view).compactMap { $0 as? UILabel }
-    let first = try XCTUnwrap(labels.first { $0.text == "水杉" })
+    let first = try XCTUnwrap(labels.first { $0.text == "iBoard" })
     XCTAssertEqual(ThemeColor.hex(first.textColor), "#FF3B30")
     for word in ["输入", "输入法"] {
       XCTAssertEqual(try XCTUnwrap(labels.first { $0.text == word }).textColor, palette.text)

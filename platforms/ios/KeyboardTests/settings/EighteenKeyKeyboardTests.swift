@@ -142,8 +142,11 @@ final class EighteenKeyKeyboardTests: XCTestCase {
           XCTAssertEqual(button.accessibilityLabel, key.accessibilityLabel)
           XCTAssertEqual(button.bounds.height, reference, accuracy: 0.5, key.face)
           let frame = button.convert(button.bounds, to: controller.view)
-          XCTAssertGreaterThanOrEqual(frame.minX, KeyboardFormFactor.phone.padding.leading - 0.5, "\(key.face) at \(width)")
-          XCTAssertLessThanOrEqual(frame.maxX, width - KeyboardFormFactor.phone.padding.trailing + 0.5, "\(key.face) at \(width)")
+          let expectedPadding = KeyboardFormFactor.phone.padding(
+            landscape: false,
+            largeScreen: KeyboardFormFactor.isLargeScreen(idiom: .phone, screenSize: UIScreen.main.bounds.size))
+          XCTAssertGreaterThanOrEqual(frame.minX, expectedPadding.leading - 0.5, "\(key.face) at \(width)")
+          XCTAssertLessThanOrEqual(frame.maxX, width - expectedPadding.trailing + 0.5, "\(key.face) at \(width)")
           // 两个字母的键面在窄屏上缩小而不越出键帽。
           if let label = button.titleLabel, !(label.text ?? "").isEmpty {
             XCTAssertLessThanOrEqual(label.frame.maxX, button.bounds.maxX + 0.5, "\(key.face) at \(width)")

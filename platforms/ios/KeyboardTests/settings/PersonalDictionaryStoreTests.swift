@@ -372,7 +372,7 @@ final class PersonalDictionaryStoreTests: XCTestCase {
     try keyboard.synchronize(apply: { _ in }, page: empty, export: export)
     XCTAssertEqual(asked.count, 1)
     let copy = try host.exportCopy(for: result)
-    XCTAssertEqual(copy.lastPathComponent, "水杉IME-快捷短语用户词库.txt")
+    XCTAssertEqual(copy.lastPathComponent, "iBoard-快捷短语用户词库.txt")
     XCTAssertEqual(try String(contentsOf: copy, encoding: .utf8), "q0\t短语0\t100\nq1\t短语1\t100\n")
 
     // A newer export must not be copied under an older result's filename.

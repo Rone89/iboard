@@ -156,7 +156,7 @@ final class RustCloudPagesTests: XCTestCase {
     let nothing = await upload.setEnabled(true)
     XCTAssertEqual(nothing?.status.enabled, true)
     XCTAssertNil(nothing?.status.lastUpload)
-    XCTAssertEqual(nothing?.message, "已打开上传。本机还没有可上传的打字计数，用水杉键盘打字以后再打开 App 会自动上传。")
+    XCTAssertEqual(nothing?.message, "已打开上传。本机还没有可上传的打字计数，用iBoard 键盘打字以后再打开 App 会自动上传。")
     answer(Script("user-1"), ["account.typing_upload_set": { _ in self.uploadStatus(true) }])
     let uploaded = await upload.setEnabled(true)
     XCTAssertEqual(uploaded?.message, "已打开上传，最近 7 天的每日计数已传到你的水杉账号。")

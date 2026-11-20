@@ -47,17 +47,17 @@ final class KeyboardAppLauncherTests: XCTestCase {
   /// scheme 在 project.yml 的 CFBundleURLTypes 里注册。两边对不上时应用不会被拉起,而键盘这边看不出区别,
   /// 所以把这个字面值钉在测试里。
   func testTargetsTheRegisteredScheme() {
-    XCTAssertEqual(KeyboardAppLauncher.settingsURL.scheme, "msime")
-    XCTAssertEqual(KeyboardAppLauncher.settingsURL.absoluteString, "msime://settings")
-    XCTAssertEqual(KeyboardAppLauncher.voiceURL.absoluteString, "msime://voice")
+    XCTAssertEqual(KeyboardAppLauncher.settingsURL.scheme, "iboard")
+    XCTAssertEqual(KeyboardAppLauncher.settingsURL.absoluteString, "iboard://settings")
+    XCTAssertEqual(KeyboardAppLauncher.voiceURL.absoluteString, "iboard://voice")
   }
 
   /// 功能菜单的四个目的地使用应用 SettingsRouter 能处理的路由：`settings/<page>`、`feedback` 和 `about`。
   func testMenuDestinationsUseTheRoutesTheAppHandles() {
-    XCTAssertEqual(KeyboardAppLauncher.dictionaryURL.absoluteString, "msime://settings/dictionary")
-    XCTAssertEqual(KeyboardAppLauncher.inputSettingsURL.absoluteString, "msime://settings/input")
-    XCTAssertEqual(KeyboardAppLauncher.feedbackURL.absoluteString, "msime://feedback")
-    XCTAssertEqual(KeyboardAppLauncher.aboutURL.absoluteString, "msime://about")
+    XCTAssertEqual(KeyboardAppLauncher.dictionaryURL.absoluteString, "iboard://settings/dictionary")
+    XCTAssertEqual(KeyboardAppLauncher.inputSettingsURL.absoluteString, "iboard://settings/input")
+    XCTAssertEqual(KeyboardAppLauncher.feedbackURL.absoluteString, "iboard://feedback")
+    XCTAssertEqual(KeyboardAppLauncher.aboutURL.absoluteString, "iboard://about")
     for url in [KeyboardAppLauncher.dictionaryURL, KeyboardAppLauncher.inputSettingsURL] {
       XCTAssertEqual(url.host, "settings")
     }
@@ -67,14 +67,14 @@ final class KeyboardAppLauncherTests: XCTestCase {
 
   /// 常用语面板里的添加常用语打开应用的常用语页（`SettingsPage.phrases`），iOS 上只有那里能添加常用语。
   func testAddPhraseOpensThePhrasesPage() {
-    XCTAssertEqual(KeyboardAppLauncher.phrasesURL.absoluteString, "msime://settings/phrases")
+    XCTAssertEqual(KeyboardAppLauncher.phrasesURL.absoluteString, "iboard://settings/phrases")
     XCTAssertEqual(KeyboardAppLauncher.phrasesURL.host, "settings")
     XCTAssertEqual(KeyboardAppLauncher.phrasesURL.pathComponents.last, "phrases")
   }
 
   /// 长按工具栏按钮打开应用的「键盘工具栏」页（`SettingsPage.toolbar`），与 Android 长按打开「编辑工具栏」一致。
   func testToolbarHoldOpensTheToolbarPage() {
-    XCTAssertEqual(KeyboardAppLauncher.toolbarSettingsURL.absoluteString, "msime://settings/toolbar")
+    XCTAssertEqual(KeyboardAppLauncher.toolbarSettingsURL.absoluteString, "iboard://settings/toolbar")
     XCTAssertEqual(KeyboardAppLauncher.toolbarSettingsURL.host, "settings")
     XCTAssertEqual(KeyboardAppLauncher.toolbarSettingsURL.pathComponents.last, "toolbar")
   }
@@ -89,11 +89,11 @@ final class KeyboardAppLauncherTests: XCTestCase {
     XCTAssertEqual(application.opened, urls)
   }
 
-  /// 每个版本各用一个 scheme，装了多个版本时键盘才不会拉起另一个版本的 App；full 仍是 msime。
+  /// 每个版本各用一个 scheme，装了多个版本时键盘才不会拉起另一个版本的 App；full 是 iboard。
   func testURLSchemeIsPerEdition() {
-    XCTAssertEqual(MSIMEAppEdition.urlScheme(in: [:]), "msime")
-    XCTAssertEqual(MSIMEAppEdition.urlScheme(in: ["MSIMEEdition": "full"]), "msime")
-    XCTAssertEqual(MSIMEAppEdition.urlScheme(in: ["MSIMEEdition": "wubi"]), "msime-wubi")
-    XCTAssertEqual(MSIMEAppEdition.urlScheme(in: ["MSIMEEdition": "pinyin"]), "msime-pinyin")
+    XCTAssertEqual(MSIMEAppEdition.urlScheme(in: [:]), "iboard")
+    XCTAssertEqual(MSIMEAppEdition.urlScheme(in: ["MSIMEEdition": "full"]), "iboard")
+    XCTAssertEqual(MSIMEAppEdition.urlScheme(in: ["MSIMEEdition": "wubi"]), "iboard-wubi")
+    XCTAssertEqual(MSIMEAppEdition.urlScheme(in: ["MSIMEEdition": "pinyin"]), "iboard-pinyin")
   }
 }

@@ -300,12 +300,12 @@ class ProjectConfigurationTests(unittest.TestCase):
         notices = about[about.index("private static let all = ["):]
         first = re.search(r"LicenseNotice\(file: \"([^\"]+)\"", notices)
         self.assertEqual(first.group(1), "LICENSE")
-        self.assertIn('LicenseNotice(file: "LICENSE", title: "水杉输入法", detail: "本应用与拼音词库 · GPL-3.0", fileExtension: "")', about)
+        self.assertIn('LicenseNotice(file: "LICENSE", title: "iBoard", detail: "基于水杉输入法（msime）与拼音词库 · GPL-3.0", fileExtension: "")', about)
         # 键盘扩展不带第二份：它没有许可页，和 App 一起安装。
         self.assertEqual(source_path_blocks(targets["MSIMEKeyboardExtension"], path), [])
 
     def test_app_and_keyboard_share_the_declared_app_group(self):
-        expected = "group.app.msime.ios"
+        expected = "group.773JTTH9DK.app.msime.ios"
         app = (IOS_ROOT / "App/Resources/MSIMEApp.entitlements").read_text()
         keyboard = (IOS_ROOT / "KeyboardExtension/Resources/MSIMEKeyboardExtension.entitlements").read_text()
         self.assertIn(expected, app)
@@ -316,7 +316,7 @@ class ProjectConfigurationTests(unittest.TestCase):
 
     def test_app_group_identifier_is_written_once(self):
         # App Group 标识只写在 MSIMEAppEdition 一处，其他 Swift 代码都引用它；漏掉的那一处会因为 `?? .standard` 悄悄读写另一份数据，其他版本也会读到 full 的数据。测试和 Tauri 公共组件（只有 full）不在检查范围内。
-        literal = '"group.app.msime.ios"'
+        literal = '"group.773JTTH9DK.app.msime.ios"'
         repo = IOS_ROOT.parents[1]
         owner = repo / "shared/backend/account/BackendAccountClient.swift"
         self.assertIn(f"static let fullAppGroupIdentifier = {literal}", owner.read_text())
@@ -330,19 +330,19 @@ class ProjectConfigurationTests(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_url_scheme_is_derived_from_the_edition(self):
-        # 键盘拉起 App 的 URL scheme 只写在 MSIMEAppEdition 一处，按版本推出；多个版本装在同一台设备上时，写死的 msime 会让系统任选一个 App 打开，语音交接和设置入口就落到另一个版本。full 的 project.yml 注册的仍是 msime。
+        # 键盘拉起 App 的 URL scheme 只写在 MSIMEAppEdition 一处，按版本推出；多个版本装在同一台设备上时，写死的 iboard 会让系统任选一个 App 打开，语音交接和设置入口就落到另一个版本。full 的 project.yml 注册的仍是 iboard。
         repo = IOS_ROOT.parents[1]
         owner = repo / "shared/backend/account/BackendAccountClient.swift"
-        self.assertIn('static let fullURLScheme = "msime"', owner.read_text())
+        self.assertIn('static let fullURLScheme = "iboard"', owner.read_text())
         project = (IOS_ROOT / "project.yml").read_text()
-        self.assertIn("CFBundleURLSchemes: [msime]", project)
+        self.assertIn("CFBundleURLSchemes: [iboard]", project)
         roots = [IOS_ROOT / "App", IOS_ROOT / "KeyboardExtension", IOS_ROOT / "SharedUI", repo / "shared/backend"]
         offenders = [
             str(path.relative_to(repo))
             for root in roots
             for path in sorted(root.rglob("*.swift"))
             if path != owner and "Tests" not in path.relative_to(repo).parts
-            and re.search(r'"msime://|scheme == "msime"', path.read_text())
+            and re.search(r'"(?:iboard|msime)://|scheme == "(?:iboard|msime)"', path.read_text())
         ]
         self.assertEqual(offenders, [])
         launcher = (IOS_ROOT / "KeyboardExtension/Sources/keyboard/KeyboardAppLauncher.swift").read_text()
@@ -405,20 +405,23 @@ class ProjectConfigurationTests(unittest.TestCase):
             if "GENERATE_INFOPLIST_FILE: YES" in body and "info:\n      path:" not in body:
                 self.assertIn('INFOPLIST_FILE: ""', body, name)
 
-    # The developer account carries app.msime.ios and app.msime.ios.keyboard with the App Group the
-    # entitlements declare. A bundle identifier outside that prefix has no profile that satisfies
-    # the App Groups entitlement, and signing fails before anything reaches a device.
+    # fork 分支的主应用与键盘使用 `com.rayc.corvid` / `com.rayc.corvid.keyboard` 与团队 `773JTTH9DK` 的 App Group，
+    # 其余测试与辅助 target 保留在 `app.msime.ios.*` 前缀下。
     def test_bundle_identifiers_match_the_provisioned_app_ids(self):
         project = (IOS_ROOT / "project.yml").read_text()
         identifiers = re.findall(r"PRODUCT_BUNDLE_IDENTIFIER: (\S+)", project)
         self.assertTrue(identifiers)
         for identifier in identifiers:
-            self.assertTrue(identifier == "app.msime.ios" or identifier.startswith("app.msime.ios."),
-                            identifier)
-        self.assertIn("PRODUCT_BUNDLE_IDENTIFIER: app.msime.ios\n", project)
-        self.assertIn("PRODUCT_BUNDLE_IDENTIFIER: app.msime.ios.keyboard\n", project)
+            self.assertTrue(
+                identifier == "com.rayc.corvid"
+                or identifier.startswith("com.rayc.corvid.")
+                or identifier.startswith("app.msime.ios."),
+                identifier,
+            )
+        self.assertIn("PRODUCT_BUNDLE_IDENTIFIER: com.rayc.corvid\n", project)
+        self.assertIn("PRODUCT_BUNDLE_IDENTIFIER: com.rayc.corvid.keyboard\n", project)
         self.assertIn("bundleIdPrefix: app.msime.ios", project)
-        self.assertIn("DEVELOPMENT_TEAM: LXCL4Z68GU", project)
+        self.assertIn("DEVELOPMENT_TEAM: 773JTTH9DK", project)
 
     def test_device_uses_real_handwriting_and_simulator_keeps_buildable_fallback(self):
         project = (IOS_ROOT / "project.yml").read_text()
@@ -527,10 +530,19 @@ class ProjectConfigurationTests(unittest.TestCase):
             if name not in linked:
                 continue
             flags = re.findall(r'^ +- "?([^"\n]+)"?$', body.split("OTHER_LDFLAGS:", 1)[1].split("\n        L", 1)[0], re.M)
-            self.assertEqual(flags[0], "-lmsime_host_api", name)
+            host_index = flags.index("-lmsime_host_api")
+            if "$(inherited)" in flags:
+                self.assertLess(host_index, flags.index("$(inherited)"), name)
+            if "-lsqlite3" in flags:
+                self.assertLess(host_index, flags.index("-lsqlite3"), name)
         for block in re.findall(r"OTHER_LDFLAGS = \(\n(.*?)\);", pbxproj, re.S):
             if '"-lmsime_host_api"' in block:
-                self.assertEqual(block.split("\n", 1)[0].strip(), '"-lmsime_host_api",')
+                entries = [line.strip().rstrip(",") for line in block.splitlines() if line.strip()]
+                host_index = entries.index('"-lmsime_host_api"')
+                if '"$(inherited)"' in entries:
+                    self.assertLess(host_index, entries.index('"$(inherited)"'))
+                if '"-lsqlite3"' in entries:
+                    self.assertLess(host_index, entries.index('"-lsqlite3"'))
 
     def test_shipping_build_uses_the_native_ios_host(self):
         script = (IOS_ROOT / "build-app.sh").read_text()
