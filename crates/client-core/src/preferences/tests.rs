@@ -336,6 +336,34 @@ fn touch_key_styles_and_number_row_round_trip_through_the_store() {
 }
 
 #[test]
+fn touch_backspace_by_syllable_defaults_off_and_round_trips_through_the_store() {
+    let defaults = Preferences::default();
+    assert!(!defaults.touch_backspace_by_syllable);
+    let written = serde_json::to_value(&defaults).unwrap();
+    assert!(written.get("touch_backspace_by_syllable").is_none());
+
+    // 没有这个键的旧文档读出默认值，读完不改写文件。
+    let dir = tempfile::tempdir().unwrap();
+    let store = PreferencesStore::new(dir.path());
+    let legacy = serde_json::to_vec(&PreferencesSnapshot::default()).unwrap();
+    fs::write(store.path(), &legacy).unwrap();
+    let loaded = store.load().unwrap().preferences;
+    assert!(!loaded.touch_backspace_by_syllable);
+    assert_eq!(fs::read(store.path()).unwrap(), legacy);
+
+    let revision = store.load().unwrap().revision;
+    let configured = Preferences {
+        touch_backspace_by_syllable: true,
+        ..Preferences::default()
+    };
+    let _ = store.save(revision, configured.clone()).unwrap();
+    let loaded = store.load().unwrap().preferences;
+    assert_eq!(loaded, configured);
+    let written = serde_json::to_value(&loaded).unwrap();
+    assert_eq!(written["touch_backspace_by_syllable"], true);
+}
+
+#[test]
 fn touch_key_style_wire_strings_are_pinned_and_unknown_strings_read_as_standard() {
     for (style, wire) in [
         (TouchTwentySixKeyStyle::Standard, "standard"),

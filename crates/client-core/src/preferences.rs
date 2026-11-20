@@ -211,7 +211,7 @@ impl TouchWubiLayout {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TouchTwentySixKeyStyle {
-    /// 现有底行：123 | 符 | 空格 | ，（长按出。）| 中/英 | 回车。
+    /// 仿 iOS 原生精简底行：123 | 空格 | ，（长按出。）| 中/英 | 回车。
     #[default]
     Standard,
     /// 空格两侧各一个标点：123 | 符 | ， | 空格 | 。 | 中/英 | 回车。
@@ -1992,6 +1992,9 @@ pub struct Preferences {
     /// 手机触屏 26 键字母层底行把 符 排到 123 左边（符 | 123 |（🌐）| …），原来是 123 |（🌐）| 符 | …；只作用于底行里有 符 的样式（标准、逗号句号在空格两侧），长空格和表情键样式没有 符、不受影响，英文和其他语言的 26 键底行同样以 123 | 符 打头，一并互换。从这块键面借来的数字九宫格跟着把返回键排在 符 后面。默认关且不写进文档。桌面宿主原样保留、不使用。
     #[serde(default, skip_serializing_if = "is_false")]
     pub touch_twenty_six_symbol_first: bool,
+    /// 手机触屏全拼 26 键与双拼 26 键的组字里，单次删除键一次删掉最后一个完整拼音音节而不是单个字母（组字 `meiyou` 退一格变 `mei`）；关闭时按字母删。滑行与逐键打的字母同粒度，长按连删本来就按音节缩，打开后两者一致。九键、14/18 键和五笔等没有字母音节的方案不受影响。默认关且不写进文档。桌面宿主原样保留、不使用。
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub touch_backspace_by_syllable: bool,
     /// 手机触屏九宫格数字键盘里空格的位置，见 [`TouchNumberPadSpace`]。默认是各端原来的排法且不写进文档。桌面宿主原样保留、不使用。
     #[serde(default, skip_serializing_if = "TouchNumberPadSpace::is_default")]
     pub touch_number_pad_space: TouchNumberPadSpace,
@@ -4489,6 +4492,7 @@ impl Default for Preferences {
             touch_nine_key_digit_sidebar_symbols: Vec::new(),
             touch_number_row: false,
             touch_twenty_six_symbol_first: false,
+            touch_backspace_by_syllable: false,
             touch_number_pad_space: TouchNumberPadSpace::default(),
             touch_one_handed_side_panel: TouchOneHandedSidePanel::default(),
             touch_language_key_side: TouchLanguageKeySide::default(),

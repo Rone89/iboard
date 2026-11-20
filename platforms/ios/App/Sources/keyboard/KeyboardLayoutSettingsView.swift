@@ -25,6 +25,7 @@ struct KeyboardLayoutSettingsView: View {
   @State private var glideTyping = KeyboardLayoutPreference.glideTyping
   @State private var glideEngine = GlideEnginePreference.choice
   @State private var bilingualGlide = KeyboardLayoutPreference.bilingualGlide
+  @State private var backspaceBySyllable = TouchBackspaceSyllablePreference.isEnabled
   @State private var cursorSwipe = KeyboardLayoutPreference.cursorSwipe
   @State private var swipeSymbols = KeyboardLayoutPreference.swipeSymbols
   @State private var swipeSymbolsDirection = KeyboardLayoutPreference.swipeSymbolsDirection
@@ -435,6 +436,11 @@ struct KeyboardLayoutSettingsView: View {
                       }))
         .accessibilityIdentifier("appBilingualGlideSwitch")
       DesignDivider()
+      // 全拼 26 键与双拼的组字按音节缩，与长按 ⌫ 的连删同粒度；滑行打出的读音回删时不再逐个字母退。
+      DesignToggleRow(title: "按音节回删", info: "组字中按一次删除键删掉最后一个完整拼音音节，而不是单个字母；关闭时按字母删。适用于全拼 26 键与双拼。",
+                      isOn: Binding(get: { backspaceBySyllable }, set: { saveBackspaceBySyllable($0) }))
+        .accessibilityIdentifier("appBackspaceBySyllableSwitch")
+      DesignDivider()
       DesignToggleRow(title: "横滑键盘移动光标", info: "无组字时从字符键左右滑动；开启滑行输入时，字母键优先输入拼音",
                       isOn: Binding(get: { cursorSwipe }, set: { enabled in
                         cursorSwipe = enabled
@@ -663,6 +669,12 @@ struct KeyboardLayoutSettingsView: View {
     nineKeySwipeDigits = saveFailed ? NineKeySwipeDigits(in: MetasequoiaInputSessionBridge.loadSharedPreferences()) : value
   }
 
+  private func saveBackspaceBySyllable(_ enabled: Bool) {
+    saveFailed = !TouchBackspaceSyllablePreference.save(enabled)
+    backspaceBySyllable = saveFailed
+      ? TouchBackspaceSyllablePreference.isEnabled(in: MetasequoiaInputSessionBridge.loadSharedPreferences()) : enabled
+  }
+
   private func saveTab(_ enabled: Bool) {
     saveFailed = !KeyboardLayoutPreference.saveTabShowsMoreCandidates(enabled)
     tabOpensCandidates = saveFailed
@@ -681,6 +693,7 @@ struct KeyboardLayoutSettingsView: View {
     scheme = InputSchemePreference.current(in: preferences).scheme
     shuangpinLayout = TouchShuangpinLayoutPreference.layout(in: preferences)
     wubiLayout = TouchWubiLayoutPreference.layout(in: preferences)
+    backspaceBySyllable = TouchBackspaceSyllablePreference.isEnabled(in: preferences)
     keySpacing = KeyboardLayoutPreference.keySpacing
     rowSpacing = KeyboardLayoutPreference.rowSpacing
     height = KeyboardLayoutPreference.heightAdjustment

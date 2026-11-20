@@ -968,6 +968,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     TouchShuangpinLayoutPreference.mirror(session.sharedPreferences)
     TouchWubiLayoutPreference.mirror(session.sharedPreferences)
     TouchKeyLayoutStyle.mirror(session.sharedPreferences)
+    TouchBackspaceSyllablePreference.mirror(session.sharedPreferences)
     keyLayoutStyle = TouchKeyLayoutStyle.mirrored
     NineKeySwipeDigits.mirror(session.sharedPreferences)
     nineKeySwipeDigits = NineKeySwipeDigits.mirrored
@@ -7820,6 +7821,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     if !isChineseMode { refreshEnglishSuggestions() }
   }
 
+  /// 组字能否按音节编辑：有组字、中文模式，且方案用字母写的拼音（全拼 26 键与双拼；九键、14/18 键网格的组码有歧义，五笔等不是音节，都除外）。单次 ⌫ 的「按音节回删」开关和长按连删共用这道门槛。
+  private var editsCompositionBySyllable: Bool {
+    hasComposition && isChineseMode && inputScheme.editsBySyllable && !typesLetterGrid
+  }
+
   private func handleBackspace() {
     session.flushPendingCharacters()
     flushDeferredInputSnapshot()
@@ -7832,7 +7838,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       refreshEnglishSuggestions()
       return
     }
-    let snapshot = session.handleBackspace()
+    // 「按音节回删」打开时单次 ⌫ 与长按一致，一次删掉最后一个完整音节（meiyou 退一格变 mei）；组字删空或没有可删的音节时快照未处理，照旧删正文。
+    let snapshot = TouchBackspaceSyllablePreference.isEnabled && editsCompositionBySyllable
+      ? session.segmentBackspace()
+      : session.handleBackspace()
     if !snapshot.isHandled {
       deleteOwnBackward()
     }
@@ -7888,7 +7897,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       handleBackspace()
       return
     }
-    if hasComposition && isChineseMode && inputScheme.editsBySyllable && !typesLetterGrid {
+    if editsCompositionBySyllable {
       didRepeatBackspace = true
       playInputClick(.backspace)
       render(session.segmentBackspace())

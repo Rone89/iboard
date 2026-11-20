@@ -227,6 +227,8 @@ private enum DeveloperDiagnostics {
                                            KeyboardLayoutPreference.spaceVoiceKey, KeyboardLayoutPreference.swipeSymbolsKey,
                                            KeyboardLayoutPreference.swipeSymbolsDirectionKey, KeyboardLayoutPreference.letterCornerHintsKey,
                                            NineKeySwipeDigits.mirrorKey] + KeyboardLayoutPreference.placementKeys),
+      // 「按音节回删」的文档字段由 restoreDefaults 恢复，这里删它的镜像。
+      (InputSchemePreference.appGroupDefaults, [TouchBackspaceSyllablePreference.appGroupKey]),
       (KeyboardFeedbackPreference.defaults, [KeyboardFeedbackPreference.soundKey, KeyboardFeedbackPreference.hapticsKey,
                                              KeyboardFeedbackPreference.strengthKey]),
       (KeyboardPrivacyPreference.defaults, [KeyboardPrivacyPreference.incognitoKey]),
