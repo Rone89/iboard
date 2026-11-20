@@ -25,7 +25,6 @@ final class KeyboardGeometrySettingsTests: XCTestCase {
   private var state: URL!
   private var previous: (Double, Double, Double) = (0, 0, 0)
   private var previousShuangpinKeyHints = true
-  private var previousQuanpinShift = true
   private var previousHideLanguageKey = false
 
   override func setUp() {
@@ -35,7 +34,6 @@ final class KeyboardGeometrySettingsTests: XCTestCase {
     previous = (KeyboardLayoutPreference.keySpacing, KeyboardLayoutPreference.rowSpacing,
                 KeyboardLayoutPreference.heightAdjustment)
     previousShuangpinKeyHints = KeyboardLayoutPreference.shuangpinKeyHints
-    previousQuanpinShift = KeyboardLayoutPreference.quanpinShift
     previousHideLanguageKey = KeyboardLayoutPreference.hideLanguageKey
   }
 
@@ -44,7 +42,6 @@ final class KeyboardGeometrySettingsTests: XCTestCase {
     KeyboardLayoutPreference.rowSpacing = previous.1
     KeyboardLayoutPreference.heightAdjustment = previous.2
     KeyboardLayoutPreference.shuangpinKeyHints = previousShuangpinKeyHints
-    KeyboardLayoutPreference.quanpinShift = previousQuanpinShift
     KeyboardLayoutPreference.hideLanguageKey = previousHideLanguageKey
     try? FileManager.default.removeItem(at: state)
     super.tearDown()
@@ -170,14 +167,12 @@ final class KeyboardGeometrySettingsTests: XCTestCase {
     XCTAssertFalse(KeyboardLayoutPreference.shuangpinKeyHints)
   }
 
-  func testQuanpinShiftDefaultsOnAndExplicitFalseIsPreserved() throws {
-    XCTAssertTrue(KeyboardLayoutPreference.sharedQuanpinShift(in: nil))
-    XCTAssertTrue(KeyboardLayoutPreference.sharedQuanpinShift(in: [:]))
-    XCTAssertTrue(KeyboardLayoutPreference.sharedQuanpinShift(in: ["touch_quanpin_shift": "off"]))
-    XCTAssertFalse(KeyboardLayoutPreference.sharedQuanpinShift(in: ["touch_quanpin_shift": false]))
-    KeyboardLayoutPreference.defaults.removeObject(forKey: KeyboardLayoutPreference.quanpinShiftKey)
-    XCTAssertTrue(KeyboardLayoutPreference.quanpinShift)
-    KeyboardLayoutPreference.quanpinShift = false
-    XCTAssertFalse(KeyboardLayoutPreference.quanpinShift)
+  /// 「组字时保留 Shift」开关已移除：共享文档里的旧键不再被读成设置，26 键第三排左端固定是 ⇧。
+  func testQuanpinShiftPreferenceIsRetired() throws {
+    XCTAssertTrue(MetasequoiaInputSessionBridge.updateSharedPreferences(stateRoot: state) {
+      $0["touch_quanpin_shift"] = false
+    })
+    let document = try XCTUnwrap(MetasequoiaInputSessionBridge.loadSharedPreferences(stateRoot: state))
+    XCTAssertEqual(document["touch_quanpin_shift"] as? Bool, false, "the document keeps the legacy key untouched")
   }
 }

@@ -20,6 +20,8 @@ Rust `Preferences` 使用 `enabled_by_default` 并在默认开启时省略序列
 - `2026-10-26-touch-quanpin-shift-preference.md` 仍准确记录共享开关和跨端接线；其中“默认关、缺字段按关”被本决定改为“默认开、只有明确 false 才关”。
 - 现有 A/L 缩进来自 Android `ImeLetterRows`、iOS `KeyboardViewController` / `KeyboardFormFactor` 和 HarmonyOS `KeyboardView`，没有发现需要修复的缺失实现。
 
+> **2026-11-19 更新**：iBoard fork 在 iOS 端退役了这个偏好——26 键第三排左端恒为 ⇧，iOS 设置页不再有开关；Android 与鸿蒙的开关与本偏好的其余接线不变。见 [iBoard 键盘面照 iOS 原生收紧](../simplification/2026-11-19-ios-native-key-surface-trim.md)。
+
 ## Alternatives considered
 
 - 继续默认显示「分词」：保留了旧用户的按键手感，但新安装用户仍无法直接找到 Shift，和三端标准 26 键的可达性要求不符。

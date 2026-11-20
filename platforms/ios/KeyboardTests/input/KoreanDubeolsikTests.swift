@@ -167,12 +167,13 @@ final class KoreanDubeolsikTests: XCTestCase {
     XCTAssertFalse(try button("characterSetShortcut", in: controller).isEnabled)
     try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
     controller.view.layoutIfNeeded()
-    // 韩文的 123 也打开数字九宫格：返回键印韩文字母页的「한」，右列的结束标点是 ASCII 的 !；韩文使用 ASCII 标点，所以 #+= 层是英文的那一层，返回键与原来一样印 ABC。
+    // 韩文的 123 打开横向 1…0 符号层，使用 ASCII 标点，所以 123 与 #+= 两层的返回键均印 ABC。
     let shown = { (view: UIView) in sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden } }
-    XCTAssertTrue(shown(try button("nineKey1", in: controller)))
-    XCTAssertEqual(try button("layoutToggleButton", in: controller).configuration?.title, "한")
-    XCTAssertEqual(try button("nineKeyClosingMark", in: controller).configuration?.title, "!")
-    try button("numberPadMoreSymbols", in: controller).sendActions(for: .primaryActionTriggered)
+    XCTAssertTrue(shown(try button("symbolLayerKey0_0", in: controller)))
+    XCTAssertEqual(try button("symbolLayerKey0_0", in: controller).configuration?.title, "1")
+    XCTAssertEqual(try button("layoutToggleButton", in: controller).configuration?.title, "ABC")
+    XCTAssertNotNil(nodes(controller.view).first { $0.accessibilityLabel == "符号 !" && shown($0) })
+    try button("symbolLayerToggle", in: controller).sendActions(for: .primaryActionTriggered)
     controller.view.layoutIfNeeded()
     XCTAssertNotNil(nodes(controller.view).first { $0.accessibilityLabel == "符号 <" && shown($0) })
     XCTAssertNil(nodes(controller.view).first { $0.accessibilityLabel == "符号 《" && shown($0) })

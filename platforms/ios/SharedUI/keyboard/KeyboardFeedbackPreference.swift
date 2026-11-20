@@ -27,12 +27,19 @@ enum KeyboardFeedbackPreference {
   static let soundKey = "keyboardSoundEnabled"
   static let hapticsKey = "keyboardHapticsEnabled"
   static let strengthKey = "keyboardHapticStrength"
+  /// 「按键预览」开关（默认开启）：关闭后按下字母或符号键不再弹出放大预览气泡。
+  static let keyPreviewKey = "keyboardKeyPreviewEnabled"
   static var defaults: UserDefaults {
     InputSchemePreference.appGroupDefaults
   }
 
   static var soundEnabled: Bool {
     defaults.object(forKey: soundKey) as? Bool ?? true
+  }
+
+  static var keyPreviewEnabled: Bool { keyPreviewEnabled(in: defaults) }
+  static func keyPreviewEnabled(in defaults: UserDefaults) -> Bool {
+    defaults.object(forKey: keyPreviewKey) as? Bool ?? true
   }
 
   /// Only iPhones have the Taptic Engine keyboard feedback drives. Elsewhere the vibration controls are hidden, but the stored value is left alone: settings sync still carries it to the user's phone.

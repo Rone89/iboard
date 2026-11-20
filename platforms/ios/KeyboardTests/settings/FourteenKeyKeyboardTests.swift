@@ -499,8 +499,11 @@ final class FourteenKeyKeyboardTests: XCTestCase {
         XCTAssertEqual(button.accessibilityLabel, key.accessibilityLabel)
         XCTAssertEqual(button.bounds.height, reference, accuracy: 0.5, key.face)
         let frame = button.convert(button.bounds, to: controller.view)
-        XCTAssertGreaterThanOrEqual(frame.minX, KeyboardFormFactor.phone.padding.leading - 0.5, "\(key.face) at \(width)")
-        XCTAssertLessThanOrEqual(frame.maxX, width - KeyboardFormFactor.phone.padding.trailing + 0.5, "\(key.face) at \(width)")
+        let expectedPadding = KeyboardFormFactor.phone.padding(
+          landscape: false,
+          largeScreen: KeyboardFormFactor.isLargeScreen(idiom: .phone, screenSize: UIScreen.main.bounds.size))
+        XCTAssertGreaterThanOrEqual(frame.minX, expectedPadding.leading - 0.5, "\(key.face) at \(width)")
+        XCTAssertLessThanOrEqual(frame.maxX, width - expectedPadding.trailing + 0.5, "\(key.face) at \(width)")
       }
       // 第二排不缩进：AS 和 QW 左边对齐，L 与 OP 右边对齐。
       let qw = try frame("fourteenKeyQW", in: controller), asKey = try frame("fourteenKeyAS", in: controller)
@@ -572,75 +575,21 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     attachScreenshot(of: controller, named: "Fourteen-key nihao")
   }
 
-  /// 全拼 14 键点读音打开放大拼写编辑条：编辑条画的是读音（引擎首选的 `bu'hao` 或 `ni'hao`），不是组码 `bugao`（#10591）；点 h 前面，引擎的光标落在 GH 那一键前。在拼音选择条上选 ni 之后编辑条画 `ni'hao`。
-  func testTheSpellingEditorShowsTheReadingAndPlacesTheCaretOnTheKeys() throws {
+  /// 全拼 14 键组字时，读音行只显示拼写作为静态文本，点击不会打开左上角/上方的放大拼写编辑条，键盘高度也不变化。
+  func testFourteenKeyReadingRowIsStaticAndDoesNotOpenSpellingEditor() throws {
     let controller = makeController(width: 390)
+    let height = try XCTUnwrap(controller.view.constraints.first { $0.identifier == "keyboardHeight" })
+    let closedHeight = height.constant
     try tap(["BN", "UI", "GH", "AS", "OP"], in: controller)
     let reading = preedit(in: controller)
     XCTAssertTrue(["ni'hao", "bu'hao"].contains(reading), "the reading row shows \(reading)")
     let preeditButton = try button("preeditButton", in: controller)
-    XCTAssertEqual(preeditButton.accessibilityLabel, "编辑拼写")
+    XCTAssertNil(preeditButton.configuration?.image)
+    XCTAssertNotEqual(preeditButton.accessibilityLabel, "编辑拼写")
+    XCTAssertFalse(preeditButton.accessibilityTraits.contains(.button))
     preeditButton.sendActions(for: .primaryActionTriggered)
-    let bar = try XCTUnwrap(descendants(controller.view).first { $0 is CompositionEditorBar } as? CompositionEditorBar)
-    XCTAssertFalse(bar.isHidden)
-    XCTAssertEqual(bar.spelling.display, reading, "the editor draws the reading, not the group codes")
-    XCTAssertEqual(bar.spelling.offset, 6, "the caret starts at the end")
-
-    bar.spelling.requestCaret(atDisplayOffset: 3)
-    XCTAssertEqual(preedit(in: controller), "bu|gao", "the engine caret sits before GH")
-    XCTAssertEqual(bar.spelling.display, reading)
-    XCTAssertEqual(bar.spelling.offset, 3, "the editor caret is drawn after the split, before h")
-    bar.spelling.accessibilityDecrement()
-    XCTAssertEqual(preedit(in: controller), "b|ugao")
-    XCTAssertEqual(bar.spelling.offset, 1)
-    try button("compositionEditorDone", in: controller).sendActions(for: .primaryActionTriggered)
-    XCTAssertTrue(bar.isHidden)
-
-    // 在拼音选择条上选 ni：读音是 ni'hao，编辑条照样画读音，光标照样落在按键上。
-    try button("readingSpelling_ni", in: controller).sendActions(for: .primaryActionTriggered)
-    controller.view.layoutIfNeeded()
-    XCTAssertTrue(preedit(in: controller).hasPrefix("ni"), preedit(in: controller))
-    preeditButton.sendActions(for: .primaryActionTriggered)
-    XCTAssertFalse(bar.isHidden)
-    XCTAssertEqual(bar.spelling.display, "ni'hao")
-    bar.spelling.requestCaret(atDisplayOffset: 4)
-    XCTAssertEqual(bar.spelling.offset, 4, "ni'h|ao")
-    XCTAssertEqual(bar.spelling.display, "ni'hao")
-    controller.viewDidDisappear(false)
-  }
-
-  /// 编辑条开关时键盘只高出、缩回编辑条那一行：系统按新的高度约束放大视图后，按键的高度和到底边的距离都不变，编辑条就是 52 pt（#10591）。模拟器的系统键盘里曾经编辑条被拉到约 90 pt、四排键各矮了约 12 pt。
-  func testOpeningTheSpellingEditorKeepsTheKeysWhereTheyAre() throws {
-    let controller = makeController(width: 390)
-    let height = try XCTUnwrap(controller.view.constraints.first { $0.identifier == "keyboardHeight" })
-    func settle() {
-      // 系统键盘按高度约束改视图的高度，底边不动。
-      controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: height.constant)
-      controller.view.layoutIfNeeded()
-    }
-    settle()
-    try tap(["BN", "UI", "GH", "AS", "OP"], in: controller)
-    settle()
-    func keyFrames() throws -> [CGRect] {
-      try ["fourteenKeyQW", "fourteenKeyAS", "fourteenKeyBN"].map { try frame($0, in: controller) }
-    }
-    let closed = try keyFrames()
-    let closedHeight = controller.view.bounds.height
-    try button("preeditButton", in: controller).sendActions(for: .primaryActionTriggered)
-    settle()
-    let bar = try XCTUnwrap(descendants(controller.view).first { $0 is CompositionEditorBar } as? CompositionEditorBar)
-    XCTAssertFalse(bar.isHidden)
-    XCTAssertEqual(controller.view.bounds.height, closedHeight + CompositionEditorBar.height, accuracy: 0.5)
-    XCTAssertEqual(bar.bounds.height, CompositionEditorBar.height, accuracy: 0.5, "the editor row is one row tall")
-    for (before, after) in zip(closed, try keyFrames()) {
-      XCTAssertEqual(after.height, before.height, accuracy: 0.5, "a key changed height when the editor opened")
-      XCTAssertEqual(controller.view.bounds.height - after.maxY, closedHeight - before.maxY, accuracy: 0.5,
-                     "a key moved against the bottom edge when the editor opened")
-    }
-    try button("compositionEditorDone", in: controller).sendActions(for: .primaryActionTriggered)
-    settle()
-    XCTAssertEqual(controller.view.bounds.height, closedHeight, accuracy: 0.5)
-    for (before, after) in zip(closed, try keyFrames()) { XCTAssertEqual(after, before) }
+    XCTAssertEqual(height.constant, closedHeight)
+    XCTAssertNil(descendants(controller.view).first { $0 is CompositionEditorBar })
     controller.viewDidDisappear(false)
   }
 
@@ -801,9 +750,9 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
     controller.view.layoutIfNeeded()
     XCTAssertFalse(shown(qw))
-    XCTAssertTrue(shown(try button("nineKey1", in: controller)))
-    XCTAssertEqual(try button("nineKey1", in: controller).configuration?.title, "1")
-    // 与 Android 一样，借用的数字页上返回键印 14 键自己的短名。
+    XCTAssertTrue(shown(try button("symbolLayerKey0_0", in: controller)))
+    XCTAssertEqual(try button("symbolLayerKey0_0", in: controller).configuration?.title, "1")
+    // 横向数字符号层上返回键印 14 键自己的短名。
     XCTAssertEqual(try button("layoutToggleButton", in: controller).configuration?.title, "14键")
     XCTAssertEqual(try button("layoutToggleButton", in: controller).accessibilityLabel, "切换到字母键盘")
     try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
@@ -859,7 +808,9 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     XCTAssertTrue(InputSchemePreference.offeredSchemes.contains(.fourteenKey))
     let qw = try button("fourteenKeyQW", in: controller)
     XCTAssertTrue(shown(qw))
-    XCTAssertEqual(qw.bounds.height, KeyboardHeightPercent.portraitKeyHeight(tablet: true), accuracy: 0.5)
+    XCTAssertEqual(qw.bounds.height, KeyboardFormFactor.tablet.keyHeight(
+      landscape: false, handwriting: false,
+      largeScreen: KeyboardFormFactor.isLargeScreen(idiom: .pad, screenSize: UIScreen.main.bounds.size)), accuracy: 0.5)
     XCTAssertFalse(shown(try view("numberRow", in: controller)))
     XCTAssertFalse(shown(try button("tabletLayerKey", in: controller)), "the 14 keys use the phone bottom row")
     XCTAssertTrue(shown(try button("returnKey", in: controller)))

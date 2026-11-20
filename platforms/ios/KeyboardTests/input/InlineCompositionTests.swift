@@ -46,7 +46,7 @@ final class InlineCompositionTests: XCTestCase {
   }
 }
 
-/// 拼写固定写进输入框（拼音分词），候选栏不再画读音：读音那一段只画打开放大拼写编辑条的笔（#10591），候选按键时不左右移动；九键写进去的是拼音，不是数字键。
+/// 拼写固定写进输入框（拼音分词），候选栏不再画读音也不在左上角放编辑笔图标，候选按键时不左右移动；九键写进去的是拼音，不是数字键。
 @MainActor
 final class InlineCompositionDefaultTests: XCTestCase {
   private var savedScheme: ChineseInputScheme?
@@ -90,7 +90,8 @@ final class InlineCompositionDefaultTests: XCTestCase {
       try tap({ $0.accessibilityLabel == "字母 \(letter)" }, in: controller)
       let preedit = try XCTUnwrap(try view("preeditButton", in: controller) as? UIButton)
       XCTAssertEqual(preedit.configuration?.title ?? "", "", "the strip draws no reading after \(letter)")
-      XCTAssertNotNil(preedit.configuration?.image, "only the pen that opens the spelling editor after \(letter)")
+      XCTAssertNil(preedit.configuration?.image, "no editing pen should appear on the top-left after \(letter)")
+      XCTAssertTrue(preedit.isHidden, "the empty reading slot collapses so candidates align to the leading edge")
       let chip = try view("candidate-1", in: controller)
       firstCandidateX.append(chip.convert(chip.bounds, to: controller.view).minX)
     }
@@ -106,7 +107,8 @@ final class InlineCompositionDefaultTests: XCTestCase {
     XCTAssertFalse(marked.contains { $0.isNumber }, marked)
     let preedit = try XCTUnwrap(try view("preeditButton", in: controller) as? UIButton)
     XCTAssertEqual(preedit.configuration?.title ?? "", "", "the strip draws no reading")
-    XCTAssertNotNil(preedit.configuration?.image, "only the pen that opens the spelling editor")
+    XCTAssertNil(preedit.configuration?.image, "no editing pen should appear on the top-left")
+    XCTAssertTrue(preedit.isHidden)
   }
 
   /// 候选按 #10330 立即呈现：每按一个键，候选条上的词块、读音和展开箭头都直接画成新状态，图层上不挂任何动画。

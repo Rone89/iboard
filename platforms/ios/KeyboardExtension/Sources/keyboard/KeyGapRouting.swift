@@ -43,6 +43,19 @@ enum KeyGapRouting {
     }
     return reach + 1
   }
+
+  /// 外周安全边距扩展：当触摸落在所有可见按键外框之外的左/右内边距或底边距里（例如标准竖屏 6pt 边距而用户把行距调到 4pt 时），
+  /// 允许命中外侧边缘键，避免屏幕边缘出现点击盲区。分隔中缝与行内空隙仍在键框包围盒内部，不会触发外扩。
+  static func outerEdgeReach(at point: CGPoint, in frames: [CGRect], baseReach: CGFloat, edgePadding: CGFloat = 12) -> CGFloat {
+    let valid = frames.filter { !$0.isEmpty }
+    guard let minX = valid.map(\.minX).min(),
+          let maxX = valid.map(\.maxX).max(),
+          let minY = valid.map(\.minY).min(),
+          let maxY = valid.map(\.maxY).max() else { return baseReach }
+    let inHorizontalEdge = (point.x < minX || point.x > maxX) && point.y >= minY && point.y <= maxY + edgePadding
+    let inBottomEdge = point.y > maxY && point.x >= minX - edgePadding && point.x <= maxX + edgePadding
+    return (inHorizontalEdge || inBottomEdge) ? max(baseReach, edgePadding) : baseReach
+  }
 }
 
 /// 键区的根 stack view。默认命中是键区里某个 stack view 自身（也就是触摸落在键距、行距或行边距里）时，改为交给 `KeyGapRouting` 选出的键；UIKit 随后把这次触摸的整个序列都送给那个键，键上的长按、空格滑动等手势也照常参与。
@@ -50,6 +63,8 @@ enum KeyGapRouting {
 /// 候选栏、手写区这类不是键的子树放进 `gapRoutingExclusions`，落在它们里面的命中原样返回，它们的按钮也不会被选来接空隙里的触摸。面板和弹层加在键盘根视图上而不在这里，盖住键区时先命中的是它们自己。
 final class KeyAreaStackView: UIStackView {
   var gapRoutingExclusions: [UIView] = []
+  /// 允许扩展到键盘外框内边距里的命中范围（对应 `KeyboardFormFactor.padding` 的左/右/底边，顶部为 0 避免抢占候选栏上方）。
+  var outerHitInsets: UIEdgeInsets = .zero
   /// 把键帽左侧 `KeyGapRouting.returnYield` 让给紧挨在左边的 `yieldReceiver` 的键：底行的回车让给中/英。两者不相邻（别的布局把中/英挪走或藏起来）时不起作用。
   weak var yieldingKey: UIControl?
   weak var yieldReceiver: UIControl?
@@ -58,17 +73,31 @@ final class KeyAreaStackView: UIStackView {
   /// 滑行输入或横滑光标进行中：新落下的手指一律命中键区自己而不是键，它们什么都不输入，挂在键区上的手势仍能结束或取消当前触摸。
   var suppressesKeyHits = false
 
+  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    let expanded = CGRect(
+      x: bounds.minX - outerHitInsets.left,
+      y: bounds.minY - outerHitInsets.top,
+      width: bounds.width + outerHitInsets.left + outerHitInsets.right,
+      height: bounds.height + outerHitInsets.top + outerHitInsets.bottom
+    )
+    return expanded.contains(point)
+  }
+
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    let hit = super.hitTest(point, with: event)
+    var hit = super.hitTest(point, with: event)
+    if hit == nil, self.point(inside: point, with: event) { hit = self }
     if suppressesKeyHits, hit != nil { return self }
     if let hit, let receiver = yieldedReceiver(at: point, hit: hit) { return receiver }
-    guard let gap = hit as? UIStackView, !isExcluded(gap) else { return hit }
+    guard let gap = hit as? UIStackView, !isExcluded(gap) else {
+      return bounds.contains(point) ? hit : nil
+    }
     var keys: [UIControl] = []
     collectKeys(in: gap, into: &keys)
     for key in overlayKeys where acceptsGapTouches(key) && !keys.contains(where: { $0 === key }) {
       keys.append(key)
     }
-    guard !keys.isEmpty else { return hit }
+    let fallback: UIView? = bounds.contains(point) ? hit : nil
+    guard !keys.isEmpty else { return fallback }
     let frames = keys.map { Self.layoutFrame(of: $0, in: gap) }
     // 第三排等带自定义宽间距（如 `⇧↔Z`、`M↔⌫`）的横排需要按最大可见间距计算够得着的范围，避免中间出现点击盲区。
     let visible = gap.arrangedSubviews.filter { !$0.isHidden }
@@ -76,18 +105,20 @@ final class KeyAreaStackView: UIStackView {
       .map { gap.customSpacing(after: $0) }
       .filter { $0 != UIStackView.spacingUseDefault && $0.isFinite }
       .max() ?? 0
-    let reach = KeyGapRouting.reach(
+    let baseReach = KeyGapRouting.reach(
       spacing: max(gap.spacing, maxCustomSpacing), axis: gap.axis,
       margins: gap.isLayoutMarginsRelativeArrangement ? gap.layoutMargins : nil)
     let local = convert(point, to: gap)
-    guard let index = KeyGapRouting.nearest(to: local, in: frames, reach: reach) else { return hit }
+    let outerPadding = max(12, max(outerHitInsets.left, max(outerHitInsets.right, outerHitInsets.bottom)) + 2)
+    let reach = KeyGapRouting.outerEdgeReach(at: local, in: frames, baseReach: baseReach, edgePadding: outerPadding)
+    guard let index = KeyGapRouting.nearest(to: local, in: frames, reach: reach) else { return fallback }
     // 顶栏和第一排之间的间隔比行距还窄时，整段间隔都在第一排的够得着范围内；离候选栏这类非键区域更近的点仍然不交给键，空隙两侧各归一半。
     let keyDistance = KeyGapRouting.distance(from: local, to: frames[index])
     let closerToExcluded = gapRoutingExclusions.contains { excluded in
       !excluded.isHidden && excluded.isDescendant(of: gap)
         && KeyGapRouting.distance(from: local, to: excluded.convert(excluded.bounds, to: gap)) < keyDistance
     }
-    return closerToExcluded ? hit : keys[index]
+    return closerToExcluded ? fallback : keys[index]
   }
 
   /// 命中的是让出的键（或它所在行的空隙）、触摸落在它让出的那一段里，而接收的键就在同一行里可用时，返回接收的键。按布局位置判断，按下动画的缩放不算在内。

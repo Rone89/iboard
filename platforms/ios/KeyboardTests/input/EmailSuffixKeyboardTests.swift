@@ -158,7 +158,7 @@ final class EmailSuffixKeyboardTests: XCTestCase {
       XCTAssertEqual(emailSuffixChips(in: controller), [], "round \(round)")
       try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
       controller.view.layoutIfNeeded()
-      XCTAssertTrue(shown(try button("nineKey1", in: controller), in: controller), "round \(round)")
+      XCTAssertTrue(shown(try button("symbolLayerKey0_0", in: controller), in: controller), "round \(round)")
       try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
     }
     try button("bottomLanguageKey", in: controller).sendActions(for: .primaryActionTriggered)

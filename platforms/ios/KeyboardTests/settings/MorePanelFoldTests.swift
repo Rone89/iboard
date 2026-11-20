@@ -131,20 +131,23 @@ final class MorePanelFoldTests: XCTestCase {
 
   /// 面板装在键区里（`installPanel`：顶栏底边到键盘根视图底边），高度是顶栏下的间隔加按键区再加高度调整。两种选择面板都按这个真实高度排布：格子各行放得进滚动区、不能上下拖动，所有格子一样高，页码圆点不出面板。
   ///
-  /// 最矮的手机竖屏是 26 键、行距 4pt、高度调到 -12pt：4 + (4 × 45 + 3 × 4) - 12 = 184pt，减去上下边距 14pt 和圆点 14pt 后格子只有 156pt，比三行满尺寸的 180pt 矮，于是三行等比缩到 44pt；默认排距 11pt 下是 217pt，放得下满尺寸。手机横屏最矮是 140pt，两行缩到 112 / 120。
+  /// 最矮的标准手机竖屏是 26 键（43pt）、行距 4pt、高度调到 -12pt：4 + (4 × 43 + 3 × 4) - 12 = 176pt，减去上下边距 14pt 和圆点 14pt 后格子只有 148pt，三行缩到低于 44pt 下限而自动改排两行（120pt 无缩放）；行距 7pt 下为 185pt，三行等比缩放到约 45.4pt。大屏手机（46pt）、行距 4pt、高度调到 -12pt 下是 188pt，三行等比缩放；默认排距 11pt 下放得下满尺寸。手机横屏（32pt）最矮是 132pt，两行缩到 104 / 120。
   func testPickerPanelsFitTheRealKeyAreaHeight() throws {
     let tools = (0..<20).map { index in KeyboardTool(id: "tool\(index)", title: "工具\(index)", face: .glyph("\(index)")) {} }
-    func panelHeight(_ form: KeyboardFormFactor, landscape: Bool, letterKeys: Bool, rowSpacing: CGFloat, adjustment: CGFloat) -> CGFloat {
+    func panelHeight(_ form: KeyboardFormFactor, landscape: Bool, letterKeys: Bool, rowSpacing: CGFloat, adjustment: CGFloat,
+                     largeScreen: Bool = false) -> CGFloat {
       form.topRowGap
         + KeyboardHeightPercent.keyBlockHeight(
-          keyHeight: form.keyHeight(landscape: landscape, handwriting: false, letterKeys: letterKeys),
+          keyHeight: form.keyHeight(landscape: landscape, handwriting: false, letterKeys: letterKeys, largeScreen: largeScreen),
           rows: 4, rowSpacing: rowSpacing)
         + adjustment - (form == .phone && letterKeys && !landscape
           ? KeyboardFormFactor.phoneLetterVerticalPadding(rows: 4) : 0)
     }
     let shortest = KeyboardHeightPercent.adjustmentRange.lowerBound
     let cases: [(form: KeyboardFormFactor, landscape: Bool, width: CGFloat, height: CGFloat, rows: Int, scaled: Bool)] = [
-      (.phone, false, 375, panelHeight(.phone, landscape: false, letterKeys: true, rowSpacing: 4, adjustment: shortest), 3, true),
+      (.phone, false, 375, panelHeight(.phone, landscape: false, letterKeys: true, rowSpacing: 4, adjustment: shortest), 2, false),
+      (.phone, false, 375, panelHeight(.phone, landscape: false, letterKeys: true, rowSpacing: 7, adjustment: shortest), 3, true),
+      (.phone, false, 440, panelHeight(.phone, landscape: false, letterKeys: true, rowSpacing: 4, adjustment: shortest, largeScreen: true), 3, true),
       (.phone, false, 375, panelHeight(.phone, landscape: false, letterKeys: false, rowSpacing: 4, adjustment: shortest), 3, false),
       (.phone, false, 375, panelHeight(.phone, landscape: false, letterKeys: true, rowSpacing: 11, adjustment: 0), 3, false),
       (.phone, true, 812, panelHeight(.phone, landscape: true, letterKeys: true, rowSpacing: 4, adjustment: shortest), 2, true),
@@ -153,8 +156,9 @@ final class MorePanelFoldTests: XCTestCase {
       // 比任何真实键盘都矮：三行要缩到 44pt 以下，改排满尺寸的两行。
       (.phone, false, 375, 150, 2, false),
     ]
-    XCTAssertEqual(cases[0].height, 184)
-    XCTAssertEqual(cases[3].height, 140)
+    XCTAssertEqual(cases[0].height, 176)
+    XCTAssertEqual(cases[2].height, 188)
+    XCTAssertEqual(cases[5].height, 132)
     for item in cases {
       for build in [{ KeyboardMorePickerView(tools: tools, formFactor: item.form, landscape: item.landscape) as UIView },
                     { KeyboardSchemePickerView(selected: .quanpin, showsHeader: false, formFactor: item.form, landscape: item.landscape,
@@ -472,7 +476,9 @@ final class MorePanelFoldTests: XCTestCase {
   func testSideHandlesNarrowTheWholeKeyboardWithTheOtherEdgeFixed() throws {
     let controller = makeController(width: 390)
     let overlay = try openAdjust(in: controller)
-    let padding = KeyboardFormFactor.phone.padding
+    let padding = KeyboardFormFactor.phone.padding(
+      landscape: false,
+      largeScreen: KeyboardFormFactor.isLargeScreen(idiom: .phone, screenSize: UIScreen.main.bounds.size))
     try view("keyboardAdjustLeft", in: overlay).accessibilityDecrement()
     try layoutAtRequestedHeight(controller)
     let root = try keyArea(controller)

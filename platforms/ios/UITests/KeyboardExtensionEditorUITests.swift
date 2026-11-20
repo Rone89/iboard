@@ -960,7 +960,7 @@ final class KeyboardExtensionEditorUITests: XCTestCase {
     XCTAssertTrue(opened, "添加语言应打开应用的输入设置")
   }
 
-  /// 数字页只接受字面输入，不能在结束拼音时悄悄选中首选候选。
+  /// 数字符号层只接受字面输入，不能在结束拼音时悄悄选中首选候选。
   func testNumberPadCommitsRawCompositionBeforeEveryLiteral() throws {
     let app = XCUIApplication()
     let field = try focusedTryoutKeyboard(app)
@@ -972,26 +972,24 @@ final class KeyboardExtensionEditorUITests: XCTestCase {
       app.descendants(matching: .any)[id].firstMatch
     }
     var expected = ""
-    for (identifier, literal) in [("nineKey1", "1"), ("nineKeyZero", "0"),
-                                  ("nineKeyMiddleKey", "."), ("运算符 +", "+"),
-                                  ("运算符 -", "-"), ("运算符 *", "*"), ("运算符 /", "/")] {
+    for (identifier, literal) in [("symbolLayerKey0_0", "1"), ("symbolLayerKey0_9", "0"),
+                                  ("符号 -", "-"), ("符号 /", "/"), ("符号 @", "@")] {
       key("字母 N").tap()
       key("字母 I").tap()
       XCTAssertTrue(app.buttons["candidate-1"].exists, "必须先建立可选词的拼音组合")
       key("layoutToggleButton").tap()
       let target = key(identifier)
-      revealNumberPadSidebarKey(target, in: app)
-      if !target.isHittable { keepScreenshot("数字侧栏不可点击-\(literal)", in: app) }
+      if !target.isHittable { keepScreenshot("横向符号键不可点击-\(literal)", in: app) }
       XCTAssertTrue(target.isHittable)
       target.tap()
       expected += "ni" + literal
-      XCTAssertEqual(field.value as? String, expected, "数字页必须原样结束组合，再写入 \(literal)")
-      XCTAssertTrue(key("numberPadSymbolPanelKey").isHittable, "输入后必须留在数字页")
+      XCTAssertEqual(field.value as? String, expected, "数字符号层必须原样结束组合，再写入 \(literal)")
+      XCTAssertTrue(key("symbolLayerKey0_0").isHittable, "输入后必须留在横向数字符号层")
       key("layoutToggleButton").tap()
     }
   }
 
-  /// 常规中文和原九键的数字页在系统编辑器里连续输入，扩展符号往返不丢失原方案。
+  /// 全拼横向 1…0 数字符号层与九键 3×3 数字页在系统编辑器里连续输入，扩展符号往返不丢失原方案。
   func testNumberPadTypesContinuousArithmeticIntoTheHostEditor() throws {
     let app = XCUIApplication()
     let field = try focusedTryoutKeyboard(app)
@@ -1007,61 +1005,85 @@ final class KeyboardExtensionEditorUITests: XCTestCase {
       let toggle = key("layoutToggleButton")
       XCTAssertTrue(toggle.isHittable)
       toggle.tap()
-      for digit in 1...9 {
-        XCTAssertTrue(key("nineKey\(digit)").isHittable, "数字 \(digit) 必须可点")
-      }
-      let one = key("nineKey1").frame
-      let two = key("nineKey2").frame
-      let four = key("nineKey4").frame
-      XCTAssertEqual(one.minY, two.minY, accuracy: 1)
-      XCTAssertEqual(one.minX, four.minX, accuracy: 1)
-      XCTAssertLessThan(one.maxX, two.minX)
-      XCTAssertLessThan(one.maxY, four.minY)
-      let zero = key("nineKeyZero").frame
-      let space = key("spaceKey").frame
-      // 三倍屏的像素取整允许相邻等宽键相差三分之一点，与布局单测容差一致。
-      XCTAssertGreaterThanOrEqual(zero.width, key("nineKey8").frame.width - 0.5)
-      // 借来的数字页底行对齐上方各列；原九键的数字层底行以 符 | 九键 打头、与字母层同一格（#10061），不对齐网格。
-      if scheme == "quanpin" && !key("inputModeSwitchButton").exists {
-        XCTAssertEqual(zero.minX, key("nineKey7").frame.minX, accuracy: 1)
-        XCTAssertEqual(zero.maxX, key("nineKey7").frame.maxX, accuracy: 1)
-        XCTAssertEqual(space.minX, key("nineKey8").frame.minX, accuracy: 1)
-        XCTAssertEqual(space.maxX, key("nineKey8").frame.maxX, accuracy: 1)
-      }
-      XCTAssertLessThan(zero.maxX, space.minX)
-      for character in "12.3+4-5*6/7001234567890123456789" {
-        let target: XCUIElement
-        switch character {
-        case "0": target = key("nineKeyZero")
-        case "1"..."9": target = key("nineKey\(character)")
-        case ".": target = key("nineKeyMiddleKey")
-        default: target = app.buttons["运算符 \(character)"]
+      if scheme == "quanpin" {
+        for col in 0..<10 {
+          XCTAssertTrue(key("symbolLayerKey0_\(col)").isHittable, "横向数字列 \(col) 必须可点")
         }
-        revealNumberPadSidebarKey(target, in: app)
-        XCTAssertTrue(target.isHittable, "数字页必须能输入 \(character)")
-        target.tap()
-        expected.append(character)
+        let one = key("symbolLayerKey0_0").frame
+        let two = key("symbolLayerKey0_1").frame
+        let nine = key("symbolLayerKey0_8").frame
+        XCTAssertEqual(one.minY, two.minY, accuracy: 1)
+        XCTAssertEqual(two.minY, nine.minY, accuracy: 1)
+        XCTAssertLessThan(one.maxX, two.minX)
+        for id in ["symbolLayerKey0_0", "symbolLayerKey0_1", "symbolLayerKey0_9", "符号 -", "符号 /"] {
+          let target = key(id)
+          XCTAssertTrue(target.isHittable, "横向数字页必须能输入 \(id)")
+          target.tap()
+        }
+        expected += "120-/"
+        XCTAssertEqual(field.value as? String, expected, "数字与符号必须按字面跨进程上屏")
+        key("symbolLayerDeleteKey").tap()
+        expected.removeLast()
+        XCTAssertEqual(field.value as? String, expected)
+        let symbols = key("symbolPanelKey")
+        XCTAssertTrue(symbols.isHittable)
+        symbols.tap()
+        XCTAssertTrue(key("keyboardSymbolPanel").waitForExistence(timeout: 5))
+        key("closeSymbolPanel").tap()
+        XCTAssertTrue(key("symbolLayerKey0_0").isHittable)
+        key("symbolLayerToggle").tap()
+        XCTAssertTrue(key("symbolLayerToggle").waitForExistence(timeout: 5))
+        key("symbolLayerToggle").tap()
+        XCTAssertTrue(key("symbolLayerKey0_0").isHittable)
+        toggle.tap()
+        XCTAssertTrue(key("字母 A").isHittable, "返回后必须恢复原中文方案")
+      } else {
+        for digit in 1...9 {
+          XCTAssertTrue(key("nineKey\(digit)").isHittable, "数字 \(digit) 必须可点")
+        }
+        let one = key("nineKey1").frame
+        let two = key("nineKey2").frame
+        let four = key("nineKey4").frame
+        XCTAssertEqual(one.minY, two.minY, accuracy: 1)
+        XCTAssertEqual(one.minX, four.minX, accuracy: 1)
+        XCTAssertLessThan(one.maxX, two.minX)
+        XCTAssertLessThan(one.maxY, four.minY)
+        let zero = key("nineKeyZero").frame
+        let space = key("spaceKey").frame
+        XCTAssertGreaterThanOrEqual(zero.width, key("nineKey8").frame.width - 0.5)
+        XCTAssertLessThan(zero.maxX, space.minX)
+        for character in "12.3+4-5*6/7001234567890123456789" {
+          let target: XCUIElement
+          switch character {
+          case "0": target = key("nineKeyZero")
+          case "1"..."9": target = key("nineKey\(character)")
+          case ".": target = key("nineKeyMiddleKey")
+          default: target = app.buttons["运算符 \(character)"]
+          }
+          revealNumberPadSidebarKey(target, in: app)
+          XCTAssertTrue(target.isHittable, "数字页必须能输入 \(character)")
+          target.tap()
+          expected.append(character)
+        }
+        XCTAssertEqual(field.value as? String, expected, "数字与运算符必须按字面跨进程上屏")
+        key("nineKeyDelete").tap()
+        expected.removeLast()
+        XCTAssertEqual(field.value as? String, expected)
+        let symbols = key("symbolPanelKey")
+        XCTAssertTrue(symbols.isHittable, "滚动后符号入口仍固定可点")
+        symbols.tap()
+        XCTAssertTrue(key("keyboardSymbolPanel").waitForExistence(timeout: 5))
+        key("closeSymbolPanel").tap()
+        XCTAssertTrue(key("nineKeyZero").isHittable)
+        let more = key("numberPadMoreSymbols")
+        revealNumberPadSidebarKey(more, in: app)
+        more.tap()
+        XCTAssertTrue(key("symbolLayerToggle").waitForExistence(timeout: 5))
+        key("symbolLayerToggle").tap()
+        XCTAssertTrue(key("nineKey1").isHittable)
+        toggle.tap()
+        XCTAssertTrue(key("nineKey2").isHittable, "返回后必须恢复原中文方案")
       }
-      XCTAssertEqual(field.value as? String, expected, "数字与运算符必须按字面跨进程上屏")
-      key("nineKeyDelete").tap()
-      expected.removeLast()
-      XCTAssertEqual(field.value as? String, expected)
-      // 借来的数字页的 符 在符号栏第三排，原九键数字层的 符 在底行最左。
-      let symbols = key(scheme == "quanpin" ? "numberPadSymbolPanelKey" : "symbolPanelKey")
-      XCTAssertTrue(symbols.isHittable, "滚动后符号入口仍固定可点")
-      symbols.tap()
-      XCTAssertTrue(key("keyboardSymbolPanel").waitForExistence(timeout: 5))
-      key("closeSymbolPanel").tap()
-      XCTAssertTrue(key("nineKeyZero").isHittable)
-      let more = key("numberPadMoreSymbols")
-      revealNumberPadSidebarKey(more, in: app)
-      more.tap()
-      XCTAssertTrue(key("symbolLayerToggle").waitForExistence(timeout: 5))
-      key("symbolLayerToggle").tap()
-      XCTAssertTrue(key("nineKey1").isHittable)
-      toggle.tap()
-      XCTAssertTrue((scheme == "quanpin" ? key("字母 A") : key("nineKey2")).isHittable,
-                    "返回后必须恢复原中文方案")
     }
   }
 

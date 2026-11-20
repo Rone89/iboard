@@ -111,7 +111,7 @@ final class KeyboardCursorSwipeTests: XCTestCase {
     entry.sendActions(for: .primaryActionTriggered)
     controller.view.layoutIfNeeded()
     XCTAssertTrue(kana.isHidden)
-    let pad = try XCTUnwrap(nodes(controller.view).first { $0.accessibilityIdentifier == "nineKey1" } as? UIButton)
+    let pad = try XCTUnwrap(nodes(controller.view).first { $0.accessibilityIdentifier == "symbolLayerKey0_0" } as? UIButton)
     XCTAssertEqual(pad.configuration?.title, "1")
     let pan = DirectionalPan()
     pan.name = "keyboardCursorPan"

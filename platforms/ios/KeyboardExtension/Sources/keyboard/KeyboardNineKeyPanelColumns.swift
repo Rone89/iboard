@@ -27,7 +27,7 @@ final class KeyboardNineKeyPanelColumns {
   let trailing = UIStackView()
   var onAction: ((Action) -> Void)?
 
-  private let spellingScrollView = UIScrollView()
+  private let spellingScrollView = EdgeMaskedScrollView()
   private let spellingStack = UIStackView()
   private var spellingButtons: [UIButton] = []
   private let strokeColumn = UIStackView()

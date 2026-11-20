@@ -187,6 +187,8 @@ Android 的拼音九键（含九键双拼）右列 ！ 原本上滑输入 0、�
 - 顶部数字行的 1–0 与 123 层的数字共用 `Digit0`–`Digit9` 统计 id，三端相同：四端共享的按键 id 白名单不为数字行另加 id，热力图上两处按同一个 id 计数、同样亮，分不出是哪一处按的。
 - 「按键布局」的九键组判定：Android 按 `QUANPIN_NINE_KEY`、`NINE_KEY_SHUANGPIN`、`STROKE` 判断；鸿蒙的 `touchKeyLayoutGroups` 把 shuangpin 也算进九键组。只有双拼的版本里鸿蒙列 9 键组、Android 不列；现有版本表里没有这种版本，实际不受影响，本次没改。
 
+> **2026-11-19 更新**：iBoard fork 在 iOS 端退役了按键布局样式——数字层在 iOS 改排原生 4×3 底排，空格位置与数字侧栏在 iOS 不再消费。见 [iBoard 键盘面照 iOS 原生收紧](../simplification/2026-11-19-ios-native-key-surface-trim.md)。
+
 ## Alternatives considered
 
 - 一个枚举覆盖全部键面（如 `touch_bottom_row_style`）：只有一个设置项，但多数取值只对部分键面有意义，宿主得各自定义「这个值在九键上画成什么」，三端很容易画出不一样的结果；按键面类型分开存，每个取值都有唯一的画法。

@@ -34,9 +34,19 @@ enum KeyboardLayoutPreference {
     get { spacing(key: keySpacingKey, fallback: 6, range: 3...6) }
     set { defaults.set(SharedNumber.clamped(newValue, to: 3...6), forKey: keySpacingKey) }
   }
+  static let defaultRowSpacing: Double = 10
+  static let phoneLandscapeDefaultRowSpacing: Double = 8
+
   static var rowSpacing: Double {
-    get { spacing(key: rowSpacingKey, fallback: 11, range: 4...11) }
-    set { defaults.set(SharedNumber.clamped(newValue, to: 4...11), forKey: rowSpacingKey) }
+    get { spacing(key: rowSpacingKey, fallback: defaultRowSpacing, range: 4...10) }
+    set { defaults.set(SharedNumber.clamped(newValue, to: 4...10), forKey: rowSpacingKey) }
+  }
+
+  /// 当前设备形态与方向下实际生效的排距：手机横屏在行距仍处于默认 10pt 时收紧为 KeyboardKit 的 8pt；用户显式调整过行距时保留用户设置。
+  static func effectiveRowSpacing(rowSpacing: Double = Self.rowSpacing,
+                                    tablet: Bool, landscape: Bool) -> Double {
+    guard !tablet, landscape, abs(rowSpacing - defaultRowSpacing) < 0.05 else { return rowSpacing }
+    return phoneLandscapeDefaultRowSpacing
   }
   /// Keyboard height adjustment relative to the platform's current default, in points.
   ///
@@ -112,30 +122,6 @@ enum KeyboardLayoutPreference {
       document[shuangpinKeyHintsDocumentKey] = enabled
     }) else { return false }
     shuangpinKeyHints = enabled
-    return true
-  }
-
-  /// 「组字时保留 Shift」：全拼 26 键组字时第三排左端默认保留 ⇧，点一下臂辅助码（Shift+字母）；关闭后换成「分词」（送 `'` 断音节）。共享文档里是 `touch_quanpin_shift`，缺省为开；键盘从 App Group 镜像读。九键、14 键和 18 键的分词键不受它影响。
-  static let quanpinShiftDocumentKey = "touch_quanpin_shift"
-  static let quanpinShiftKey = "keyboard.quanpin.shift"
-
-  /// 文档里缺这一项或不是布尔值时按开，与 client-core 的默认值一致。
-  static func sharedQuanpinShift(in preferences: [String: Any]?) -> Bool {
-    preferences?[quanpinShiftDocumentKey] as? Bool ?? true
-  }
-
-  static var quanpinShift: Bool {
-    get { defaults.object(forKey: quanpinShiftKey) as? Bool ?? true }
-    set { defaults.set(newValue, forKey: quanpinShiftKey) }
-  }
-
-  /// 把「组字时保留 Shift」写进共享文档，只改这一项；文档接受了才更新 App Group 镜像。
-  @discardableResult
-  static func saveQuanpinShift(_ enabled: Bool, stateRoot: URL? = nil) -> Bool {
-    guard MetasequoiaInputSessionBridge.updateSharedPreferences(stateRoot: stateRoot, { document in
-      document[quanpinShiftDocumentKey] = enabled
-    }) else { return false }
-    quanpinShift = enabled
     return true
   }
 
@@ -280,7 +266,7 @@ enum KeyboardLayoutPreference {
 
   static func sharedRowSpacing(_ value: Any?) -> Double? {
     guard let integer = SharedNumber.strictInt(value) else { return nil }
-    return SharedNumber.clamped(Double(integer) / 10, to: 4...11)
+    return SharedNumber.clamped(Double(integer) / 10, to: 4...10)
   }
 
   static func sharedHeightAdjustment(_ value: Any?) -> Double? {
@@ -417,10 +403,13 @@ enum KeyboardHeightPercent {
   /// `touch_keyboard_height_adjustment` 经过校验的取值范围，单位为点。
   static let adjustmentRange: ClosedRange<CGFloat> = -12...48
 
-  /// 竖屏的按键高度：手机按键 52pt，九键的宽键帽保留足够的纵向空间；iPad 按键 54pt（`dc.html` 的 `keyH`）。键盘高度由它累加而来（`KeyboardFormFactor.keyboardHeight`），所以 100% 画出的正好是这样的按键。
+  /// 竖屏的按键高度：手机九键等宽键帽保留 52pt；iPad 按 KeyboardKit（Liquid Glass）分为标准 54pt、大屏（12.9"/13"）61pt。键盘高度由它累加而来（`KeyboardFormFactor.keyboardHeight`），所以 100% 画出的正好是这样的按键。
   ///
   /// 手机原是设计稿的 42pt：九键每个键约 105pt 宽，42pt 高看上去是扁的，上面的顶栏又按读音行加候选行留着 56pt，整块键盘头重脚轻。
-  static func portraitKeyHeight(tablet: Bool) -> CGFloat { tablet ? 54 : 52 }
+  static func portraitKeyHeight(tablet: Bool, largeScreen: Bool = false) -> CGFloat {
+    guard tablet else { return 52 }
+    return largeScreen ? 61 : 54
+  }
 
   /// 默认高度下的按键区：`rows` 行高为 `keyHeight` 的按键，加上行与行之间的间距。手机竖屏、默认行距 7pt 时为 229pt。
   static func keyBlockHeight(keyHeight: CGFloat, rows: Int, rowSpacing: CGFloat) -> CGFloat {
@@ -475,11 +464,11 @@ struct KeyboardGeometry: Equatable {
   }
 
   /// 手机 26 键第三排（⇧ Z–M ⌫）非分离键盘下左右功能键宽度及与字母间的空白间距：
-  /// 使 `Z..M` 从 `1.5 * pitch` 开始严格等宽对齐 `S..K`，窄屏（如 320pt SE）自动压低功能键宽度以免挤压字母。
+  /// 对齐 KeyboardKit 的行宽 13%（`keysWidth * 0.13`），并保持 `Z..M` 从 `1.5 * pitch` 开始严格等宽对齐 `S..K`。
   static func phoneThirdRowEdgeLayout(keysWidth: CGFloat, keySpacing: CGFloat) -> (width: CGFloat, gap: CGFloat) {
-    let (keyWidth, pitch) = phoneLetterKeyMetrics(keysWidth: keysWidth, keySpacing: keySpacing)
+    let (_, pitch) = phoneLetterKeyMetrics(keysWidth: keysWidth, keySpacing: keySpacing)
     let slot = max(0, 1.5 * pitch)
-    let rawEdgeWidth = max(42, (keyWidth * 1.21).rounded(.toNearestOrEven))
+    let rawEdgeWidth = (keysWidth * 0.13).rounded(.toNearestOrEven)
     let edgeWidth = max(0, min(rawEdgeWidth, slot - keySpacing))
     let edgeGap = max(keySpacing, slot - edgeWidth)
     return (edgeWidth, edgeGap)

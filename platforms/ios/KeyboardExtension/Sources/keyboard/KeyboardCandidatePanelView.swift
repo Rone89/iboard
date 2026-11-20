@@ -30,7 +30,7 @@ extension UIColor {
 // 带标题栏时（默认）面板独自盖住整个键盘：顶部是品牌标志、拼写、候选数和收起箭头。不带标题栏时（`showsHeader: false`）面板用满候选条下方的按键区，拼写和收起箭头由候选条保留，不另放底部按钮。
 //
 // 传入 `columns` 时是全拼九键的三栏面板：左边拼音栏、中间候选网格、右边功能键，同样位于按键区；读音留在上面的候选栏里，所以不画标题栏，返回和退格在右栏里，也不画底栏。
-final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionViewDataSource {
+final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionViewDataSource, UICollectionViewDelegate {
   static let minimumCellWidth: CGFloat = 64
   static let cellSpacing: CGFloat = 6
   static let cellHeight: CGFloat = 44
@@ -53,7 +53,7 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
   /// 长按候选块：打开释义卡片（#10915），参数是候选在列表里的位置。与候选条共用：在候选条里能看释义、管理词条的长按，展开列表后不应失效。
   private let onLongPress: (Int) -> Void
   /// 以选中样式绘制的候选（`accentSoft` 底、强调色半粗体文字），即候选条中高亮的那个，默认是第一个。
-  private let selectedIndex: Int
+  private var selectedIndex: Int
   private let showsHeader: Bool
   private var skin: KeyboardTheme { KeyboardTheme.current }
   private var palette: CandidatePalette?
@@ -64,6 +64,9 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
   private var laidOutWidth: CGFloat = 0
   private var pendingScrollOffset: CGPoint?
   private var headerGap: NSLayoutConstraint?
+  private let scrollEdgeMask = VerticalScrollEdgeMask()
+  private var sideColumns: [UIView] = []
+  private var savedClipsToBoundsBeforeTransition: Bool?
 
   /// 宽 `width` 的网格有几列：CSS auto-fill 的列数，即按 64pt 列宽、6pt 间隔能放下几列，至少一列。
   static func columns(width: CGFloat) -> Int {
@@ -126,11 +129,13 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
     scrollView.alwaysBounceVertical = false
     scrollView.backgroundColor = .clear
     scrollView.dataSource = self
+    scrollView.delegate = self
     scrollView.register(CandidateGridCell.self, forCellWithReuseIdentifier: "candidate")
     scrollView.disableEdgeEffects()
     scrollView.contentInsetAdjustmentBehavior = .never
     addSubview(scrollView)
     if let columns {
+      sideColumns = [columns.leading, columns.trailing]
       // 两栏各占面板宽度的 15%，贴着按键区的左右边；面板底色透明，留给后面的键盘皮肤，被盖住的按键由键盘控制器藏起来（`installPanel`）。
       for column in [columns.leading, columns.trailing] {
         column.translatesAutoresizingMaskIntoConstraints = false
@@ -245,16 +250,43 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
 
   /// 换成另一代候选，面板不关。九键面板里选拼音、退格或筛选之后回到列表开头；只是 AI 行变了（回答插进第一页最后一格、多出来的接在末尾）时 `keepingScrollPosition` 留在原处，不跳回开头（#6888）。
   func reload(candidates: [String], annotations: [KeyboardCandidateAnnotation], markers: [[CandidateMarker]],
-              aiPlaceholders: Set<Int> = [], confidentCorrections: Set<Int> = [], keepingScrollPosition: Bool = false) {
+              aiPlaceholders: Set<Int> = [], confidentCorrections: Set<Int> = [],
+              selectedIndex: Int? = nil, keepingScrollPosition: Bool = false) {
     self.candidates = candidates
     self.annotations = annotations
     self.markers = markers
     self.aiPlaceholders = aiPlaceholders
     self.confidentCorrections = confidentCorrections
+    if let selectedIndex { self.selectedIndex = selectedIndex }
     count.text = "\(candidates.count) 个候选"
     if !keepingScrollPosition { scrollView.setContentOffset(.zero, animated: false) }
     rebuildChips()
     setNeedsLayout()
+  }
+
+  func prepareExpandTransition() {
+    if savedClipsToBoundsBeforeTransition == nil {
+      savedClipsToBoundsBeforeTransition = clipsToBounds
+    }
+    // 展开动画从候选条正下方滑出时裁剪超出的顶部偏移，避免短暂挡住候选条文字。
+    clipsToBounds = true
+    alpha = 0
+    let shift = CGAffineTransform(translationX: 0, y: -18)
+    scrollView.transform = shift
+    for column in sideColumns { column.transform = shift }
+  }
+
+  func commitExpandTransition() {
+    alpha = 1
+    scrollView.transform = .identity
+    for column in sideColumns { column.transform = .identity }
+  }
+
+  func finishExpandTransition() {
+    if let savedClipsToBoundsBeforeTransition {
+      clipsToBounds = savedClipsToBoundsBeforeTransition
+      self.savedClipsToBoundsBeforeTransition = nil
+    }
   }
 
   // 布局只保存几何；UICollectionView 负责可见按钮、滚动、菜单和无障碍的生命周期。
@@ -266,6 +298,11 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
       layoutGrid(width: available)
     }
     scrollView.layoutIfNeeded()
+    scrollEdgeMask.update(for: scrollView, contentHeight: gridLayout.collectionViewContentSize.height)
+  }
+
+  func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    scrollEdgeMask.update(for: scrollView, contentHeight: gridLayout.collectionViewContentSize.height)
   }
 
   private func rebuildChips() {
@@ -288,13 +325,43 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
 
   private func layoutGrid(width: CGFloat) {
     let padding = Self.gridPadding
-    let spacing = palette?.layout?.itemGap?.dip(fontSize: CandidateFontPreference.font(.body, scale: candidateScale).pointSize) ?? Self.cellSpacing
+    let regularFont = CandidateFontPreference.font(.body, scale: candidateScale, families: candidateFamilies)
+    let selectedFont = Self.semibold(regularFont)
+    let spacing = palette?.layout?.itemGap?.dip(fontSize: regularFont.pointSize) ?? Self.cellSpacing
     let content = max(0, width - padding * 2)
     let columns = Self.columns(width: content)
     let columnWidth = max(0, (content - spacing * CGFloat(columns - 1)) / CGFloat(columns))
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.lineBreakMode = .byTruncatingTail
+    paragraph.alignment = .center
+    let regularAttributes: [NSAttributedString.Key: Any] = [.font: regularFont, .paragraphStyle: paragraph]
+    let selectedAttributes: [NSAttributedString.Key: Any] = [.font: selectedFont, .paragraphStyle: paragraph]
+    let horizontalInsets = Self.cellInsets.leading + Self.cellInsets.trailing
+    let verticalInsets = Self.cellInsets.top + Self.cellInsets.bottom
+    let regularBaseHeight = ceil(max(Self.cellHeight, verticalInsets + regularFont.lineHeight + 2))
+    let selectedBaseHeight = ceil(max(Self.cellHeight, verticalInsets + selectedFont.lineHeight + 2))
+
+    // 展开时往往有数百条候选；几何排布阶段直接按字体测宽，避免为不可见格反复重建 UIButton.Configuration。
+    var glossLineCounts = [Int](repeating: 0, count: candidates.count)
     let spans = candidates.indices.map { index in
-      let chip = makeChip(candidate: candidates[index], index: index, reusing: measurementChip, interactive: false)
-      return Self.span(titleWidth: chip.titleWidth, annotated: chip.glossLines > 0,
+      let text = display(candidates[index])
+      let selected = index == selectedIndex
+      let marks = markers.indices.contains(index) ? markers[index] : []
+      let annotation = annotations.indices.contains(index) ? annotations[index] : .none
+      let glossLines = annotation.text.isEmpty
+        ? 0 : annotation.text.split(separator: "\n", omittingEmptySubsequences: false).count
+      glossLineCounts[index] = glossLines
+      let titleWidth: CGFloat
+      if marks.contains(where: { !$0.symbol.isEmpty }) {
+        let font = selected ? selectedFont : regularFont
+        var title = AttributedString(text, attributes: AttributeContainer([.font: font, .paragraphStyle: paragraph]))
+        title += KeyboardViewController.markerRun(marks, color: skin.secondary, scale: candidateScale)
+        titleWidth = ceil(NSAttributedString(title).size().width) + horizontalInsets
+      } else {
+        let attributes = selected ? selectedAttributes : regularAttributes
+        titleWidth = ceil((text as NSString).size(withAttributes: attributes).width) + horizontalInsets
+      }
+      return Self.span(titleWidth: titleWidth, annotated: glossLines > 0,
                        columns: columns, columnWidth: columnWidth)
     }
     let cells = Self.place(spans: spans, columns: columns)
@@ -305,8 +372,12 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
       while rowEnd < cells.count, cells[rowEnd].row == cells[rowStart].row { rowEnd += 1 }
       var height = Self.cellHeight
       for index in rowStart..<rowEnd {
-        let chip = makeChip(candidate: candidates[index], index: index, reusing: measurementChip, interactive: false)
-        height = max(height, cellHeight(for: chip, width: cellWidth(span: cells[index].span, columnWidth: columnWidth)))
+        if glossLineCounts[index] == 0 {
+          height = max(height, index == selectedIndex ? selectedBaseHeight : regularBaseHeight)
+        } else {
+          let chip = makeChip(candidate: candidates[index], index: index, reusing: measurementChip, interactive: false)
+          height = max(height, cellHeight(for: chip, width: cellWidth(span: cells[index].span, columnWidth: columnWidth)))
+        }
       }
       for index in rowStart..<rowEnd {
         let cell = cells[index]
@@ -323,6 +394,7 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
                      max(0, gridLayout.collectionViewContentSize.height - scrollView.bounds.height))
     pendingScrollOffset = nil
     scrollView.setContentOffset(CGPoint(x: 0, y: offset), animated: false)
+    scrollEdgeMask.update(for: scrollView, contentHeight: gridLayout.collectionViewContentSize.height)
   }
 
   private func cellWidth(span: Int, columnWidth: CGFloat) -> CGFloat {

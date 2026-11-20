@@ -126,7 +126,9 @@ final class HandwritingTests: XCTestCase {
       // 书写区有四排 52pt 键连同三道排间距那么高（底行的键只有 44pt，省下的 8pt 也归书写区）。
       XCTAssertGreaterThanOrEqual(panel.canvas.bounds.height, 4 * 52 + 3 * CGFloat(KeyboardLayoutPreference.rowSpacing))
       // 书写卡片铺满键盘宽度，只留键盘本身两侧的内边距；虚线框从卡片边缘内缩 8pt。
-      let padding = KeyboardFormFactor.phone.padding
+      let padding = KeyboardFormFactor.phone.padding(
+        landscape: false,
+        largeScreen: KeyboardFormFactor.isLargeScreen(idiom: .phone, screenSize: UIScreen.main.bounds.size))
       XCTAssertEqual(panel.canvas.bounds.width, width - padding.leading - padding.trailing, accuracy: 0.5)
       let guide = try XCTUnwrap(HandwritingCanvasCard.guideRect(for: panel.canvas.bounds))
       XCTAssertEqual(panel.canvas.bounds.width - guide.width, 2 * HandwritingCanvasCard.guideInset, accuracy: 0.5)
@@ -136,7 +138,8 @@ final class HandwritingTests: XCTestCase {
     }
     let language = try XCTUnwrap(nodes(controller.view).first { $0.accessibilityIdentifier == "bottomLanguageKey" } as? UIButton)
     language.sendActions(for: .primaryActionTriggered)
-    XCTAssertEqual(controller.view.constraints.first { $0.identifier == "keyboardHeight" }?.constant, KeyboardViewController.defaultKeyboardHeight)
+    XCTAssertEqual(controller.view.constraints.first { $0.identifier == "keyboardHeight" }?.constant,
+                   KeyboardViewController.keyboardHeight(letterKeys: true))
     XCTAssertTrue(try XCTUnwrap(nodes(controller.view).first { $0.accessibilityIdentifier == "handwritingInput" }).isHidden)
     // 离开手写后底行的「重写」和 ⌫ 也一起收起。
     XCTAssertTrue(try control("handwritingRewrite", in: controller).isHidden)
@@ -282,7 +285,9 @@ final class HandwritingTests: XCTestCase {
       let panel = try XCTUnwrap(nodes(controller.view).first { $0.accessibilityIdentifier == "handwritingInput" } as? HandwritingInputView)
       XCTAssertFalse(panel.isHidden)
       let card = frame(panel, in: controller)
-      let padding = KeyboardFormFactor.phone.padding
+      let padding = KeyboardFormFactor.phone.padding(
+        landscape: false,
+        largeScreen: KeyboardFormFactor.isLargeScreen(idiom: .phone, screenSize: UIScreen.main.bounds.size))
       XCTAssertEqual(card.minX, padding.leading, accuracy: 0.5)
       XCTAssertEqual(card.maxX, width - padding.trailing, accuracy: 0.5)
       XCTAssertFalse(nodes(controller.view).contains { ($0.accessibilityIdentifier ?? "").hasPrefix("handwritingPunctuation") },

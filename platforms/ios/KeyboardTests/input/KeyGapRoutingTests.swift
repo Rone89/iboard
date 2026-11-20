@@ -319,4 +319,44 @@ final class KeyGapRoutingTests: XCTestCase {
       XCTAssertTrue(hit(CGPoint(x: deleteFrame.minX - 1, y: mFrame.midY), in: controller) === delete)
     }
   }
+
+  func testOuterEdgeReachExtendsOnlyOuterHorizontalAndBottomMargins() {
+    let frames = [
+      CGRect(x: 6, y: 10, width: 32, height: 42),
+      CGRect(x: 180, y: 10, width: 32, height: 42),
+      CGRect(x: 352, y: 10, width: 32, height: 42),
+    ]
+    XCTAssertEqual(KeyGapRouting.outerEdgeReach(at: CGPoint(x: 1, y: 30), in: frames, baseReach: 3), 12)
+    XCTAssertEqual(KeyGapRouting.outerEdgeReach(at: CGPoint(x: 389, y: 30), in: frames, baseReach: 3), 12)
+    XCTAssertEqual(KeyGapRouting.outerEdgeReach(at: CGPoint(x: 196, y: 55), in: frames, baseReach: 3), 12)
+    // 内部中缝与键盘顶缘之上（候选栏衔接带）不外扩。
+    XCTAssertEqual(KeyGapRouting.outerEdgeReach(at: CGPoint(x: 100, y: 30), in: frames, baseReach: 3), 3)
+    XCTAssertEqual(KeyGapRouting.outerEdgeReach(at: CGPoint(x: 196, y: 4), in: frames, baseReach: 3), 3)
+  }
+
+  func testOuterMarginsStillRouteWhenRowSpacingDropsBelowSixPoints() throws {
+    let previous = InputSchemePreference.scheme
+    defer { InputSchemePreference.scheme = previous }
+    InputSchemePreference.scheme = .quanpin
+    KeyboardLayoutPreference.rowSpacing = 4
+
+    let controller = KeyboardViewController()
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.keyboardHeight(letterKeys: true))
+    controller.viewWillAppear(false)
+    controller.view.layoutIfNeeded()
+
+    let qKey = try key("字母 Q", in: controller)
+    let pKey = try key("字母 P", in: controller)
+    let returnKey = try key("returnKey", in: controller)
+    let qFrame = frame(qKey, in: controller)
+    let pFrame = frame(pKey, in: controller)
+    let returnFrame = frame(returnKey, in: controller)
+
+    XCTAssertTrue(hit(CGPoint(x: 1, y: qFrame.midY), in: controller) === qKey)
+    XCTAssertTrue(hit(CGPoint(x: 389, y: pFrame.midY), in: controller) === pKey)
+    XCTAssertTrue(hit(CGPoint(x: returnFrame.midX, y: returnFrame.maxY + 2), in: controller) === returnKey)
+    let strip = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "candidateStrip" })
+    XCTAssertFalse(hit(CGPoint(x: 1, y: frame(strip, in: controller).midY), in: controller) === qKey)
+  }
 }

@@ -153,7 +153,7 @@ final class AsynchronousLetterInputTests: XCTestCase {
     }
   }
 
-  /// 字母还没画出来就按 Shift：要按字母已在组字来判断。双拼组字中的 Shift 让下一个字母成为辅助码，不能因为画面还是空的就切到英文、把字母原样上屏；全拼的 Shift 是分词键，组字照常继续。
+  /// 字母还没画出来就按 Shift：要按字母已在组字来判断。中文 26 键开启 Shift 后，若还没再点字母，当前组字状态仍保留；直到点下字母时才上屏候选并写入大写字母。
   func testShiftRightAfterALetterSeesTheComposition() async throws {
     for scheme in [ChineseInputScheme.shuangpin, .quanpin] {
       let controller = keyboard(scheme)

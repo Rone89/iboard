@@ -84,129 +84,46 @@ final class CompositionCaretTests: XCTestCase {
     _ = bridge.cancel()
   }
 
-  /// 26 键全拼：拼写写进输入框后，候选行最左一段画一支笔（#10591），点它打开候选栏下面的放大拼写编辑条，键盘高出一行；在编辑条上放光标、再点入口保持打开、「完成」把光标移回末尾并收起。
+  /// 26 键全拼与九键组字时，不再在输入法左上角显示铅笔编辑按钮，也不会弹出放大拼写编辑条；空格移动光标后仍会在读音区显示光标位置但仅作静态文本。
   @MainActor
-  func testTappingTheReadingOpensTheSpellingEditor() throws {
+  func testTypingDoesNotShowTopLeftSpellingEditor() throws {
     enableAllInputSchemes()
     let previous = InputSchemePreference.scheme
     defer { InputSchemePreference.scheme = previous }
-    InputSchemePreference.scheme = .quanpin
-    let controller = KeyboardViewController()
-    controller.loadViewIfNeeded()
-    controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
-    controller.viewWillAppear(false)
-    controller.view.layoutIfNeeded()
-    let preedit = try XCTUnwrap(descendants(controller.view).first {
-      $0.accessibilityIdentifier == "preeditButton"
-    } as? UIButton)
-    let bar = try XCTUnwrap(descendants(controller.view).first { $0 is CompositionEditorBar } as? CompositionEditorBar)
-    let height = try XCTUnwrap(controller.view.constraints.first { $0.identifier == "keyboardHeight" })
-    let closedHeight = height.constant
-    XCTAssertTrue(bar.isHidden)
-    XCTAssertNotEqual(preedit.accessibilityLabel, "编辑拼写", "nothing to edit before a spelling")
+    for scheme in [ChineseInputScheme.quanpin, .nineKey] {
+      InputSchemePreference.scheme = scheme
+      let controller = KeyboardViewController()
+      controller.loadViewIfNeeded()
+      controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
+      controller.viewWillAppear(false)
+      controller.view.layoutIfNeeded()
+      let preedit = try XCTUnwrap(descendants(controller.view).first {
+        $0.accessibilityIdentifier == "preeditButton"
+      } as? UIButton)
+      let height = try XCTUnwrap(controller.view.constraints.first { $0.identifier == "keyboardHeight" })
+      let closedHeight = height.constant
+      XCTAssertNil(descendants(controller.view).first { $0 is CompositionEditorBar })
+      XCTAssertNotEqual(preedit.accessibilityLabel, "编辑拼写")
 
-    for letter in "NIHAO" { try key(letter, in: controller).sendActions(for: .primaryActionTriggered) }
-    // 拼写在输入框里，读音那一段不再收成零宽，画的是笔。
-    XCTAssertFalse(preedit.isHidden)
-    XCTAssertEqual(preedit.configuration?.title ?? "", "")
-    XCTAssertNotNil(preedit.configuration?.image, "a pen marks the entry while the spelling is in the field")
-    XCTAssertNil(preedit.menu, "the spelling menu is gone, a tap opens the editor bar")
-    XCTAssertEqual(preedit.accessibilityLabel, "编辑拼写")
-    XCTAssertTrue(preedit.accessibilityTraits.contains(.button))
-    XCTAssertTrue(bar.isHidden, "typing alone does not open the editor")
-    // 读音那一段上下占满的整个高度都点得到读音（#10474）。
-    controller.view.layoutIfNeeded()
-    let row = try XCTUnwrap(preedit.superview)
-    XCTAssertEqual(row.accessibilityIdentifier, "compositionRow")
-    XCTAssertGreaterThanOrEqual(row.bounds.width, 40, "the pen keeps the segment wide enough to tap")
-    for y in [row.bounds.minY + 0.5, row.bounds.midY, row.bounds.maxY - 0.5] {
-      XCTAssertTrue(row.hitTest(CGPoint(x: row.bounds.midX, y: y), with: nil) === preedit, "y = \(y) in a \(row.bounds.height)pt row")
+      if scheme == .quanpin {
+        for letter in "NIHAO" { try key(letter, in: controller).sendActions(for: .primaryActionTriggered) }
+      } else {
+        for digit in "64426" {
+          try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKey\(digit)" } as? UIButton)
+            .sendActions(for: .primaryActionTriggered)
+        }
+      }
+      controller.view.layoutIfNeeded()
+      XCTAssertTrue(preedit.isHidden, "\(scheme) inline reading collapses without a pencil button")
+      XCTAssertNil(preedit.configuration?.image, "\(scheme) must not show a top-left pencil icon")
+      XCTAssertNotEqual(preedit.accessibilityLabel, "编辑拼写")
+      XCTAssertFalse(preedit.accessibilityTraits.contains(.button))
+
+      preedit.sendActions(for: .primaryActionTriggered)
+      XCTAssertEqual(height.constant, closedHeight, "tapping preedit must not grow the keyboard")
+      XCTAssertNil(descendants(controller.view).first { $0 is CompositionEditorBar })
+      controller.viewDidDisappear(false)
     }
-
-    preedit.sendActions(for: .primaryActionTriggered)
-    XCTAssertFalse(bar.isHidden)
-    XCTAssertEqual(height.constant, closedHeight + CompositionEditorBar.height, "the keyboard grows by the editor row")
-    XCTAssertEqual(bar.spelling.display.filter(\.isLetter), "nihao")
-    XCTAssertEqual(bar.spelling.offset, bar.spelling.display.count, "the caret starts at the end")
-    preedit.sendActions(for: .primaryActionTriggered)
-    XCTAssertFalse(bar.isHidden, "tapping the entry again keeps the editor open")
-    XCTAssertEqual(height.constant, closedHeight + CompositionEditorBar.height)
-
-    // 点在拼写开头：光标到开头，读音行画出光标。
-    bar.spelling.requestCaret(atDisplayOffset: 0)
-    XCTAssertEqual(preedit.configuration?.title, "|nihao")
-    XCTAssertEqual(bar.spelling.offset, 0)
-    // 读屏的调整动作逐个按键走。
-    bar.spelling.accessibilityIncrement()
-    XCTAssertEqual(preedit.configuration?.title, "n|ihao")
-    XCTAssertFalse(bar.isHidden)
-
-    try XCTUnwrap(descendants(bar).first { $0.accessibilityIdentifier == "compositionEditorDone" } as? UIButton)
-      .sendActions(for: .primaryActionTriggered)
-    XCTAssertTrue(bar.isHidden)
-    XCTAssertEqual(height.constant, closedHeight)
-    XCTAssertEqual(preedit.configuration?.title ?? "", "", "done sends the caret back to the end")
-    XCTAssertNotNil(preedit.configuration?.image)
-    controller.viewDidDisappear(false)
-  }
-
-  /// 编辑条开着时组字结束（选了候选），它自己收起，键盘回到原来的高度。
-  @MainActor
-  func testTheSpellingEditorClosesWhenTheCompositionEnds() throws {
-    enableAllInputSchemes()
-    let previous = InputSchemePreference.scheme
-    defer { InputSchemePreference.scheme = previous }
-    InputSchemePreference.scheme = .quanpin
-    let controller = KeyboardViewController()
-    controller.loadViewIfNeeded()
-    controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
-    controller.viewWillAppear(false)
-    controller.view.layoutIfNeeded()
-    let height = try XCTUnwrap(controller.view.constraints.first { $0.identifier == "keyboardHeight" })
-    let closedHeight = height.constant
-    for letter in "NIHAO" { try key(letter, in: controller).sendActions(for: .primaryActionTriggered) }
-    let preedit = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "preeditButton" } as? UIButton)
-    let bar = try XCTUnwrap(descendants(controller.view).first { $0 is CompositionEditorBar } as? CompositionEditorBar)
-    preedit.sendActions(for: .primaryActionTriggered)
-    XCTAssertFalse(bar.isHidden)
-    try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "candidate-1" } as? UIButton)
-      .sendActions(for: .primaryActionTriggered)
-    XCTAssertTrue(bar.isHidden)
-    XCTAssertEqual(height.constant, closedHeight)
-    XCTAssertTrue(preedit.isHidden, "idle again, the inline segment collapses")
-    controller.viewDidDisappear(false)
-  }
-
-  /// 九键：编辑条画拼音读音，光标按九键键位对到数字上，点读音里的字母把光标放到对应的数字前。
-  @MainActor
-  func testTheNineKeyEditorPlacesTheCaretAmongTheDigits() throws {
-    enableAllInputSchemes()
-    let previous = InputSchemePreference.scheme
-    defer { InputSchemePreference.scheme = previous }
-    InputSchemePreference.scheme = .nineKey
-    let controller = KeyboardViewController()
-    controller.loadViewIfNeeded()
-    controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
-    controller.viewWillAppear(false)
-    controller.view.layoutIfNeeded()
-    for digit in "64426" {
-      try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKey\(digit)" } as? UIButton)
-        .sendActions(for: .primaryActionTriggered)
-    }
-    let preedit = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "preeditButton" } as? UIButton)
-    let bar = try XCTUnwrap(descendants(controller.view).first { $0 is CompositionEditorBar } as? CompositionEditorBar)
-    XCTAssertEqual(preedit.accessibilityLabel, "编辑拼写")
-    preedit.sendActions(for: .primaryActionTriggered)
-    XCTAssertFalse(bar.isHidden)
-    let display = bar.spelling.display
-    XCTAssertTrue(display.contains { $0.isLetter }, "the editor shows the reading, not the digits: \(display)")
-    let map = try XCTUnwrap(CompositionCaretPolicy.alignment(display, "64426"))
-    // 点在第二个音节的第一个字母前：光标落在它对应的数字前。
-    let second = try XCTUnwrap(Array(display).indices.dropFirst().first { map[$0] == 2 && Array(display)[$0].isLetter })
-    bar.spelling.requestCaret(atDisplayOffset: second)
-    XCTAssertEqual(preedit.configuration?.title, "64|426")
-    XCTAssertEqual(bar.spelling.offset, second)
-    controller.viewDidDisappear(false)
   }
 
   /// 读音单独一行时，它和候选行之间的皮肤行距也归读音；拼音选择条下面那段缝不归读音（#10591，与 Android 相同）。

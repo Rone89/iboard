@@ -512,7 +512,7 @@ final class TouchPointTests: XCTestCase {
     XCTAssertEqual(controller.touchCharacterCount, 2, "读屏的激活不带落点")
     controller.isVoiceOverRunning = { false }
 
-    // 组字中按 Shift，下一个字母是辅助码的大写，不带落点；辅助码之后 Shift 复原，字母又带按下点。Shift 之后键面读作「大写 J」，所以先拿住这个键。
+    // 组字中按 Shift，先上屏当前首选并直接插入大写字母 `J`（不带落点），随后 `Shift` 复原，下一个字母又带按下点。Shift 之后键面读作「大写 J」，所以先拿住这个键。
     let j = try letterKey("j", in: controller)
     try control("shiftButton", in: controller).sendActions(for: .primaryActionTriggered)
     XCTAssertEqual(j.accessibilityLabel, "大写 J", "Shift 让下一个字母成为辅助码")

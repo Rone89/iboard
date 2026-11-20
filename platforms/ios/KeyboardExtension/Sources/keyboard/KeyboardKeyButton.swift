@@ -144,12 +144,14 @@ final class KeyboardKeyButton: UIButton {
     guard value == 0 || hasVisibleFill else { return }
     let shade = pressShade ?? {
       let layer = CAShapeLayer()
-      layer.fillColor = UIColor.black.cgColor
+      layer.fillColor = pressShadeFillColor.cgColor
       layer.opacity = 0
       pressShade = layer
       return layer
     }()
     if value > 0 {
+      // 深浅色切换或换肤后按当前键帽亮度重算叠加色，保证深色半透明键帽按下提亮、浅色键帽按下压暗。
+      shade.fillColor = pressShadeFillColor.cgColor
       // 保持在背景和标题之上，UIKit 可能在上次按下之后又插入了它们。
       if layer.sublayers?.last !== shade { layer.addSublayer(shade) }
       layoutPressShade()
@@ -169,6 +171,31 @@ final class KeyboardKeyButton: UIButton {
   private var hasVisibleFill: Bool {
     guard let background = configuration?.background else { return false }
     return background.customView is SkinKeySurfaceView || (background.backgroundColor?.cgColor.alpha ?? 0) > 0
+  }
+
+  /// 按当前键帽底色（半透明键帽与键盘底色预混后）的感知亮度选择按压叠加色：
+  /// 浅色键帽保持黑色压暗，深色或深色半透明液态玻璃键帽改为白色提亮，避免 17% 白键帽按下反而变黑。
+  private var pressShadeFillColor: UIColor {
+    let raw = (configuration?.background.customView as? SkinKeySurfaceView)?.fillColor
+      ?? configuration?.background.backgroundColor
+      ?? KeyboardTheme.current.keyBackground
+    let resolved = raw.resolvedColor(with: traitCollection)
+    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+    guard resolved.getRed(&r, green: &g, blue: &b, alpha: &a) else {
+      return traitCollection.userInterfaceStyle == .dark ? .white : .black
+    }
+    if a < 0.999 {
+      let back = KeyboardTheme.current.background.resolvedColor(with: traitCollection)
+      var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+      if back.getRed(&br, green: &bg, blue: &bb, alpha: &ba) {
+        let inv = 1 - a
+        r = r * a + br * inv
+        g = g * a + bg * inv
+        b = b * a + bb * inv
+      }
+    }
+    let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return luminance < 0.45 ? .white : .black
   }
 
   /// 按键底色的轮廓：皮肤设计自己的键形，或者 configuration 的圆角背景。
@@ -397,6 +424,13 @@ final class KeyboardKeyButton: UIButton {
     if nineKeySwipe.gesture != .none { isHighlighted = nineKeySwipe.gesture == .digit }
   }
 
+  /// 手指滑出按键后仍算作有效点击的最大容差（参考 KeyboardKit `releaseOutsideTolerance`），防止误滑出几十 pt 跨越他行时依然触发原按键。
+  var releaseOutsideTolerance: CGFloat = 24
+
+  func acceptsRelease(at location: CGPoint) -> Bool {
+    bounds.insetBy(dx: -releaseOutsideTolerance, dy: -releaseOutsideTolerance).contains(location)
+  }
+
   override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
     // 按下时已经出过声、振过，这次松手里执行的动作不再重复（#10768）。
     Self.releasing(self) { endTouches(touches, with: event) }
@@ -415,7 +449,12 @@ final class KeyboardKeyButton: UIButton {
     }
     guard cornerHintTriggered, let hint = cornerHint else {
       resetCornerHint()
-      // 松手输入时按键的动作在这里面同步执行并取走按下点；手指滑出按键后松开不输入，按下点也不留下。
+      if let touch = touches.first, !acceptsRelease(at: touch.location(in: self)) {
+        super.touchesCancelled(touches, with: event)
+        touchDownLocation = nil
+        return
+      }
+      // 松手输入时按键的动作在这里面同步执行并取走按下点；手指大幅滑出容差后松开不再误输入。
       super.touchesEnded(touches, with: event)
       touchDownLocation = nil
       return
@@ -495,8 +534,12 @@ final class KeyboardKeyButton: UIButton {
     previewTitleOverride = nil
   }
 
+  private static let sharedFeedbackDefaults = KeyboardFeedbackPreference.defaults
+
   private func updatePressPreview() {
-    guard showsPressPreview, isHighlighted, isEnabled, traitCollection.userInterfaceIdiom == .phone,
+    guard showsPressPreview,
+          KeyboardFeedbackPreference.keyPreviewEnabled(in: Self.sharedFeedbackDefaults),
+          isHighlighted, isEnabled, traitCollection.userInterfaceIdiom == .phone,
           let title = previewTitleOverride ?? configuration?.title, !title.isEmpty, let host = pressPreviewHost else {
       removePressPreview()
       return
@@ -511,7 +554,8 @@ final class KeyboardKeyButton: UIButton {
     // 取未经变换的 frame：按键可能已经缩放到一半。
     let key = superview?.convert(untransformedFrame, to: host) ?? convert(bounds, to: host)
     preview.show(title, key: key, wide: KeyPressPreviewView.isWide(key: bounds.width, letter: rowLetterWidth),
-                 fill: skin.opaqueKeyBackground.resolvedColor(with: traitCollection),
+                 fill: skin.calloutBackground.resolvedColor(with: traitCollection),
+                 border: skin.calloutBorder.resolvedColor(with: traitCollection),
                  text: skin.keyForeground.resolvedColor(with: traitCollection),
                  monospaced: skin.usesMonospacedFont)
     pressPreview = preview
@@ -586,7 +630,8 @@ final class KeyboardKeyButton: UIButton {
   }
 }
 
-/// 设计稿的按键气泡：与按住的键分开的圆角矩形，比键宽并压住它的上边缘，里面是放大的字符。它放在键盘的根视图里，才能伸到按键所在行的上方。
+/// 按键气泡（参考 KeyboardKit `KeyboardCalloutStyle.standard`）：放大头部（圆角 `10pt`）经平滑颈部曲线（`curveSize 8×15`）
+/// 一体化落入下方的 `9pt` 按键底座。它放在键盘的根视图里，才能伸到按键所在行的上方。
 final class KeyPressPreviewView: UIView {
   struct Geometry: Equatable {
     /// 气泡。
@@ -598,8 +643,10 @@ final class KeyPressPreviewView: UIView {
   static let height: CGFloat = 54
   /// 气泡下边缘向下压过按键上边缘的距离。
   static let overlap: CGFloat = 6
-  static let topRadius: CGFloat = 12
-  static let bottomRadius: CGFloat = 8
+  /// 对齐 KeyboardKit `KeyboardCalloutStyle.standard`：头部圆角 `10pt`，底座与 Liquid Glass 按键一致 `9pt`，过渡曲线 `8×15`。
+  static let topRadius: CGFloat = 10
+  static let bottomRadius: CGFloat = 9
+  static let curveSize = CGSize(width: 8, height: 15)
   static let fontSize: CGFloat = 30
   static let widthFactor: CGFloat = 1.38
   static let wideWidthFactor: CGFloat = 1.5
@@ -629,12 +676,12 @@ final class KeyPressPreviewView: UIView {
     isAccessibilityElement = false
     accessibilityElementsHidden = true
     layer.addSublayer(shape)
-    // 设计稿的 `0 6px 18px rgba(0,0,0,.22)` 阴影，加一圈 .5pt 的 `rgba(0,0,0,.08)` 描边。
+    // 对齐 KeyboardKit `KeyboardCalloutStyle.standard`（shadowRadius 5）的轻盈原生投影与 0.5pt 细描边。
     shape.shadowColor = UIColor.black.cgColor
-    shape.shadowOpacity = 0.22
-    shape.shadowRadius = 9
-    shape.shadowOffset = CGSize(width: 0, height: 6)
-    shape.strokeColor = UIColor.black.withAlphaComponent(0.08).cgColor
+    shape.shadowOpacity = 0.14
+    shape.shadowRadius = 5
+    shape.shadowOffset = CGSize(width: 0, height: 2)
+    shape.strokeColor = UIColor.black.withAlphaComponent(0.12).cgColor
     shape.lineWidth = 0.5
     label.textAlignment = .center
     label.adjustsFontSizeToFitWidth = true
@@ -645,15 +692,16 @@ final class KeyPressPreviewView: UIView {
 
   var text: String? { label.text }
 
-  func show(_ title: String, key: CGRect, wide: Bool, fill: UIColor, text: UIColor, monospaced: Bool) {
+  func show(_ title: String, key: CGRect, wide: Bool, fill: UIColor, border: UIColor, text: UIColor, monospaced: Bool) {
     let geometry = Self.geometry(key: key, in: bounds, wide: wide)
-    let path = Self.path(geometry.head)
+    let path = Self.path(for: geometry)
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     shape.frame = bounds
     shape.path = path
     shape.shadowPath = path
     shape.fillColor = fill.cgColor
+    shape.strokeColor = border.cgColor
     CATransaction.commit()
     // 被窗口顶部压矮的气泡，字符仍留在气泡内。
     let size = min(Self.fontSize, geometry.head.height * 0.62)
@@ -663,23 +711,61 @@ final class KeyPressPreviewView: UIView {
     label.frame = geometry.head.insetBy(dx: 4, dy: 2)
   }
 
-  /// 上方圆角为 `topRadius`、下方圆角为 `bottomRadius` 的圆角矩形。
-  private static func path(_ rect: CGRect) -> CGPath {
-    let limit = min(rect.width, rect.height) / 2
-    let top = min(topRadius, limit), bottom = min(bottomRadius, limit)
+  /// 绘制由「放大气泡 + 平滑颈部曲线 + 底座按键」构成的一体化轮廓。
+  static func path(for geometry: Geometry) -> CGPath {
+    let head = geometry.head, key = geometry.key
+    guard !head.isEmpty, !key.isEmpty, key.height > 0 else {
+      return UIBezierPath(roundedRect: head, cornerRadius: topRadius).cgPath
+    }
+    let headRadius = min(topRadius, min(head.width, head.height) / 2)
+    let footRadius = min(bottomRadius, min(key.width, key.height) / 2)
+    let leftFlare = max(0, key.minX - head.minX)
+    let rightFlare = max(0, head.maxX - key.maxX)
+    // 气泡下沿落在 key.minY + overlap 处，颈部曲线从 head 上缘略上方滑顺收敛到底座键宽。
+    let neckTopY = max(head.minY + headRadius, key.minY - 2)
+    let neckBottomY = min(key.maxY - footRadius, neckTopY + min(curveSize.height, max(8, key.height * 0.45)))
+
     let path = UIBezierPath()
-    path.move(to: CGPoint(x: rect.minX + top, y: rect.minY))
-    path.addLine(to: CGPoint(x: rect.maxX - top, y: rect.minY))
-    path.addArc(withCenter: CGPoint(x: rect.maxX - top, y: rect.minY + top), radius: top,
+    path.move(to: CGPoint(x: head.minX + headRadius, y: head.minY))
+    path.addLine(to: CGPoint(x: head.maxX - headRadius, y: head.minY))
+    path.addArc(withCenter: CGPoint(x: head.maxX - headRadius, y: head.minY + headRadius), radius: headRadius,
                 startAngle: -.pi / 2, endAngle: 0, clockwise: true)
-    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottom))
-    path.addArc(withCenter: CGPoint(x: rect.maxX - bottom, y: rect.maxY - bottom), radius: bottom,
+
+    // 右侧：从气泡头部外沿经 S 形曲线收敛到按键右沿。
+    if rightFlare >= 1 {
+      let rShoulder = min(headRadius * 0.6, max(2, neckTopY - (head.minY + headRadius)))
+      let curveTop = max(head.minY + headRadius, neckTopY - rShoulder)
+      path.addLine(to: CGPoint(x: head.maxX, y: curveTop))
+      path.addCurve(
+        to: CGPoint(x: key.maxX, y: neckBottomY),
+        controlPoint1: CGPoint(x: head.maxX, y: curveTop + (neckBottomY - curveTop) * 0.6),
+        controlPoint2: CGPoint(x: key.maxX, y: curveTop + (neckBottomY - curveTop) * 0.4))
+    } else {
+      path.addLine(to: CGPoint(x: key.maxX, y: neckBottomY))
+    }
+
+    path.addLine(to: CGPoint(x: key.maxX, y: key.maxY - footRadius))
+    path.addArc(withCenter: CGPoint(x: key.maxX - footRadius, y: key.maxY - footRadius), radius: footRadius,
                 startAngle: 0, endAngle: .pi / 2, clockwise: true)
-    path.addLine(to: CGPoint(x: rect.minX + bottom, y: rect.maxY))
-    path.addArc(withCenter: CGPoint(x: rect.minX + bottom, y: rect.maxY - bottom), radius: bottom,
+    path.addLine(to: CGPoint(x: key.minX + footRadius, y: key.maxY))
+    path.addArc(withCenter: CGPoint(x: key.minX + footRadius, y: key.maxY - footRadius), radius: footRadius,
                 startAngle: .pi / 2, endAngle: .pi, clockwise: true)
-    path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + top))
-    path.addArc(withCenter: CGPoint(x: rect.minX + top, y: rect.minY + top), radius: top,
+
+    // 左侧：从按键左沿经 S 形曲线展开到气泡头部左沿。
+    if leftFlare >= 1 {
+      let lShoulder = min(headRadius * 0.6, max(2, neckTopY - (head.minY + headRadius)))
+      let curveTop = max(head.minY + headRadius, neckTopY - lShoulder)
+      path.addLine(to: CGPoint(x: key.minX, y: neckBottomY))
+      path.addCurve(
+        to: CGPoint(x: head.minX, y: curveTop),
+        controlPoint1: CGPoint(x: key.minX, y: curveTop + (neckBottomY - curveTop) * 0.4),
+        controlPoint2: CGPoint(x: head.minX, y: curveTop + (neckBottomY - curveTop) * 0.6))
+    } else {
+      path.addLine(to: CGPoint(x: head.minX, y: neckBottomY))
+    }
+
+    path.addLine(to: CGPoint(x: head.minX, y: head.minY + headRadius))
+    path.addArc(withCenter: CGPoint(x: head.minX + headRadius, y: head.minY + headRadius), radius: headRadius,
                 startAngle: .pi, endAngle: -.pi / 2, clockwise: true)
     path.close()
     return path.cgPath

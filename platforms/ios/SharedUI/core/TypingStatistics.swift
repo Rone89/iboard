@@ -501,12 +501,12 @@ struct TypingKeyHeatmap: Equatable {
   }
 
   private static func letters(_ row: String) -> [Cell] {
-    row.map { Cell("Key\($0)", String($0)) }
+    row.map { Cell("Key\($0.uppercased())", String($0)) }
   }
 
-  /// 手机竖屏默认中文全拼 26 键：字母键面大写，第三排左端为 ⇧（关闭「组字时保留 Shift」后改为「分词」，记 `'`），右端为 ⌫；底行为 123 | 符 | 空格 | ， | 中 | 回车，逗号长按输入句号。iPhone 自带地球键时不画自己的地球键。
+  /// 手机竖屏默认中文全拼 26 键：对齐 iOS 原生默认小写字母键帽，第三排左端为 ⇧（大小写键），右端为 ⌫；底行为 123 | 空格 | ， | 中 | 回车，逗号长按输入句号。iPhone 自带地球键时不画自己的地球键。
   ///
-  /// 宽度照键盘的约束：前两排字母等宽，第二排两侧各缩进本行宽度的 5%（`keyboardMiddleRowInset`）；第三排的分词键和 ⌫ 在键盘上固定 44pt，iPhone 17 竖屏时约是同排字母键的 1.2 倍；底行是 `phoneActionWidths` 的权重，空格为 4。用户选了别的「按键布局」时画 `letterRows(for:)`。
+  /// 宽度照键盘的约束：前两排字母等宽，第二排两侧各缩进本行宽度的 5%（`keyboardMiddleRowInset`）；第三排的 ⇧ 和 ⌫ 自适应对齐 `S..K`（按 `13%` 边缘键比例约占同排字母键的 1.5 倍）；底行随 `TouchBottomRowLayout.twentySixKey(.standard)` 权重排列。用户选了别的「按键布局」时画 `letterRows(for:)`。
   static let keyboardRows: [[Cell]] = letterRows(for: TouchKeyLayoutStyle())
 
   /// 按用户的「按键布局」画的 26 键：底行照 `TouchBottomRowLayout.twentySixKey`（打开「符」与「123」互换时 符 排在 123 左边，中/英键放在空格左边时照 `TouchBottomRowLayout.languageBeforeSpace` 重排），打开顶部数字行时字母上方多一排 1 到 0（记 `Digit1`…`Digit0`）。
@@ -521,11 +521,11 @@ struct TypingKeyHeatmap: Equatable {
   /// 顶部数字行：一排 1 到 0，记 `Digit1`…`Digit0`。「按键布局」页的预览也画这一排。
   static let numberRow: [Cell] = "1234567890".map { Cell("Digit\($0)", String($0)) }
 
-  /// 26 键的三排字母：第三排两端是分词键（记 `'`）和 ⌫，各占同排字母键的 1.2 倍。「按键布局」页的预览也画这三排。
+  /// 26 键的三排字母（默认小写以对齐 iOS 原生）：第三排两端是 ⇧（记 `ShiftLeft`）和 ⌫，各占同排字母键的 1.5 倍。「按键布局」页的预览也画这三排。
   static let twentySixKeyLetterRows: [[Cell]] = [
-    letters("QWERTYUIOP"),
-    letters("ASDFGHJKL"),
-    [Cell(TypingKeyID.pinyinSeparator, "分词", width: 1.2)] + letters("ZXCVBNM") + [Cell(TypingKeyID.backspace, "删除", width: 1.2)],
+    letters("qwertyuiop"),
+    letters("asdfghjkl"),
+    [Cell(TypingKeyID.shift, "⇧", width: 1.5)] + letters("zxcvbnm") + [Cell(TypingKeyID.backspace, "删除", width: 1.5)],
   ]
 
   /// 26 键热力图里第二排字母（要两侧缩进的那一排）的下标：数字行打开时往下挪一排。
@@ -545,6 +545,7 @@ struct TypingKeyHeatmap: Equatable {
       case .zero: return Cell(TypingKeyID.nineKey(0) ?? "Nine0", "0", width: width)
       case .language: return Cell(TypingKeyID.language, "中", width: width)
       case .returnKey: return Cell(TypingKeyID.enter, "换行", width: width)
+      case .delete: return Cell(TypingKeyID.backspace, "删除", width: width)
       case .globe: return nil
       }
     }

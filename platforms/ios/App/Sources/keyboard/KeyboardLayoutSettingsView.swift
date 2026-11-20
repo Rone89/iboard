@@ -35,7 +35,6 @@ struct KeyboardLayoutSettingsView: View {
   @State private var quickSymbols = KeyboardLayoutPreference.quickPunctuationSymbols.joined()
   @State private var tabOpensCandidates = true
   @State private var shuangpinKeyHints = KeyboardLayoutPreference.shuangpinKeyHints
-  @State private var quanpinShift = KeyboardLayoutPreference.quanpinShift
   /// 「按键布局」里的顶部数字行决定手机键盘有几排，高度百分比按它算（`heightPercent`）。
   @State private var keyLayoutStyle = TouchKeyLayoutStyle.mirrored
   @State private var dragBase: (height: Double, keySpacing: Double, rowSpacing: Double)?
@@ -47,6 +46,8 @@ struct KeyboardLayoutSettingsView: View {
   private var hapticsEnabled = false
   @AppStorage(KeyboardFeedbackPreference.strengthKey, store: KeyboardFeedbackPreference.defaults)
   private var hapticStrength = KeyboardHapticStrength.medium.rawValue
+  @AppStorage(KeyboardFeedbackPreference.keyPreviewKey, store: KeyboardFeedbackPreference.defaults)
+  private var keyPreviewEnabled = true
   @State private var previewFeedback: UIImpactFeedbackGenerator?
   /// 选中的按键音包，取自共享文档。
   @State private var keySoundPack = KeySoundPackPolicy.defaultPack
@@ -242,9 +243,6 @@ struct KeyboardLayoutSettingsView: View {
         .accessibilityIdentifier("appShuangpinKeyHintsToggle")
         DesignDivider()
       }
-      DesignToggleRow(title: "组字时保留 Shift", info: "全拼 26 键组字时左下角保留 ⇧，点一下再输字母即辅助码；默认开启，关闭后这一键改为「分词」，用来断开音节",
-                      isOn: Binding(get: { quanpinShift }, set: { saveQuanpinShift($0) }))
-        .accessibilityIdentifier("appQuanpinShiftToggle")
       DesignToggleRow(title: "隐藏中/英键", info: "加宽底行空格键；中英文仍可在工具栏的输入方式中切换",
                       isOn: Binding(get: { hideLanguageKey }, set: { enabled in
                         hideLanguageKey = enabled
@@ -320,6 +318,14 @@ struct KeyboardLayoutSettingsView: View {
         onSelect: selectKeySoundPack)
       .disabled(!soundEnabled)
       .opacity(soundEnabled ? 1 : 0.45)
+      if UIDevice.current.userInterfaceIdiom == .phone {
+        DesignDivider()
+        DesignToggleRow(
+          title: "按键预览",
+          info: "按下字母或符号键时在上方放大显示当前字符；关闭后不再弹出预览气泡。",
+          isOn: $keyPreviewEnabled.markingSettingsChange())
+        .accessibilityIdentifier("keyboardKeyPreviewToggle")
+      }
       if KeyboardFeedbackPreference.hapticsAvailable {
         DesignDivider()
         DesignToggleRow(title: "按键振动", isOn: $hapticsEnabled.markingSettingsChange())
@@ -363,7 +369,8 @@ struct KeyboardLayoutSettingsView: View {
   }
 
   private var gestureGroup: some View {
-    DesignGroup(title: "手势", info: "滑行输入只在全拼 26 键的字母键盘上生效，轻点照常输入单个字母。") {
+    DesignGroup(title: "手势", info: "滑行输入只在全拼 26 键的字母键盘上生效，轻点照常输入单个字母。",
+                footer: saveFailed ? SettingsSaveFailure.message : nil) {
       DesignToggleRow(title: "滑动输入符号", info: "沿设定方向滑动输入角标符号，默认上滑；长按字母键始终可以输入",
                       isOn: Binding(get: { swipeSymbols }, set: { enabled in
                         swipeSymbols = enabled
@@ -638,13 +645,6 @@ struct KeyboardLayoutSettingsView: View {
       : enabled
   }
 
-  private func saveQuanpinShift(_ enabled: Bool) {
-    saveFailed = !KeyboardLayoutPreference.saveQuanpinShift(enabled)
-    quanpinShift = saveFailed
-      ? KeyboardLayoutPreference.sharedQuanpinShift(in: MetasequoiaInputSessionBridge.loadSharedPreferences())
-      : enabled
-  }
-
   /// 「九键滑动输入数字」只在本版本提供拼音九键（触屏方案 `nine_key`）时列出。
   static var offersNineKeySwipeDigits: Bool { ChineseInputScheme.nineKey.isOfferedByEdition }
 
@@ -710,8 +710,6 @@ struct KeyboardLayoutSettingsView: View {
     height = KeyboardLayoutPreference.heightAdjustment
     shuangpinKeyHints = KeyboardLayoutPreference.sharedShuangpinKeyHints(in: preferences)
     KeyboardLayoutPreference.shuangpinKeyHints = shuangpinKeyHints
-    quanpinShift = KeyboardLayoutPreference.sharedQuanpinShift(in: preferences)
-    KeyboardLayoutPreference.quanpinShift = quanpinShift
     NineKeySwipeDigits.mirror(preferences)
     nineKeySwipeDigits = NineKeySwipeDigits(in: preferences)
     TouchKeyLayoutStyle.mirror(preferences)

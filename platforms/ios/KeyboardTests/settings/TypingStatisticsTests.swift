@@ -551,9 +551,9 @@ final class TypingStatisticsTests: XCTestCase {
     XCTAssertFalse(TypingKeyHeatmap(counts: statistics.keyCounts(on: [day], calendar: calendar)).showsNineKey)
     // Ties keep id order, so Backspace comes before KeyB.
     XCTAssertEqual(heatmap.top().map(\.id), ["KeyA", "Backspace", "KeyB", "Comma", "Nine5"])
-    // 页面一次只画一块键盘，其他键按当前那块列出：26 键热力图下列出九键格子，九键热力图下列出字母。两块键盘的底行都有 符，所以它不在其他键里。
-    XCTAssertEqual(heatmap.others(nineKey: false).map(\.id), ["Nine5", "Digit1"])
-    XCTAssertEqual(heatmap.others(nineKey: false).map(\.label), ["九键 5", "1"])
+    // 页面一次只画一块键盘，其他键按当前那块列出：标准 26 键底行没有 符，所以 符 出现在其他键里；九键热力图底行带 符，所以不在其他键里。
+    XCTAssertEqual(heatmap.others(nineKey: false).map(\.id), ["Nine5", TypingKeyID.symbol, "Digit1"])
+    XCTAssertEqual(heatmap.others(nineKey: false).map(\.label), ["九键 5", "符", "1"])
     XCTAssertEqual(heatmap.others(nineKey: true).map(\.id), ["KeyA", "KeyB", "Comma", "Digit1"])
     XCTAssertEqual(TypingKeyHeatmap.accessibilityLabel("KeyA", count: 123), "A，123 次")
     // 画在键盘图上的键读它的键面：分词键记在 `'` 上，读出来仍是「分词」。
@@ -651,15 +651,15 @@ final class TypingStatisticsTests: XCTestCase {
     XCTAssertTrue(letters.allSatisfy { TypingKeyHeatmap.sharedFaces($0, nineKey: false).isEmpty })
     XCTAssertEqual(nine.filter { !TypingKeyHeatmap.sharedFaces($0, nineKey: true).isEmpty }.map(\.face), ["，。？", "！"])
     XCTAssertEqual(TypingKeyHeatmap.sharedFaces(TypingKeyHeatmap.nineKeySidebar, nineKey: true), ["！"])
-    // 两块键盘都没画的键列在其他键里：英文模式的 Shift、九键数字层的 0 和句点。
+    // 两块键盘都没画的键列在其他键里：⇧ 只画在 26 键上，九键热力图的右列仍画分词键（记 Quote）；26 键热力图不再画分词键，它按其他键列出。
     let others = TypingKeyHeatmap(counts: [TypingKeyID.shift: 5, "Nine0": 4, "Period": 3, TypingKeyID.pinyinSeparator: 2])
-    XCTAssertEqual(others.others(nineKey: false).map(\.id), [TypingKeyID.shift, "Nine0", "Period"])
+    XCTAssertEqual(others.others(nineKey: false).map(\.id), ["Nine0", "Period", TypingKeyID.pinyinSeparator])
     XCTAssertEqual(others.others(nineKey: true).map(\.id), [TypingKeyID.shift, "Nine0", "Period"])
   }
 
   /// 键盘按下各键时 `countKeyPress` 记的 id，按无障碍标识对应。地球键也列出来，好让比对时把它当作热力图不画的键滤掉。
   private static let recordedID: [String: String] = [
-    "shiftButton": TypingKeyID.pinyinSeparator, "letterDeleteKey": TypingKeyID.backspace,
+    "shiftButton": TypingKeyID.shift, "letterDeleteKey": TypingKeyID.backspace,
     "symbolPanelKey": TypingKeyID.symbol, "layoutToggleButton": TypingKeyID.layer, "inputModeSwitchButton": TypingKeyID.globe,
     "spaceKey": TypingKeyID.space, "bottomLanguageKey": TypingKeyID.language, "returnKey": TypingKeyID.enter,
     "quickPunctuationKey": TypingKeyID.quickPunctuation,

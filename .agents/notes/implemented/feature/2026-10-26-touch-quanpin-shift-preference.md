@@ -14,6 +14,8 @@ Status: implemented
 
 偏好随账号同步：Android 走 `platform.android.quanpin_shift`，鸿蒙走同构键 `platform.harmony.quanpin_shift`；iOS 键盘经 App Group 镜像 `keyboard.quanpin.shift` 读取，模式与 `touch_shuangpin_key_hints` 完全相同（`KeyboardLayoutPreference.swift`）。三端宿主都读这个偏好：Android 的「键盘 › 组字时保留 Shift」（`KeyboardOptionsPage.java`），iOS 的「键盘 › 布局 › 组字时保留 Shift」（`KeyboardLayoutSettingsView.swift`），鸿蒙走共享 React 设置页「屏幕键盘 › 布局 › 组字时保留 Shift」（`screen-keyboard-page.tsx` → `touch-keyboard-geometry-section.tsx`，键盘侧 `KeyboardSession.ets` 以 `=== true` 读文档、缺省关）。
 
+> **2026-11-19 更新**：iBoard fork 在 iOS 端退役了这个偏好——26 键第三排左端恒为 ⇧，iOS 设置页不再有开关；Android 与鸿蒙的开关与本偏好的其余接线不变。见 [iBoard 键盘面照 iOS 原生收紧](../simplification/2026-11-19-ios-native-key-surface-trim.md)。
+
 ## Alternatives considered
 
 - 默认改回 Shift、分词做成另一个键：恢复旧键位会让依赖分词断音节的用户失去现有入口，且 26 键底行没有空位再放一个分词键；保留默认、把选择交给用户是双向都能活的方案。

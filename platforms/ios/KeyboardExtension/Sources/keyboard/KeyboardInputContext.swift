@@ -3,7 +3,7 @@ import UIKit
 // A field's preferred keyboard temporarily overrides the language, not the user's input scheme.
 // Track its identity as well as its type so typing callbacks do not undo a manual language choice.
 struct KeyboardInputContext {
-  private var documentIdentifier: UUID?
+  private(set) var documentIdentifier: UUID?
   private(set) var keyboardType: UIKeyboardType = .default
   private var languageBeforeLatinField: Bool?
 

@@ -40,14 +40,40 @@ enum KeyboardFormFactor: Equatable {
     resolve(idiom: traits.userInterfaceIdiom, horizontalSizeClass: traits.horizontalSizeClass)
   }
 
-  /// 键盘在顶部那一行和按键四周的内边距（dc.html `kbPad`）：手机上方 2、下方 4，两侧对齐 iOS 27 系统键盘的
-  /// 6.67pt（UI Kit 20px@3x，见 IOS27_KEYBOARD_DESIGN.md 的取值）；iPad 为 6 / 8 / 4。
+  /// 是否属于同形态下的大屏设备（参考 KeyboardKit `KeyboardLayoutConfiguration` 分档）：
+  /// - 手机：短边 >= 428pt 或长边 >= 926pt（Plus / Pro Max 系列）
+  /// - 平板：短边 >= 1024pt 或长边 >= 1366pt（12.9" / 13" iPad Pro）
+  static func isLargeScreen(idiom: UIUserInterfaceIdiom, screenSize: CGSize?) -> Bool {
+    guard let screenSize, screenSize.width > 0, screenSize.height > 0 else { return false }
+    let shortSide = min(screenSize.width, screenSize.height)
+    let longSide = max(screenSize.width, screenSize.height)
+    switch idiom {
+    case .pad:
+      return shortSide >= 1024 || longSide >= 1366
+    case .phone:
+      return shortSide >= 428 || longSide >= 926
+    default:
+      return false
+    }
+  }
+
+  /// 键盘在顶部那一行和按键四周的内边距（dc.html `kbPad`）：
+  /// - 手机上方 2、下方 4；两侧对齐 KeyboardKit（Liquid Glass）：标准竖屏 6pt，大屏竖屏与手机横屏 3pt。
+  /// - iPad 保持 6 / 8 / 4。
   ///
   /// 手机的上边距原是设计稿的 6：顶栏为了打字时按键不跳，空闲时也按读音行加候选行的高度留着，再加上边距和下面的间隔，iPhone 上按键以上占了约 72pt，比四排按键的三分之一还多。上边距和间隔（`topRowGap`）是这一截里纯空白的部分，所以从这两处压。
   var padding: NSDirectionalEdgeInsets {
+    padding()
+  }
+
+  /// 按当前屏幕方向和是否为大屏手机计算键盘内边距：大屏竖屏与横屏把手机左右边距从 6pt 收紧到 3pt。
+  func padding(landscape: Bool = false, largeScreen: Bool = false) -> NSDirectionalEdgeInsets {
     switch self {
-    case .phone: NSDirectionalEdgeInsets(top: 2, leading: 6.67, bottom: 4, trailing: 6.67)
-    case .tablet: NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 4, trailing: 8)
+    case .phone:
+      let horizontal: CGFloat = (landscape || largeScreen) ? 3 : 6
+      return NSDirectionalEdgeInsets(top: 2, leading: horizontal, bottom: 4, trailing: horizontal)
+    case .tablet:
+      return NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 4, trailing: 8)
     }
   }
 
@@ -56,17 +82,21 @@ enum KeyboardFormFactor: Equatable {
   /// 设计稿的各排按键之间也用同样的间隔，这里则与 Android 一样保留用户的排间距（`touch_row_spacing_tenths`，取值 4-10，默认 7）：共享的取值范围放不下 11，而且用户调过的间距应当保持不变。
   var topRowGap: CGFloat { self == .tablet ? 9 : 4 }
 
-  /// 默认键盘高度下一排按键的高度。
-  ///
-  /// 竖屏用设计稿的按键高度（`KeyboardHeightPercent.portraitKeyHeight`）：手机 52pt、26 键字母页 45pt（iOS 27
-  /// 系统键盘实测键帽 45pt，原设计稿 44），iPad 54pt。设计稿没有画横屏键盘，所以横屏沿用以前按系统尺寸做的横屏键盘的按键高度：手机 34pt，其中手写为 40pt，让书写区仍然够用；iPad 为更高的 73pt，和系统键盘一样随更宽的屏幕变大。
-  func keyHeight(landscape: Bool, handwriting: Bool, letterKeys: Bool = false) -> CGFloat {
+  /// 默认键盘高度下一排按键的高度（四档设备键高参考 KeyboardKit `liquidGlass: true` 标准配置，保留九键等竖屏 52pt）：
+  /// - 竖屏：标准手机 26 键及切出的数字/符号层 43pt、大屏手机（Plus / Pro Max）46pt；九键/网格/笔画/手写仍为 52pt；普通 iPad 54pt、大屏 iPad（12.9"/13"）61pt。
+  /// - 横屏：手机 32pt，手写保留 40pt 以留足书写区；普通 iPad 74pt、大屏 iPad 78pt。
+  func keyHeight(landscape: Bool, handwriting: Bool, letterKeys: Bool = false, largeScreen: Bool = false) -> CGFloat {
     guard landscape else {
-      return self == .phone && letterKeys ? 45 : KeyboardHeightPercent.portraitKeyHeight(tablet: self == .tablet)
+      switch self {
+      case .phone:
+        return letterKeys ? (largeScreen ? 46 : 43) : KeyboardHeightPercent.portraitKeyHeight(tablet: false)
+      case .tablet:
+        return KeyboardHeightPercent.portraitKeyHeight(tablet: true, largeScreen: largeScreen)
+      }
     }
     switch self {
-    case .phone: return handwriting ? 40 : 34
-    case .tablet: return 73
+    case .phone: return handwriting ? 40 : 32
+    case .tablet: return largeScreen ? 78 : 74
     }
   }
 
@@ -81,12 +111,13 @@ enum KeyboardFormFactor: Equatable {
 
   /// 用户调整之前的键盘高度，按设计稿的结构逐项相加：上边距、顶部那一行、它下面的间隔、各排按键连同排间距，以及下边距。顶部那一行收起（`topRow` 为 0，「显示方式」为隐藏时）时间隔也一起去掉，与 `applyKeyboardMetrics` 把那段间隔设为 0 一致，否则多出的高度会被分给按键，组字开始和结束时按键高度跟着跳。
   func keyboardHeight(topRow: CGFloat, rowSpacing: CGFloat, landscape: Bool, handwriting: Bool,
-                      numberRow: Bool = false, letterKeys: Bool = false, phoneNumberRow: Bool = false) -> CGFloat {
+                      numberRow: Bool = false, letterKeys: Bool = false, phoneNumberRow: Bool = false,
+                      largeScreen: Bool = false) -> CGFloat {
     let rows = keyRows(numberRow: numberRow, handwriting: handwriting, landscape: landscape, phoneNumberRow: phoneNumberRow)
     let keyBlock = KeyboardHeightPercent.keyBlockHeight(
-      keyHeight: keyHeight(landscape: landscape, handwriting: handwriting, letterKeys: letterKeys),
+      keyHeight: keyHeight(landscape: landscape, handwriting: handwriting, letterKeys: letterKeys, largeScreen: largeScreen),
       rows: rows, rowSpacing: rowSpacing)
-    // 手机竖屏 26 键直接按 45pt 键帽计算紧凑高度，不再加回 52pt 标准键帽多出的 28pt 留白，使键盘总高（约 263pt）与首行位置对齐 iOS 27 原生键盘。
+    // 手机竖屏 26 键直接按分档键帽高度计算紧凑高度，不再加回 52pt 标准键帽多出的留白。
     let letterHeightCompensation: CGFloat = 0
     return padding.top + topRow + (topRow > 0 ? topRowGap : 0)
       + keyBlock + letterHeightCompensation

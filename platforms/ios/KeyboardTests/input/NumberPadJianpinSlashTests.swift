@@ -34,9 +34,9 @@ final class NumberPadJianpinSlashTests: XCTestCase {
     let original = try preedit(controller)
     XCTAssertEqual(original, "nuu")
     try press("layoutToggleButton", in: controller)
-    try press("运算符 /", in: controller)
+    try pressSymbol("/", in: controller)
     XCTAssertEqual(try preedit(controller), "Jnuu")
-    let delete = try button("nineKeyDelete", in: controller)
+    let delete = try button("symbolLayerDeleteKey", in: controller)
     delete.sendActions(for: .touchDown)
     delete.sendActions(for: .touchUpInside)
     controller.view.layoutIfNeeded()
@@ -66,7 +66,7 @@ final class NumberPadJianpinSlashTests: XCTestCase {
     try type(letters, in: controller)
     XCTAssertFalse(try preedit(controller).isEmpty)
     try press("layoutToggleButton", in: controller)
-    try press("运算符 /", in: controller)
+    try pressSymbol("/", in: controller)
     XCTAssertEqual(try preedit(controller), "")
   }
 
@@ -93,6 +93,14 @@ final class NumberPadJianpinSlashTests: XCTestCase {
 
   private func preedit(_ controller: KeyboardViewController) throws -> String {
     try button("preeditButton", in: controller).accessibilityValue ?? ""
+  }
+
+  private func pressSymbol(_ symbol: String, in controller: KeyboardViewController) throws {
+    let key = try button("symbolLayerKey1_1", in: controller)
+    XCTAssertEqual(key.accessibilityLabel, "符号 \(symbol)")
+    XCTAssertTrue(sequence(first: key as UIView, next: \.superview).allSatisfy { !$0.isHidden })
+    key.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
   }
 
   private func press(_ name: String, in controller: KeyboardViewController) throws {

@@ -335,6 +335,7 @@ struct KeyboardSkinPreview: View {
       }
     case .returnKey:
       if miniatureBottomRow { symbolKey("return", emphasized: true) } else { key("换行", emphasized: true) }
+    case .delete: symbolKey("delete.left", function: true)
     }
   }
 

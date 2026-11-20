@@ -134,7 +134,9 @@ final class OneHandModeTests: XCTestCase {
 
     let gutter = try view("oneHandGutter", in: controller)
     XCTAssertFalse(gutter.isHidden)
-    let padding = KeyboardFormFactor.phone.padding
+    let padding = KeyboardFormFactor.phone.padding(
+      landscape: false,
+      largeScreen: KeyboardFormFactor.isLargeScreen(idiom: .phone, screenSize: UIScreen.main.bounds.size))
     let available = controller.view.bounds.width - padding.leading - padding.trailing
     let column = gutter.convert(gutter.bounds, to: controller.view)
     XCTAssertEqual(column.width, available * KeyboardOneHandLayout.gutterRatio, accuracy: 0.5)
@@ -194,7 +196,9 @@ final class OneHandModeTests: XCTestCase {
     let controller = makeController()
     let gutter = try view("oneHandGutter", in: controller)
     XCTAssertFalse(gutter.isHidden)
-    let padding = KeyboardFormFactor.phone.padding
+    let padding = KeyboardFormFactor.phone.padding(
+      landscape: false,
+      largeScreen: KeyboardFormFactor.isLargeScreen(idiom: .phone, screenSize: UIScreen.main.bounds.size))
     XCTAssertEqual(gutter.convert(gutter.bounds, to: controller.view).maxX, controller.view.bounds.width - padding.trailing, accuracy: 0.5)
     let menu = try openMenu(in: controller)
     XCTAssertEqual(menu.convert(menu.bounds, to: controller.view).width,

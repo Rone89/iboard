@@ -76,25 +76,33 @@ enum NativeKeyboardTokens {
 enum SystemKeyboardTokens {
   /// 是否画 iOS 26 起的系统键盘：底板是 Liquid Glass，按键扁平、同色、无阴影。
   static var drawsLiquidGlassKeyboard: Bool {
-    if #available(iOS 26.0, *) { return true }
-    return false
+    return true
   }
 
-  static let background = drawsLiquidGlassKeyboard ? adaptiveColor(0xE1E4E8, 0x1C1C1E) : NativeKeyboardTokens.background
+  static let lightBackground = rgbColor(0xE1E4E8)
+  static let darkBackground = rgbColor(0x1C1C1E)
+  static let background = drawsLiquidGlassKeyboard
+    ? UIColor { traits in traits.userInterfaceStyle == .dark ? darkBackground : lightBackground }
+    : NativeKeyboardTokens.background
   /// iOS 27 Liquid Glass 键盘键帽：浅色使用官方 `#FDFEFF`，深色使用 17% 白色半透明叠层以透出底层毛玻璃。
+  static let lightKey = rgbColor(0xFDFEFF)
+  static let darkKey = UIColor(white: 1, alpha: 0.17)
   static let key = drawsLiquidGlassKeyboard
-    ? UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.17) : rgbColor(0xFDFEFF) }
+    ? UIColor { traits in traits.userInterfaceStyle == .dark ? darkKey : lightKey }
     : NativeKeyboardTokens.key
   static let functionKey = drawsLiquidGlassKeyboard ? key : NativeKeyboardTokens.functionKey
-  /// iOS 27 起系统与 iPad 键帽圆角统一为 8.5pt 连续曲率圆角；经典系统维持旧比例。
+  /// iOS 26/27 起系统与 iPad 键帽圆角统一对齐 KeyboardKit（Liquid Glass）的 9pt 连续曲率圆角；经典系统维持旧比例。
   static var cornerRadius: CGFloat {
-    if drawsLiquidGlassKeyboard { return 8.5 }
+    if drawsLiquidGlassKeyboard { return 9 }
     return UIDevice.current.userInterfaceIdiom == .pad ? 8 : 6
   }
   /// 原生皮肤在 iOS 27 对齐系统蓝（已通过浅/深色背景 WCAG 4.5:1 对比度校验），不跟季节。
   static let accent = adaptiveColor(0x0A5DC8, 0x8CC2FF)
   /// 系统蓝填充上的文字：浅色用白色，深色用黑色。
   static let onAccent = adaptiveColor(0xFFFFFF, 0x000000)
+  /// 原生主题发送/回车动作键对齐 KeyboardKit（Liquid Glass）系统蓝（浅色 `#0088FF`、深色 `#0091FF`），文字固定使用白色。
+  static let actionBackground = adaptiveColor(0x0088FF, 0x0091FF)
+  static let actionForeground = UIColor.white
   static let accentSoft = adaptiveColor(0x0A5DC8, 0x8CC2FF, lightAlpha: 0.14, darkAlpha: 0.26)
   /// 工具栏 logo 的圆底：系统蓝混入系统卡片底，不跟季节。
   static let logoCircle = UIColor { traits in

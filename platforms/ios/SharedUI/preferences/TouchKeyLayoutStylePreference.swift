@@ -3,7 +3,7 @@ import Foundation
 
 /// 「按键布局」里 26 键的底行样式，共享文档里是 `touch_twenty_six_key_style`（client-core `TouchTwentySixKeyStyle`），作用于手机中文 26 键字母层；英文 26 键和 iPad 全尺寸键盘不受它影响。各样式的排法见 `TouchBottomRowLayout`。
 enum TouchTwentySixKeyStyle: String, CaseIterable, Hashable {
-  /// 123 | 符 | 空格 | ，（长按出。）| 中/英 | 回车，即原来的底行。
+  /// 仿 iOS 原生精简底行：123 | 空格 | ，（长按出。）| 中/英 | 回车（符号面板从长按 123 或更多菜单进入）。
   case standard
   /// 123 | 符 | ， | 空格 | 。 | 中/英 | 回车。
   case commaPeriod = "comma_period"
@@ -535,7 +535,7 @@ struct KeyboardPreviewFace: Equatable {
 /// 标准样式就是原来的底行（`KeyboardViewController` 的 `phoneActionWidths`、`nineKeyActionWidths` 等），表里照抄一份，供统计热力图、设置页预览和测试使用；其余样式由键盘控制器按这张表排列并加宽度约束。样式加的键都从空格里让出份额，整行总份额不变。地球键只在宿主要求时出现，占 1 份，从行宽里另外分；隐藏中/英键时它的 1.05 份交给空格。
 enum TouchBottomRowLayout {
   enum Slot: String, Hashable {
-    case symbols, layer, globe, emoji, comma, space, period, zero, language, returnKey
+    case symbols, layer, globe, emoji, comma, space, period, zero, language, returnKey, delete
   }
 
   struct Key: Hashable {
@@ -548,13 +548,25 @@ enum TouchBottomRowLayout {
     }
   }
 
-  /// 手机 26 键与 14/18 键底行权重（对齐 iOS 27 原生左下紧凑功能键、居中舒展空格与 2.25u 回车）。
+  /// 手机 26 键标准底行（仿 iOS 原生，对齐 KeyboardKit `Liquid Glass`）：
+  /// 竖屏 123 占 12.3%、换行占 25%，总权重 10.00（`1.23 + 4.32 + 0.95 + 1.00 + 2.50`）。
+  static let standardTwentySixKeyLayerWeight: CGFloat = 1.23
+  static let standardTwentySixKeySpaceWeight: CGFloat = 4.32
+  static let standardTwentySixKeyReturnWeight: CGFloat = 2.50
+  /// 手机横屏 26 键标准底行（对齐 KeyboardKit）：123 占 9.5%、换行占 19.5%，总权重 10.00（`0.95 + 5.15 + 0.95 + 1.00 + 1.95`）。
+  static let standardTwentySixKeyLandscapeLayerWeight: CGFloat = 0.95
+  static let standardTwentySixKeyLandscapeSpaceWeight: CGFloat = 5.15
+  static let standardTwentySixKeyLandscapeReturnWeight: CGFloat = 1.95
+  /// 英文 26 键底行（仿 iOS 原生）：仅保留 123 | 空格 | 英 | return，空格吃下逗号份额（5.27 / 横屏 6.10），总权重维持 10.00。
+  static let englishTwentySixKeySpaceWeight: CGFloat = standardTwentySixKeySpaceWeight + punctuationWeight
+  static let englishTwentySixKeyLandscapeSpaceWeight: CGFloat = standardTwentySixKeyLandscapeSpaceWeight + punctuationWeight
+  /// 手机 26 键其余样式与 14/18 键底行权重。
   static let layerWeight: CGFloat = 1.15
   static let symbolsWeight: CGFloat = 1.0
   static let languageWeight: CGFloat = 1.0
   static let globeWeight: CGFloat = 1
   static let punctuationWeight: CGFloat = 0.95
-  /// 26 键、14 键和 18 键底行的空格与回车。
+  /// 26 键扩展样式与 14/18 键底行的空格与回车。
   static let spaceWeight: CGFloat = 4.3
   static let returnWeight: CGFloat = 2.25
   /// 九键底行沿用既有比例（9.15u 框架，与数字层五列及大回车 14% 侧栏严格对齐）。
@@ -567,21 +579,36 @@ enum TouchBottomRowLayout {
   static let nineKeyReturnWeight: CGFloat = 1.6
   static let zeroWeight: CGFloat = 1.05
 
-  /// 中文 26 键字母层。标准：123 | 符 | 空格 | ， | 中/英 | 回车；逗号句号在空格两侧：。从空格让出 1 份；长空格：符 的 1.05 份给空格；表情键：😀 占 符 的位置和份额。
-  static func twentySixKey(_ style: TouchTwentySixKeyStyle, globe: Bool, language: Bool = true) -> [Key] {
-    var keys = [Key(.layer, layerWeight)]
+  /// 中文 26 键字母层。标准（仿 iOS 原生）：123 | 空格 | ， | 中/英 | 回车；逗号句号在空格两侧：123 | 符 | ， | 空格 | 。 | 中/英 | 回车；长空格：123 | ， | 长空格 | 中/英 | 回车；表情键：123 | 😀 | 空格 | ， | 中/英 | 回车。
+  static func twentySixKey(_ style: TouchTwentySixKeyStyle, globe: Bool, language: Bool = true,
+                           landscape: Bool = false) -> [Key] {
+    let layer = landscape ? standardTwentySixKeyLandscapeLayerWeight : standardTwentySixKeyLayerWeight
+    let space = landscape ? standardTwentySixKeyLandscapeSpaceWeight : standardTwentySixKeySpaceWeight
+    let returnWeight = landscape ? standardTwentySixKeyLandscapeReturnWeight : standardTwentySixKeyReturnWeight
+    var keys = [Key(.layer, layer)]
     if globe { keys.append(Key(.globe, globeWeight)) }
     switch style {
     case .standard:
-      keys += [Key(.symbols, symbolsWeight), Key(.space, spaceWeight), Key(.comma, punctuationWeight)]
+      keys += [Key(.space, space), Key(.comma, punctuationWeight)]
     case .commaPeriod:
       keys += [Key(.symbols, symbolsWeight), Key(.comma, punctuationWeight),
-               Key(.space, spaceWeight - punctuationWeight), Key(.period, punctuationWeight)]
+               Key(.space, space - symbolsWeight - punctuationWeight), Key(.period, punctuationWeight)]
     case .longSpace:
-      keys += [Key(.comma, punctuationWeight), Key(.space, spaceWeight + symbolsWeight)]
+      keys += [Key(.comma, punctuationWeight), Key(.space, space)]
     case .emoji:
-      keys += [Key(.emoji, symbolsWeight), Key(.space, spaceWeight), Key(.comma, punctuationWeight)]
+      keys += [Key(.emoji, symbolsWeight), Key(.space, space - symbolsWeight), Key(.comma, punctuationWeight)]
     }
+    return finish(keys, language: language, returnWeight: returnWeight)
+  }
+
+  /// 英文 26 键字母层（仿 iOS 原生）：123 | (🌐) | 空格 | 中/英 | 回车。
+  static func englishTwentySixKey(globe: Bool, language: Bool = true, landscape: Bool = false) -> [Key] {
+    let layer = landscape ? standardTwentySixKeyLandscapeLayerWeight : standardTwentySixKeyLayerWeight
+    let space = landscape ? englishTwentySixKeyLandscapeSpaceWeight : englishTwentySixKeySpaceWeight
+    let returnWeight = landscape ? standardTwentySixKeyLandscapeReturnWeight : standardTwentySixKeyReturnWeight
+    var keys = [Key(.layer, layer)]
+    if globe { keys.append(Key(.globe, globeWeight)) }
+    keys.append(Key(.space, space))
     return finish(keys, language: language, returnWeight: returnWeight)
   }
 
@@ -640,17 +667,13 @@ enum TouchBottomRowLayout {
     nineKeyRowWeight(globe: globe) * nineKeySideRatio
   }
 
-  /// 九键「右侧大回车」的底行，整行与九键外框同宽、总份额与同一地球键状态下的标准底行相同（带地球键时是 10.15 份）。第一格 符 在符号栏正下方、与符号栏同宽，最后一格回车与右列同宽（它在键盘上从右列第三行一直伸到底行，两倍高）；中间几格合起来正好是九宫格的宽度：123、地球键、中/英 与同一地球键状态下的标准九键底行同宽，空格占剩下的部分，地球键也从空格里让出。这里的份额不含键距；键盘上的绝对宽度按标准底行的键距扣法算（`nineKeyStandardKeyCount`），于是与标准底行的键逐点等宽。九键双拼字母层的 0 照旧跟在空格后面。
-  ///
-  /// 数字层（`digits`）照同一框架：符 不动，123 的位置是回到字母层的切换键，空格的位置放 0、占剩下的部分；空格按 iOS 数字层原来的规则留在 0 的右边，与 中/英 同宽。
-  static func nineKeyTallReturn(globe: Bool, zero: Bool = false, language: Bool = true, digits: Bool = false) -> [Key] {
+  /// 九键「右侧大回车」的底行，整行与九键外框同宽、总份额与同一地球键状态下的标准底行相同（带地球键时是 10.15 份）。第一格 符 在符号栏正下方、与符号栏同宽，最后一格回车与右列同宽（它在键盘上从右列第三行一直伸到底行，两倍高）；中间几格合起来正好是九宫格的宽度：123、地球键、中/英 与同一地球键状态下的标准九键底行同宽，空格占剩下的部分，地球键也从空格里让出。这里的份额不含键距；键盘上的绝对宽度按标准底行的键距扣法算（`nineKeyStandardKeyCount`），于是与标准底行的键逐点等宽。九键双拼字母层的 0 照旧跟在空格后面。数字层不按这张表排（见 `numberPadNative`）。
+  static func nineKeyTallReturn(globe: Bool, zero: Bool = false, language: Bool = true) -> [Key] {
     var middle = [Key(.layer, nineKeyLayerWeight)]
     if globe { middle.append(Key(.globe, globeWeight)) }
-    let fill: Slot = digits ? .zero : .space
+    let fill: Slot = .space
     middle.append(Key(fill, 0))
-    if digits {
-      middle.append(Key(.space, zeroWeight))
-    } else if zero {
+    if zero {
       middle.append(Key(.zero, zeroWeight))
     }
     if language { middle.append(Key(.language, nineKeyLanguageWeight)) }
@@ -679,20 +702,16 @@ enum TouchBottomRowLayout {
     return keys
   }
 
-  /// 从九键一族和笔画以外的键面（26 键一族、14/18 键、手写、假名九键、大千，以及英文和本地模式）借来的数字九宫格（返回 |（🌐）| 0 | 空格 | 中/英 | 回车）在空格位置不是 iOS 原来的 `afterZero` 时的份额：返回 1.25、地球键 1、中/英 1.05、回车 1.6 与原来的数字页相同，0 和空格合起来的 5.25 份（隐藏中/英时再加 1.05）按 `space` 分：`beforeZero` 空格在左占大份、0 是 1.05，`rightColumn` 底行只有 0。`afterZero` 仍走原来的约束（不带地球键时与上方五列对齐），不用这张表。
-  static func borrowedNumberPad(globe: Bool, language: Bool = true, space: TouchNumberPadSpace) -> [Key] {
-    var keys = [Key(.layer, nineKeyLayerWeight)]
-    if globe { keys.append(Key(.globe, globeWeight)) }
-    let wideShare = nineKeySpaceWeight + (language ? 0 : nineKeyLanguageWeight)
-    switch space {
-    case .afterZero: keys += [Key(.zero, wideShare), Key(.space, zeroWeight)]
-    case .beforeZero: keys += [Key(.space, wideShare), Key(.zero, zeroWeight)]
-    case .rightColumn: keys.append(Key(.zero, wideShare + zeroWeight))
-    }
-    if language { keys.append(Key(.language, nineKeyLanguageWeight)) }
-    keys.append(Key(.returnKey, nineKeyReturnWeight))
+  /// iOS 键盘数字层的原生底排：返回 |（🌐）| 0 | ⌫，三格（带地球键时四格）等宽，与上方数字网格的三列对齐——iOS 原生数字键盘的底排就是 空位 | 0 | ⌫，这里把空位换成回到字母层的返回键。没有空格、中/英和回车；0 长按输入句点，小数和版本号的 `.` 从那里进。
+  static func numberPadNative(globe: Bool) -> [Key] {
+    var keys = [Key(.layer, numberPadCellWeight)]
+    if globe { keys.append(Key(.globe, numberPadCellWeight)) }
+    keys += [Key(.zero, numberPadCellWeight), Key(.delete, numberPadCellWeight)]
     return keys
   }
+
+  /// 原生数字层底排每格的权重：与上方网格的一列同宽（三列等分）。
+  static let numberPadCellWeight: CGFloat = 1
 
   /// 「26 键「符」与「123」互换」（`touch_twenty_six_symbol_first`）：排在 123 后面的 符 挪到 123 左边，其余键次序和份额不变，与 Android `KeyboardActionRow.designEntries`、鸿蒙 `TouchLayoutStylePolicy.symbolFirst` 相同；没有 符（长空格、表情键）或 符 已经在前面时原样返回。
   static func symbolFirst(_ keys: [Key]) -> [Key] {

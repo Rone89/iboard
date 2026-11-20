@@ -124,11 +124,12 @@ struct KeyboardTheme: Equatable {
     return theme
   }
 
-  /// 记下键盘画在哪种明暗下，再按它 `reload`；nil 不再按明暗换主题。
+  /// 记下键盘画在哪种明暗下，再按它 `reload`；nil 不再按明暗换主题。force 强制清除缓存并重解析。
   @discardableResult
-  static func reload(_ document: [String: Any]?, dark: Bool?) -> KeyboardTheme {
+  static func reload(_ document: [String: Any]?, dark: Bool?, force: Bool = false) -> KeyboardTheme {
     lock.lock()
     storedMode = dark
+    if force { stored = nil }
     lock.unlock()
     return reload(document)
   }
@@ -159,6 +160,30 @@ struct KeyboardTheme: Equatable {
       back.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
       let inv = 1 - ka
       return UIColor(red: kr * ka + br * inv, green: kg * ka + bg * inv, blue: kb * ka + bb * inv, alpha: 1)
+    }
+  }
+
+  /// 按键弹出气泡的填充底色：原生皮肤在深色下使用 KeyboardKit `11.2.4` 标准不透明深灰 `#6B6B6B`（浅色沿用亮白），保证气泡与半透明键帽明显区分；其余主题沿用 `opaqueKeyBackground`。
+  var calloutBackground: UIColor {
+    let opaque = opaqueKeyBackground
+    guard isNative else { return opaque }
+    let appearance = self.appearance
+    return UIColor { traits in
+      if Self.isDark(traits, appearance) {
+        return UIColor(red: 107 / 255.0, green: 107 / 255.0, blue: 107 / 255.0, alpha: 1)
+      }
+      return opaque.resolvedColor(with: traits)
+    }
+  }
+
+  /// 按键弹出气泡的细边描边：原生皮肤在深色气泡（`#6B6B6B`）下用轻微亮边、浅色用轻微暗边；其余主题沿用 `hairline`。
+  var calloutBorder: UIColor {
+    guard isNative else { return hairline }
+    let appearance = self.appearance
+    return UIColor { traits in
+      Self.isDark(traits, appearance)
+        ? UIColor(white: 1, alpha: 0.16)
+        : UIColor(white: 0, alpha: 0.12)
     }
   }
 
@@ -209,16 +234,16 @@ struct KeyboardTheme: Equatable {
     if let palette = drawnPalette { return palette.candidateAccent ?? palette.accent }
     return isNative ? SystemKeyboardTokens.accent : NativeKeyboardTokens.candidateAccent
   }
-  /// 回车键使用主题强调色；原生皮肤使用柔和水杉绿，键盘设计使用自己的操作色。
+  /// 回车键使用主题强调色；原生皮肤对齐 iOS 原生蓝色，键盘设计使用自己的操作色。
   var actionBackground: UIColor {
     if let design { return CustomKeyboardSkin.color(design.actionBackground) }
-    return drawnPalette?.accent ?? (isNative ? SystemKeyboardTokens.accent : NativeKeyboardTokens.accent)
+    return drawnPalette?.accent ?? (isNative ? SystemKeyboardTokens.actionBackground : NativeKeyboardTokens.accent)
   }
-  /// `actionBackground` 上的文字：配色自己的 `on_accent`，跟随系统配色在浅色下为白色、深色下为 Rust 算出的 mix(accent 25%, #000)。经典兜底在深色主色 `#5FBF84` 上用黑字，因为设计稿的白字在那里对比度只有 2.3:1。
+  /// `actionBackground` 上的文字：原生皮肤固定使用白色，其余皮肤沿用配色或对比度计算。
   var actionForeground: UIColor {
     if let design { return CustomKeyboardSkin.color(CustomKeyboardSkin.readableText(on: design.actionBackground)) }
     if let palette = drawnPalette { return palette.onAccent }
-    if isNative { return SystemKeyboardTokens.onAccent }
+    if isNative { return SystemKeyboardTokens.actionForeground }
     return UIColor { $0.userInterfaceStyle == .dark ? .black : .white }
   }
   /// 画在 `accent` 填充上的图形，例如语音面板的麦克风：配色自己的 `on_accent`；键盘设计时为其主色上可读的文字色；经典主色上与 `actionForeground` 一样用白或黑。
@@ -275,12 +300,11 @@ struct KeyboardTheme: Equatable {
     (appearance ?? traits.userInterfaceStyle) == .dark
   }
 
-  /// 设计自带的圆角；原生皮肤在 iOS 26 起用系统键盘的圆角（`SystemKeyboardTokens.cornerRadius`）；其余主题
-  /// 对齐 iOS 27 系统键盘的 8.5pt（UI Kit 键帽圆角，原设计稿的手机 5、iPad 7 偏方）。
+  /// 设计自带的圆角；未指定设计时统一对齐 KeyboardKit（Liquid Glass）全设备 9pt 连续曲率圆角；经典系统保留旧比例。
   var cornerRadius: CGFloat {
     if let design { return CGFloat(design.cornerRadius) }
     if drawsLiquidGlassKeys { return SystemKeyboardTokens.cornerRadius }
-    return UIDevice.current.userInterfaceIdiom == .pad ? 7 : 8.5
+    return SystemKeyboardTokens.drawsLiquidGlassKeyboard ? 9 : (UIDevice.current.userInterfaceIdiom == .pad ? 7 : 8.5)
   }
   var borderWidth: CGFloat { design.map { CGFloat($0.borderWidth) } ?? 0 }
   var borderColor: UIColor {

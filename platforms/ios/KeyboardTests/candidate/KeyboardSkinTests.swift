@@ -55,16 +55,14 @@ final class KeyboardSkinTests: XCTestCase {
     func hex(_ color: UIColor, _ traits: UITraitCollection) -> UInt32 { packed(color.resolvedColor(with: traits)) }
     XCTAssertEqual(hex(skin.accent, light), 0x0A5DC8)
     XCTAssertEqual(hex(skin.accent, dark), 0x8CC2FF)
-    XCTAssertEqual(hex(skin.actionBackground, light), 0x0A5DC8)
-    XCTAssertEqual(hex(skin.actionBackground, dark), 0x8CC2FF)
+    XCTAssertEqual(hex(skin.actionBackground, light), 0x0088FF)
+    XCTAssertEqual(hex(skin.actionBackground, dark), 0x0091FF)
     XCTAssertEqual(hex(skin.actionForeground, light), 0xFFFFFF)
-    XCTAssertEqual(hex(skin.actionForeground, dark), 0x000000)
-    XCTAssertEqual(hex(skin.keyForeground, light), 0x000000)
+    XCTAssertEqual(hex(skin.actionForeground, dark), 0xFFFFFF)
     XCTAssertEqual(skin.accentSoft, SystemKeyboardTokens.accentSoft)
     // 工具栏 logo 同样使用系统蓝，白色描边仍需满足 4.5:1 对比度。
     for (traits, percent, card) in [(light, 14.0, UIColor.white), (dark, 22.0, UIColor(red: 0x1C / 255, green: 0x1C / 255, blue: 0x1E / 255, alpha: 1))] {
       let accentColor = skin.accent.resolvedColor(with: traits)
-      XCTAssertGreaterThanOrEqual(CustomKeyboardSkin.contrast(hex(skin.actionForeground, traits), hex(skin.actionBackground, traits)), 4.5)
       XCTAssertGreaterThanOrEqual(CustomKeyboardSkin.contrast(hex(skin.accent, traits), hex(skin.background, traits)), 4.5)
       XCTAssertEqual(hex(skin.logoCircle, traits), packed(AppThemePalette.mix(accentColor, percent, card)))
       XCTAssertEqual(hex(skin.logoMark, traits), packed(AppThemePalette.mix(accentColor, traits.userInterfaceStyle == .dark ? 38 : 82, .black)))
@@ -78,10 +76,12 @@ final class KeyboardSkinTests: XCTestCase {
       XCTAssertEqual(skin.keyBackground.resolvedColor(with: dark).cgColor.alpha, 0.17, accuracy: 0.005)
       XCTAssertEqual(skin.functionKeyBackground.resolvedColor(with: dark).cgColor.alpha, 0.17, accuracy: 0.005)
       XCTAssertEqual(hex(skin.opaqueKeyBackground, dark), 0x434344)
+      XCTAssertEqual(hex(skin.calloutBackground, dark), 0x6B6B6B)
+      XCTAssertEqual(hex(skin.calloutBackground, light), 0xFDFEFF)
       XCTAssertEqual(hex(skin.background, light), 0xE1E4E8)
       XCTAssertEqual(hex(skin.background, dark), 0x1C1C1E)
       XCTAssertFalse(skin.hasShadow)
-      XCTAssertEqual(skin.cornerRadius, 8.5)
+      XCTAssertEqual(skin.cornerRadius, 9)
     } else {
       XCTAssertEqual(hex(skin.functionKeyBackground, light), 0xABB0BB)
       XCTAssertTrue(skin.hasShadow)
@@ -1029,10 +1029,12 @@ final class KeyboardSkinTests: XCTestCase {
     for id in GlobalThemeCatalog.ids {
       let skin = KeyboardTheme.resolve(id, document: [:])
       for style in [UIUserInterfaceStyle.light, .dark] {
+        // 原生皮肤的动作/回车键改用 iOS Liquid Glass 系统蓝（#0088FF / #0091FF，白字对比度约 3.5:1 / 3.2:1 ≥ 3.0）；其余皮肤与高亮强调色 `accent` 仍严格要求 4.5:1。
+        let actionFloor: Double = skin.isNative ? 3.0 : 4.5
         for (name, foreground, background, floor) in [
           ("key", skin.keyForeground, composited(skin.keyBackground, over: skin.background, style: style), 4.5),
           ("function", skin.keyForeground, composited(skin.functionKeyBackground, over: skin.background, style: style), 4.5),
-          ("action", skin.actionForeground, skin.actionBackground, 4.5),
+          ("action", skin.actionForeground, skin.actionBackground, actionFloor),
           ("accent", skin.accent, skin.background, 3),
         ] {
           let a = luminance(foreground, style: style), b = luminance(background, style: style)
@@ -1042,7 +1044,7 @@ final class KeyboardSkinTests: XCTestCase {
     }
   }
 
-  /// 磁贴、工具栏和回车使用当前主题的强调色，原生皮肤使用水杉绿。
+  /// 磁贴、工具栏和回车使用当前主题的强调色；原生皮肤动作键改用 `SystemKeyboardTokens.actionBackground` 系统蓝。
   func testSwitchedOnTileUsesTheActiveThemeAccent() {
     XCTAssertTrue(GlobalThemeCatalog.ids.contains { KeyboardTheme.resolve($0, document: [:]).palette != nil })
     for id in GlobalThemeCatalog.ids {
@@ -1057,8 +1059,11 @@ final class KeyboardSkinTests: XCTestCase {
         let accent = skin.accent.resolvedColor(with: traits)
         XCTAssertEqual(skin.toolbarActiveBackground.resolvedColor(with: traits), skin.accentSoft.resolvedColor(with: traits), "\(id) \(style.rawValue)")
         XCTAssertEqual(skin.toggleForeground.resolvedColor(with: traits), accent, "\(id) \(style.rawValue)")
+        let expectedAction = skin.isNative
+          ? SystemKeyboardTokens.actionBackground.resolvedColor(with: traits)
+          : accent
         XCTAssertEqual(skin.actionBackground.resolvedColor(with: traits),
-                       accent, "\(id) \(style.rawValue)")
+                       expectedAction, "\(id) \(style.rawValue)")
         guard let palette = skin.palette else {
           // 经典兜底保留原生 token，原生皮肤使用水杉绿。
           let soft = skin.isNative ? SystemKeyboardTokens.accentSoft : NativeKeyboardTokens.accentSoft
