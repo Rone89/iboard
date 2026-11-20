@@ -21,11 +21,18 @@ enum SwipeHintPolicy {
   /// 手指需要移动的距离，必须严格大于这个值。
   static let threshold: CGFloat = 14
 
-  /// 窗口纵坐标向下增大，严格超过所选方向的阈值才接管点按。
+  /// 窗口纵坐标向下增大，严格超过所选方向的阈值，且纵向位移严格大于横向位移才接管点按，
+  /// 防止斜滑或横滑过按键时误触发角标符号。
+  static func swiped(direction: KeyboardLayoutPreference.SwipeDirection = .up,
+                     down: CGPoint, current: CGPoint) -> Bool {
+    let distance = direction == .up ? down.y - current.y : current.y - down.y
+    return distance > threshold && distance > abs(current.x - down.x)
+  }
+
+  /// 兼容仅传入纵坐标的既有调用方：等价于横向位移为 0。
   static func swiped(direction: KeyboardLayoutPreference.SwipeDirection = .up,
                      downY: CGFloat, currentY: CGFloat) -> Bool {
-    let distance = direction == .up ? downY - currentY : currentY - downY
-    return distance > threshold
+    swiped(direction: direction, down: CGPoint(x: 0, y: downY), current: CGPoint(x: 0, y: currentY))
   }
 
   /// 「长空格」逗号的滑动，与 Android 的 `ImeBottomRow.bindCommaSwipe` 一致：上滑、下滑都算（逗号没有别的纵向手势，照字母键习惯上滑也要出句号），门槛与字母键相同，纵向位移严格大于 `threshold` 且大于横向位移，点按时手指带一下不算；按下后满 `holdDelay` 还没滑出去的触摸已经归长按，之后再挪手指不起滑动。坐标是窗口坐标，`elapsed` 是从按下起的秒数。

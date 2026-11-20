@@ -58,6 +58,39 @@ final class LetterCornerHintTests: XCTestCase {
     XCTAssertFalse(SwipeHintPolicy.swiped(direction: .down, downY: 40, currentY: 10))
   }
 
+  func testDiagonalOrMostlyHorizontalDragDoesNotTriggerCornerSwipe() {
+    let down = CGPoint(x: 100, y: 100)
+    // 纵向虽然跨过 14pt 门槛，但横向位移更大或相等时视为斜滑/横滑，不抢成角标。
+    XCTAssertFalse(SwipeHintPolicy.swiped(direction: .up, down: down, current: CGPoint(x: 124, y: 84)))
+    XCTAssertFalse(SwipeHintPolicy.swiped(direction: .up, down: down, current: CGPoint(x: 116, y: 84)))
+    XCTAssertFalse(SwipeHintPolicy.swiped(direction: .down, down: down, current: CGPoint(x: 120, y: 116)))
+    // 纵向严格超过 14pt 且大于横向位移时正常触发。
+    XCTAssertTrue(SwipeHintPolicy.swiped(direction: .up, down: down, current: CGPoint(x: 108, y: 84)))
+    XCTAssertTrue(SwipeHintPolicy.swiped(direction: .down, down: down, current: CGPoint(x: 92, y: 116)))
+  }
+
+  /// 真实字母键按钮走完整触摸序列：纵向虽然跨过 14pt 但斜滑/横滑幅度更大时不触发角标，垂直上滑正常提交角标。
+  func testLetterButtonIgnoresDiagonalDragAndAcceptsVerticalSwipe() throws {
+    let controller = makeController(.quanpin)
+    let q = try key(labelled: "字母 Q", in: controller)
+    var committed: [String] = []
+    q.onCornerHint = { committed.append($0) }
+
+    let touch = CornerHintTouch(CGPoint(x: 100, y: 100))
+    XCTAssertTrue(q.beginTracking(touch, with: nil))
+    touch.point = CGPoint(x: 120, y: 84)
+    XCTAssertTrue(q.continueTracking(touch, with: nil))
+    q.touchesEnded([touch], with: nil)
+    XCTAssertTrue(committed.isEmpty)
+
+    touch.point = CGPoint(x: 100, y: 100)
+    XCTAssertTrue(q.beginTracking(touch, with: nil))
+    touch.point = CGPoint(x: 104, y: 84)
+    XCTAssertTrue(q.continueTracking(touch, with: nil))
+    q.touchesEnded([touch], with: nil)
+    XCTAssertEqual(committed, ["1"])
+  }
+
   func testSwipeDirectionDefaultsUpAndRefreshesExistingLetterKeys() throws {
     let defaults = KeyboardLayoutPreference.defaults
     let name = KeyboardLayoutPreference.swipeSymbolsDirectionKey
@@ -118,7 +151,7 @@ final class LetterCornerHintTests: XCTestCase {
     let typeHint = try XCTUnwrap(q.onCornerHint)
     typeHint("1")
     controller.view.layoutIfNeeded()
-    XCTAssertEqual(preedit.configuration?.title, "水杉输入法",
+    XCTAssertEqual(preedit.configuration?.title, "iBoard",
                    "the composition was committed before the symbol, not extended by it")
   }
 
@@ -169,4 +202,13 @@ final class LetterCornerHintTests: XCTestCase {
     XCTAssertEqual(cornerLabel(of: q)?.isHidden, true)
     XCTAssertEqual(q.cornerHint, "1")
   }
+}
+
+private final class CornerHintTouch: UITouch {
+  var point: CGPoint
+  init(_ point: CGPoint) {
+    self.point = point
+    super.init()
+  }
+  override func location(in view: UIView?) -> CGPoint { point }
 }

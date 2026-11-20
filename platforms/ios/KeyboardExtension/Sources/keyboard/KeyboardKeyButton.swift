@@ -361,6 +361,10 @@ final class KeyboardKeyButton: UIButton {
   var nineKeySwipeMode: (() -> NineKeySwipeDigits)?
   /// 判出反方向时立刻以 `.letters` 回调（弹出数字和字母）；沿设定方向的在松手时以 `.digit` 回调（输入数字）。触摸被取消时不回调。两种都不再执行按键自己的点按。
   var onNineKeySwipe: ((NineKeySwipePolicy.Gesture) -> Void)?
+  /// 反方向滑出九键选项后继续横向拖选与松手时的窗口坐标回调（`ended == true` 表示松手）。
+  var onNineKeySwipeDrag: ((CGPoint?, Bool) -> Void)?
+  /// 反方向滑出九键选项后触摸被外部取消时回调。
+  var onNineKeySwipeDragCancelled: (() -> Void)?
   private var nineKeySwipe = NineKeySwipeTracker()
   /// 输入数字期间被换下的键面标题和角标的显隐，松手或取消时原样还原（1 键的键面可能随组字状态变过）。
   private var nineKeySwipeRestingFace: (title: String?, hintHidden: Bool)?
@@ -397,9 +401,14 @@ final class KeyboardKeyButton: UIButton {
   }
 
   override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+    if nineKeySwipe.gesture == .letters {
+      onNineKeySwipeDrag?(touch.location(in: nil), false)
+      return true
+    }
     if let digit = nineKeySwipeDigit, nineKeySwipe.gesture == .none, let mode = nineKeySwipeMode?(),
        let decided = nineKeySwipe.move(y: touch.location(in: nil).y, mode: mode, hasLetters: nineKeySwipeHasLetters) {
       beginNineKeySwipe(decided, digit: digit)
+      if decided == .letters { onNineKeySwipeDrag?(touch.location(in: nil), false) }
       return true
     }
     if !cornerHintTriggered, swipesCornerHint, let hint = cornerHint, cornerHintSwiped(touch) {
@@ -411,13 +420,17 @@ final class KeyboardKeyButton: UIButton {
   private func cornerHintSwiped(_ touch: UITouch) -> Bool {
     let current = touch.location(in: nil)
     guard cornerHintSwipesEitherWay else {
-      return SwipeHintPolicy.swiped(direction: cornerHintSwipeDirection, downY: cornerHintDown.y, currentY: current.y)
+      return SwipeHintPolicy.swiped(direction: cornerHintSwipeDirection, down: cornerHintDown, current: current)
     }
     return SwipeHintPolicy.swipedEitherWay(down: cornerHintDown, current: current,
                                            elapsed: touch.timestamp - cornerHintDownTime, holdDelay: Self.cornerHintHoldDelay)
   }
 
   override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+    if nineKeySwipe.gesture == .letters {
+      if let touch = touches.first { onNineKeySwipeDrag?(touch.location(in: nil), false) }
+      return
+    }
     // 判出九键滑动之后这次触摸不再是点按：键停在判出时的样子（输入数字时保持按下，弹出字母时松开），不随手指进出按键变化。
     guard nineKeySwipe.gesture == .none else { return }
     super.touchesMoved(touches, with: event)
@@ -445,6 +458,7 @@ final class KeyboardKeyButton: UIButton {
       resetCornerHint()
       touchDownLocation = nil
       if swiped == .digit { onNineKeySwipe?(.digit) }
+      else if swiped == .letters { onNineKeySwipeDrag?(touches.first?.location(in: nil), true) }
       return
     }
     guard cornerHintTriggered, let hint = cornerHint else {
@@ -468,11 +482,12 @@ final class KeyboardKeyButton: UIButton {
 
   override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
     // 触摸被滑行输入、横滑移光标或长按接管，或被系统取消时，什么也不输入；已经换成数字的键面还原。
-    _ = nineKeySwipe.finish()
+    let wasLetters = nineKeySwipe.finish() == .letters
     restoreNineKeySwipeFace()
     resetCornerHint()
     touchDownLocation = nil
     super.touchesCancelled(touches, with: event)
+    if wasLetters { onNineKeySwipeDragCancelled?() }
   }
 
   /// 判出九键滑动的那一刻：取消这个键的长按（之后不会再弹长按菜单），点按由 `touchesEnded` 改成取消。输入数字时键保持按下、键面换成数字、角标藏起；弹出字母时立刻回调。
@@ -769,6 +784,152 @@ final class KeyPressPreviewView: UIView {
                 startAngle: .pi, endAngle: -.pi / 2, clockwise: true)
     path.close()
     return path.cgPath
+  }
+}
+
+/// 长按/反滑弹出多选气泡（参考 KeyboardKit `KeyboardActionCallout` + `KeyboardCalloutStyle.standard`）：
+/// 统一采用 10pt 圆角、`calloutBackground`/`calloutBorder` 配色与轻量投影，并在同一次按压中支持横向拖选与移出取消；
+/// 仅在原地轻按并直接抬手时保留气泡等待点选，兼容原有点击交互与无障碍操作。
+final class KeyActionCalloutView: UIStackView {
+  static let dragActivationDistance: CGFloat = 8
+  static let itemSize = CGSize(width: 36, height: 38)
+
+  let options: [String]
+  private(set) var optionButtons: [UIButton] = []
+  private(set) var highlightedIndex: Int? {
+    didSet {
+      if oldValue != highlightedIndex { applyHighlightAppearance() }
+    }
+  }
+  private(set) var hasEnteredSelection = false
+  private var dragAnchorInCallout: CGPoint?
+  private let skin: KeyboardTheme
+
+  init(options: [String], skin: KeyboardTheme, onSelect: @escaping (String) -> Void) {
+    self.options = options
+    self.skin = skin
+    super.init(frame: .zero)
+    axis = .horizontal
+    spacing = 4
+    distribution = .fillEqually
+    accessibilityIdentifier = "nineKeyHoldOptions"
+    backgroundColor = skin.calloutBackground
+    layer.cornerRadius = KeyPressPreviewView.topRadius
+    layer.cornerCurve = .continuous
+    layer.borderWidth = 0.5
+    layer.shadowColor = UIColor.black.cgColor
+    layer.shadowOpacity = 0.14
+    layer.shadowRadius = 5
+    layer.shadowOffset = CGSize(width: 0, height: 2)
+    isLayoutMarginsRelativeArrangement = true
+    layoutMargins = UIEdgeInsets(top: 5, left: 5, bottom: 5, right: 5)
+    translatesAutoresizingMaskIntoConstraints = false
+    heightAnchor.constraint(equalToConstant: Self.itemSize.height + 10).isActive = true
+
+    for option in options {
+      var config = UIButton.Configuration.plain()
+      config.contentInsets = .zero
+      config.baseForegroundColor = skin.keyForeground
+      config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+        var outgoing = incoming
+        outgoing.font = skin.usesMonospacedFont
+          ? .monospacedSystemFont(ofSize: 20, weight: .regular)
+          : .systemFont(ofSize: 20, weight: .regular)
+        return outgoing
+      }
+      let item = UIButton(configuration: config, primaryAction: UIAction(title: option) { _ in onSelect(option) })
+      item.accessibilityIdentifier = "nineKeyHoldOption-\(option)"
+      item.accessibilityLabel = "输入 \(option)"
+      item.layer.cornerRadius = 7
+      item.layer.cornerCurve = .continuous
+      item.clipsToBounds = true
+      item.widthAnchor.constraint(equalToConstant: Self.itemSize.width).isActive = true
+      item.heightAnchor.constraint(equalToConstant: Self.itemSize.height).isActive = true
+      optionButtons.append(item)
+      addArrangedSubview(item)
+    }
+    applyHighlightAppearance()
+  }
+
+  @available(*, unavailable)
+  required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    layer.borderColor = skin.calloutBorder.resolvedColor(with: traitCollection).cgColor
+    if !bounds.isEmpty {
+      layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
+    }
+  }
+
+  private func applyHighlightAppearance() {
+    for (index, button) in optionButtons.enumerated() {
+      let selected = index == highlightedIndex
+      button.backgroundColor = selected ? skin.accent : .clear
+      button.configuration?.baseForegroundColor = selected ? skin.onAccent : skin.keyForeground
+    }
+  }
+
+  func beginDrag(at windowPoint: CGPoint?) {
+    hasEnteredSelection = false
+    highlightedIndex = nil
+    dragAnchorInCallout = windowPoint.map { convert($0, from: nil) }
+  }
+
+  func trackDrag(at windowPoint: CGPoint?, ended: Bool, triggerKey: UIView,
+                 onCommit: (String) -> Void, onCancel: () -> Void) {
+    layoutIfNeeded()
+    if let windowPoint {
+      let point = convert(windowPoint, from: nil)
+      if dragAnchorInCallout == nil {
+        dragAnchorInCallout = point
+        if !ended { return }
+      }
+      let anchor = dragAnchorInCallout ?? point
+      let triggerFrame = triggerKey.superview?.convert(triggerKey.frame, to: self) ?? triggerKey.bounds
+      highlightedIndex = Self.dragSelection(
+        at: point,
+        itemFrames: optionButtons.map(\.frame),
+        calloutBounds: bounds,
+        triggerKeyFrame: triggerFrame,
+        dragAnchor: anchor,
+        hasEntered: &hasEnteredSelection
+      )
+    }
+    guard ended else { return }
+    if hasEnteredSelection {
+      if let index = highlightedIndex, options.indices.contains(index) {
+        onCommit(options[index])
+      } else {
+        onCancel()
+      }
+    }
+  }
+
+  /// 纯几何拖选判定：当手指进入气泡矩形或相对锚点横向滑动 >= 8pt 时进入拖选；进入后按 X 列就近高亮，拖出容差区松手则取消。
+  static func dragSelection(at point: CGPoint, itemFrames: [CGRect], calloutBounds: CGRect,
+                            triggerKeyFrame: CGRect, dragAnchor: CGPoint, hasEntered: inout Bool) -> Int? {
+    guard !itemFrames.isEmpty else { return nil }
+    let minX = min(calloutBounds.minX, triggerKeyFrame.minX) - 28
+    let maxX = max(calloutBounds.maxX, triggerKeyFrame.maxX) + 28
+    let activeBounds = CGRect(
+      x: minX,
+      y: calloutBounds.minY - 32,
+      width: maxX - minX,
+      height: max(calloutBounds.maxY, triggerKeyFrame.maxY) - calloutBounds.minY + 56
+    )
+    if !hasEntered {
+      let moved = hypot(point.x - dragAnchor.x, point.y - dragAnchor.y) >= dragActivationDistance
+      let inStrip = moved && calloutBounds.insetBy(dx: -8, dy: -8).contains(point)
+      let slidHorizontally = abs(point.x - dragAnchor.x) >= dragActivationDistance && activeBounds.contains(point)
+      guard inStrip || slidHorizontally else { return nil }
+      hasEntered = true
+    }
+    guard activeBounds.contains(point) else { return nil }
+    if let direct = itemFrames.firstIndex(where: { $0.minX <= point.x && point.x <= $0.maxX }) {
+      return direct
+    }
+    return itemFrames.enumerated().min(by: { abs($0.element.midX - point.x) < abs($1.element.midX - point.x) })?.offset
   }
 }
 

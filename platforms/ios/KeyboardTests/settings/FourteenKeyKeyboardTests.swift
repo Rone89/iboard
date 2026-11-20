@@ -560,6 +560,43 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     XCTAssertFalse(composing(controller), "choosing a letter finished the composition first")
   }
 
+  /// 14 键长按弹出气泡后直接横向滑向目标字母并松手，不需二次点按即可上屏；滑出容差或取消则关闭菜单。
+  func testHoldingAKeySupportsSingleFingerDragSelection() throws {
+    let document = Document()
+    try attach(document)
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 320))
+    let controller = KeyboardViewController()
+    window.rootViewController = controller
+    window.isHidden = false
+    defer {
+      controller.viewDidDisappear(false)
+      window.isHidden = true
+    }
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(
+      x: 0, y: 0, width: 390, height: KeyboardViewController.keyboardHeight(separateReadingRow: true))
+    controller.viewWillAppear(false)
+    controller.view.layoutIfNeeded()
+
+    let qw = try button("fourteenKeyQW", in: controller)
+    let hold = HoldDragGesture(target: nil, action: nil)
+    qw.addGestureRecognizer(hold)
+    let start = qw.convert(CGPoint(x: qw.bounds.midX, y: qw.bounds.midY), to: nil)
+    hold.windowPoint = start
+    hold.phase = .began
+    controller.perform(NSSelectorFromString("handleFourteenKeyHold:"), with: hold)
+
+    let w = try button("nineKeyHoldOption-w", in: controller)
+    hold.windowPoint = w.convert(CGPoint(x: w.bounds.midX, y: w.bounds.midY), to: nil)
+    hold.phase = .changed
+    controller.perform(NSSelectorFromString("handleFourteenKeyHold:"), with: hold)
+    hold.phase = .ended
+    controller.perform(NSSelectorFromString("handleFourteenKeyHold:"), with: hold)
+
+    XCTAssertEqual(document.insertions.last, "w")
+    XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" })
+  }
+
   // MARK: - 输入
 
   /// 「你好」是 BN UI GH AS OP：读音行显示引擎给的拼音而不是组码，候选条上有你好。bu 和 ni 同一组码，你好和不好谁在前由引擎按词频定。
@@ -901,6 +938,14 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     override var state: UIGestureRecognizer.State { get { phase } set { phase = newValue } }
     override func translation(in view: UIView?) -> CGPoint { CGPoint(x: x, y: 0) }
     override func velocity(in view: UIView?) -> CGPoint { CGPoint(x: -100, y: 0) }
+  }
+
+  /// 长按拖选手势桩：允许直接设置当前状态与窗口坐标。
+  private final class HoldDragGesture: UILongPressGestureRecognizer {
+    var phase: UIGestureRecognizer.State = .possible
+    var windowPoint: CGPoint = .zero
+    override var state: UIGestureRecognizer.State { get { phase } set { phase = newValue } }
+    override func location(in view: UIView?) -> CGPoint { windowPoint }
   }
 
   /// 把键盘的 `textDocumentProxy` 换成 `document`，用例结束时恢复 UIKit 的实现（与 SpaceVoicePanelTests 相同的注入方式）。

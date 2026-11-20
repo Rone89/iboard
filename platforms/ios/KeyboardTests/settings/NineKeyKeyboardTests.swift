@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 import Darwin
 
 @MainActor
@@ -5366,10 +5367,10 @@ final class NineKeySwipeDigitsTests: XCTestCase {
 
     for digit in "64" { try key("nineKey\(digit)", in: controller).sendActions(for: .primaryActionTriggered) }
     let preedit = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "preeditButton" } as? UIButton)
-    XCTAssertNotEqual(preedit.configuration?.title, "水杉输入法", "正在组字")
+    XCTAssertNotEqual(preedit.configuration?.title, "iBoard", "正在组字")
     try XCTUnwrap(try key("nineKey2", in: controller).onNineKeySwipe)(.digit)
     controller.view.layoutIfNeeded()
-    XCTAssertEqual(preedit.configuration?.title, "水杉输入法", "数字先结束组字再上屏，不进拼音引擎")
+    XCTAssertEqual(preedit.configuration?.title, "iBoard", "数字先结束组字再上屏，不进拼音引擎")
     XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" })
     controller.viewDidDisappear(false)
   }
@@ -5393,6 +5394,174 @@ final class NineKeySwipeDigitsTests: XCTestCase {
     try XCTUnwrap(try key("nineKey3", in: controller).onNineKeySwipe)(.letters)
     try control("nineKeyHoldOption-e", in: controller).sendActions(for: .primaryActionTriggered)
     XCTAssertEqual(document.insertions.last, "\u{FF45}")
+  }
+
+  /// 长按/反滑气泡的同指拖选：进入后高亮当前列、松手即提交并关掉菜单；滑出容差区松手不输出；未拖动就抬手保留菜单待点选。
+  func testActionCalloutDragSelectionHighlightsCommitsAndCancels() throws {
+    // 1. 纯几何拖选状态机
+    let itemFrames = [
+      CGRect(x: 5, y: 5, width: 36, height: 38),
+      CGRect(x: 45, y: 5, width: 36, height: 38),
+      CGRect(x: 85, y: 5, width: 36, height: 38),
+    ]
+    let bounds = CGRect(x: 0, y: 0, width: 126, height: 48)
+    let trigger = CGRect(x: 30, y: 54, width: 66, height: 52)
+    let anchor = CGPoint(x: 60, y: 80)
+    var entered = false
+    // 原地微抖不激活拖选。
+    XCTAssertNil(KeyActionCalloutView.dragSelection(
+      at: CGPoint(x: 65, y: 82), itemFrames: itemFrames, calloutBounds: bounds,
+      triggerKeyFrame: trigger, dragAnchor: anchor, hasEntered: &entered))
+    XCTAssertFalse(entered)
+    // 横向拖动 >= 8pt 进入拖选，按 X 列高亮命中项。
+    XCTAssertEqual(KeyActionCalloutView.dragSelection(
+      at: CGPoint(x: 100, y: 78), itemFrames: itemFrames, calloutBounds: bounds,
+      triggerKeyFrame: trigger, dragAnchor: anchor, hasEntered: &entered), 2)
+    XCTAssertTrue(entered)
+    // 拖出容差边界后取消高亮。
+    XCTAssertNil(KeyActionCalloutView.dragSelection(
+      at: CGPoint(x: 100, y: trigger.maxY + 40), itemFrames: itemFrames, calloutBounds: bounds,
+      triggerKeyFrame: trigger, dragAnchor: anchor, hasEntered: &entered))
+    XCTAssertTrue(entered)
+
+    // 窄气泡配宽触发键（如 iPad 九键或单选项 1 键）：手指仍留在触发键水平范围内时不误取消。
+    var wideEntered = false
+    XCTAssertEqual(KeyActionCalloutView.dragSelection(
+      at: CGPoint(x: -50, y: 80),
+      itemFrames: [CGRect(x: 5, y: 5, width: 36, height: 38)],
+      calloutBounds: CGRect(x: 0, y: 0, width: 46, height: 48),
+      triggerKeyFrame: CGRect(x: -40, y: 54, width: 206, height: 52),
+      dragAnchor: CGPoint(x: 23, y: 80),
+      hasEntered: &wideEntered), 0)
+    XCTAssertTrue(wideEntered)
+
+    // 2. 真实 KeyboardViewController 走九键反滑弹出 -> 横滑直选松手上屏 / 滑出取消 / 原地抬手留框。
+    let document = Document()
+    try attach(document)
+    XCTAssertTrue(NineKeySwipeDigits.save(.up))
+    InputSchemePreference.scheme = .nineKey
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 320))
+    let controller = KeyboardViewController()
+    window.rootViewController = controller
+    window.isHidden = false
+    defer {
+      controller.viewDidDisappear(false)
+      window.isHidden = true
+    }
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.keyboardHeight(letterKeys: false))
+    controller.viewWillAppear(false)
+    controller.view.layoutIfNeeded()
+
+    let two = try key("nineKey2", in: controller)
+    let start = two.convert(CGPoint(x: two.bounds.midX, y: two.bounds.midY), to: nil)
+    let touch = PinnedTouch(start)
+
+    // 2a. 反方向下滑弹出气泡，横滑到 "b" 后松手即上屏 "b" 并关闭气泡。
+    XCTAssertTrue(two.beginTracking(touch, with: nil))
+    touch.point.y = start.y + NineKeySwipePolicy.threshold + 2
+    XCTAssertTrue(two.continueTracking(touch, with: nil))
+    let callout = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" } as? KeyActionCalloutView)
+    XCTAssertEqual(callout.layer.cornerRadius, KeyPressPreviewView.topRadius)
+    let optionB = try control("nineKeyHoldOption-b", in: controller)
+    let bCenter = optionB.convert(CGPoint(x: optionB.bounds.midX, y: optionB.bounds.midY), to: nil)
+    touch.point = bCenter
+    two.touchesMoved([touch], with: nil)
+    XCTAssertEqual(callout.highlightedIndex, 2)
+    two.touchesEnded([touch], with: nil)
+    XCTAssertEqual(document.insertions.last, "b")
+    XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" })
+
+    // 2b. 进入过选项后拖到容差区外松手：关闭气泡且不输出字符。
+    touch.point = start
+    XCTAssertTrue(two.beginTracking(touch, with: nil))
+    touch.point.y = start.y + NineKeySwipePolicy.threshold + 2
+    XCTAssertTrue(two.continueTracking(touch, with: nil))
+    let calloutCancel = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" } as? KeyActionCalloutView)
+    let optionA = try control("nineKeyHoldOption-a", in: controller)
+    touch.point = optionA.convert(CGPoint(x: optionA.bounds.midX, y: optionA.bounds.midY), to: nil)
+    two.touchesMoved([touch], with: nil)
+    XCTAssertEqual(calloutCancel.highlightedIndex, 1)
+    touch.point = CGPoint(x: start.x, y: start.y + 120)
+    two.touchesMoved([touch], with: nil)
+    XCTAssertNil(calloutCancel.highlightedIndex)
+    let countBeforeCancel = document.insertions.count
+    two.touchesEnded([touch], with: nil)
+    XCTAssertEqual(document.insertions.count, countBeforeCancel)
+    XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" })
+
+    // 2c. 弹出后原地直接抬手（未横滑选字）：保留气泡供后续点选。
+    touch.point = start
+    XCTAssertTrue(two.beginTracking(touch, with: nil))
+    touch.point.y = start.y + NineKeySwipePolicy.threshold + 2
+    XCTAssertTrue(two.continueTracking(touch, with: nil))
+    let calloutStay = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" } as? KeyActionCalloutView)
+    XCTAssertEqual(calloutStay.bounds.height, KeyActionCalloutView.itemSize.height + 10, accuracy: 0.5)
+    two.touchesEnded([touch], with: nil)
+    XCTAssertFalse(calloutStay.hasEnteredSelection)
+    XCTAssertNotNil(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" })
+  }
+
+  /// 九键长按（`handleNineKeyHold`）：按下弹出后可直接横滑直选松手上屏，原地抬手留框点选，手势取消时收起气泡。
+  func testNineKeyHoldLongPressDragSelectsAndCancels() throws {
+    let document = Document()
+    try attach(document)
+    InputSchemePreference.scheme = .nineKey
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 320))
+    let controller = KeyboardViewController()
+    window.rootViewController = controller
+    window.isHidden = false
+    defer {
+      controller.viewDidDisappear(false)
+      window.isHidden = true
+    }
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.keyboardHeight(letterKeys: false))
+    controller.viewWillAppear(false)
+    controller.view.layoutIfNeeded()
+
+    let two = try key("nineKey2", in: controller)
+    let hold = StubLongPressGesture(target: nil, action: nil)
+    two.addGestureRecognizer(hold)
+    let start = two.convert(CGPoint(x: two.bounds.midX, y: two.bounds.midY), to: nil)
+
+    // 1. 长按弹出 -> 横滑到 "a" -> 松手直接上屏。
+    hold.windowPoint = start
+    hold.phase = .began
+    controller.perform(NSSelectorFromString("handleNineKeyHold:"), with: hold)
+    let optionA = try control("nineKeyHoldOption-a", in: controller)
+    hold.windowPoint = optionA.convert(CGPoint(x: optionA.bounds.midX, y: optionA.bounds.midY), to: nil)
+    hold.phase = .changed
+    controller.perform(NSSelectorFromString("handleNineKeyHold:"), with: hold)
+    hold.phase = .ended
+    controller.perform(NSSelectorFromString("handleNineKeyHold:"), with: hold)
+    XCTAssertEqual(document.insertions.last, "a")
+    XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" })
+
+    // 2. 长按弹出 -> 未滑动原地抬手：保留气泡等待点选。
+    hold.windowPoint = start
+    hold.phase = .began
+    controller.perform(NSSelectorFromString("handleNineKeyHold:"), with: hold)
+    hold.phase = .ended
+    controller.perform(NSSelectorFromString("handleNineKeyHold:"), with: hold)
+    XCTAssertNotNil(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" })
+
+    // 3. 长按途中手势被系统取消：收起气泡且不输出字符。
+    let countBeforeCancel = document.insertions.count
+    hold.windowPoint = start
+    hold.phase = .began
+    controller.perform(NSSelectorFromString("handleNineKeyHold:"), with: hold)
+    hold.phase = .cancelled
+    controller.perform(NSSelectorFromString("handleNineKeyHold:"), with: hold)
+    XCTAssertEqual(document.insertions.count, countBeforeCancel)
+    XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "nineKeyHoldOptions" })
+  }
+
+  private final class StubLongPressGesture: UILongPressGestureRecognizer {
+    var phase: UIGestureRecognizer.State = .possible
+    var windowPoint: CGPoint = .zero
+    override var state: UIGestureRecognizer.State { get { phase } set { phase = newValue } }
+    override func location(in view: UIView?) -> CGPoint { windowPoint }
   }
 }
 

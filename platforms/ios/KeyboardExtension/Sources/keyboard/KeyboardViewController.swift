@@ -277,6 +277,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var emojiPicker: KeyboardEmojiPickerView?
   private var symbolPanel: KeyboardSymbolPanelView?
   private var nineKeyHoldPopup: UIView?
+  private weak var nineKeyHoldCallout: KeyActionCalloutView?
+  private weak var nineKeyHoldTriggerKey: UIView?
   private struct NineKeyGridKey {
     let button: UIButton
     let digit: Int
@@ -2297,6 +2299,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             guard let self, let key else { return }
             self.handleNineKeySwipe(gesture, from: key, digit: digit)
           }
+          key.onNineKeySwipeDrag = { [weak self, weak key] windowPoint, ended in
+            guard let self, let key else { return }
+            self.trackKeyHoldOptions(from: key, windowPoint: windowPoint, ended: ended)
+          }
+          key.onNineKeySwipeDragCancelled = { [weak self, weak key] in
+            guard let self, let key, self.nineKeyHoldTriggerKey === key else { return }
+            self.dismissNineKeyHoldOptions()
+          }
         }
         nineKeyGridKeys.append(
           NineKeyGridKey(button: button, digit: digit, letters: letters, numberHint: number))
@@ -2554,11 +2564,44 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   ]
 
   @objc private func handleNineKeyHold(_ gesture: UILongPressGestureRecognizer) {
-    guard gesture.state == .began, !showsSymbols, inputScheme != .nineKeyShuangpin, let key = gesture.view as? UIButton,
+    guard !showsSymbols, inputScheme != .nineKeyShuangpin, let key = gesture.view as? UIButton,
       (1...9).contains(key.tag) else { return }
-    // 长按替代点按，只统计一次；菜单选项经字面输入路径上屏，1 不进入拼音引擎。
-    countKeyPress(TypingKeyID.nineKey(key.tag))
-    showKeyHoldOptions(from: key, options: Self.nineKeyHoldOptions(key.tag))
+    trackKeyHoldLongPress(gesture, keyID: TypingKeyID.nineKey(key.tag), options: Self.nineKeyHoldOptions(key.tag))
+  }
+
+  private func trackKeyHoldLongPress(_ gesture: UILongPressGestureRecognizer,
+                                     keyID: @autoclosure () -> String?,
+                                     options: @autoclosure () -> [String]) {
+    guard let key = gesture.view as? UIButton else { return }
+    switch gesture.state {
+    case .began:
+      let values = options()
+      guard !values.isEmpty else { return }
+      // 长按替代点按，只统计一次；菜单选项经字面输入路径上屏，1 不进入拼音引擎。
+      countKeyPress(keyID())
+      showKeyHoldOptions(from: key, options: values)
+      nineKeyHoldCallout?.beginDrag(at: key.window == nil ? nil : gesture.location(in: nil))
+    case .changed:
+      trackKeyHoldOptions(from: key, windowPoint: key.window == nil ? nil : gesture.location(in: nil), ended: false)
+    case .ended:
+      trackKeyHoldOptions(from: key, windowPoint: key.window == nil ? nil : gesture.location(in: nil), ended: true)
+    case .cancelled, .failed:
+      if nineKeyHoldTriggerKey === key { dismissNineKeyHoldOptions() }
+    default:
+      break
+    }
+  }
+
+  /// 同步九键长按、九键反滑弹出或 14/18 键长按期间的单指横滑选字与松手上屏。
+  private func trackKeyHoldOptions(from key: UIView, windowPoint: CGPoint?, ended: Bool) {
+    guard let callout = nineKeyHoldCallout, nineKeyHoldTriggerKey === key else { return }
+    callout.trackDrag(
+      at: windowPoint,
+      ended: ended,
+      triggerKey: key,
+      onCommit: { [weak self] option in self?.commitNineKeyHoldOption(option) },
+      onCancel: { [weak self] in self?.dismissNineKeyHoldOptions() }
+    )
   }
 
   /// 九宫格的键此刻按哪种「九键滑动输入数字」判定：只在拼音九键的字母层生效；数字层（包括别的键面借来的数字九宫格）、九键双拼、长按菜单已经弹出、横滑移光标接管了触摸、读屏开着时一律按关闭，点按和长按照旧。
@@ -2568,7 +2611,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return nineKeySwipeDigits
   }
 
-  /// 九键滑动的结果（#10229）。沿设定方向松手：记一次这个键（与点按同一个统计 id），按长按菜单里选数字的同一条路径上屏（先结束组字再上屏、跟随全角开关，按键反馈也在那里出）。反方向滑过：与长按一样记一次这个键，弹出同样的数字和字母，之后从菜单里选的不再记。
+  /// 九键滑动的结果（#10229）。沿设定方向松手：记一次这个键（与点按同一个统计 id），按长按菜单里选数字的同一条路径上屏（先结束组字再上屏、跟随全角开关，按键反馈也在那里出）。反方向滑过：与长按一样记一次这个键，弹出同样的数字和字母并接入同次拖动直选。
   private func handleNineKeySwipe(_ gesture: NineKeySwipePolicy.Gesture, from key: UIButton, digit: Int) {
     switch gesture {
     case .digit:
@@ -2587,7 +2630,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return [String(digit)] + (nineKeyLetters[digit] ?? "").lowercased().map(String.init)
   }
 
-  /// 长按菜单：九键 1 弹出数字，2–9 弹出数字和字母，14 键弹出这一键的字母。选中的一项先结束组字再上屏，全角开关打开时写全角（`commitNineKeyHoldOption`）。
+  /// 长按/反滑菜单：采用 KeyboardKit `KeyboardActionCallout` 一体化高对比气泡并在屏边自动内收；选中的一项先结束组字再上屏，全角开关打开时写全角（`commitNineKeyHoldOption`）。
   private func showKeyHoldOptions(from key: UIButton, options optionTexts: [String]) {
     dismissNineKeyHoldOptions()
     playInputClick()
@@ -2599,32 +2642,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     backdrop.addGestureRecognizer(
       UITapGestureRecognizer(target: self, action: #selector(dismissNineKeyHoldOptionsGesture)))
 
-    let options = UIStackView()
-    options.axis = .horizontal
-    options.spacing = 4
-    options.distribution = .fillEqually
-    options.accessibilityIdentifier = "nineKeyHoldOptions"
-    options.backgroundColor = skin.background
-    options.layer.cornerRadius = 10
-    options.layer.borderWidth = 1
-    options.layer.borderColor = skin.accent.withAlphaComponent(0.3).cgColor
-    options.isLayoutMarginsRelativeArrangement = true
-    options.layoutMargins = UIEdgeInsets(top: 5, left: 5, bottom: 5, right: 5)
-    options.translatesAutoresizingMaskIntoConstraints = false
-
-    for option in optionTexts {
-      let item = makeKey(title: option, accessibilityLabel: "输入 \(option)") { [weak self] in
-        self?.commitNineKeyHoldOption(option)
-      }
-      item.configuration?.contentInsets = .zero
-      item.accessibilityIdentifier = "nineKeyHoldOption-\(option)"
-      item.widthAnchor.constraint(equalToConstant: 36).isActive = true
-      item.heightAnchor.constraint(equalToConstant: 38).isActive = true
-      options.addArrangedSubview(item)
+    let options = KeyActionCalloutView(options: optionTexts, skin: skin) { [weak self] option in
+      self?.commitNineKeyHoldOption(option)
     }
 
     view.addSubview(backdrop)
     backdrop.addSubview(options)
+    let bottom = options.bottomAnchor.constraint(equalTo: key.topAnchor, constant: -6)
+    bottom.priority = .defaultHigh
     let centred = options.centerXAnchor.constraint(equalTo: key.centerXAnchor)
     centred.priority = .defaultHigh
     NSLayoutConstraint.activate([
@@ -2632,12 +2657,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       backdrop.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       backdrop.topAnchor.constraint(equalTo: view.topAnchor),
       backdrop.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-      options.bottomAnchor.constraint(equalTo: key.topAnchor, constant: -6),
+      bottom,
+      options.topAnchor.constraint(greaterThanOrEqualTo: view.topAnchor, constant: 2),
       centred,
       options.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 6),
       options.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -6),
     ])
     nineKeyHoldPopup = backdrop
+    nineKeyHoldCallout = options
+    nineKeyHoldTriggerKey = key
+    view.layoutIfNeeded()
     UIAccessibility.post(notification: .layoutChanged, argument: options)
   }
 
@@ -2656,6 +2685,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func dismissNineKeyHoldOptions() {
     nineKeyHoldPopup?.removeFromSuperview()
     nineKeyHoldPopup = nil
+    nineKeyHoldCallout = nil
+    nineKeyHoldTriggerKey = nil
   }
 
   private func makeCandidateStrip() -> UIView {
@@ -3521,12 +3552,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  /// 长按 14 键或 18 键的一键：弹出这一键的字母，选中后与九键一样先结束组字，再上屏这个字母。长按取代这次点按，所以按键在这里记一次，菜单里选的那一项不再记。
+  /// 长按 14 键或 18 键的一键：弹出这一键的字母，支持单指横滑直选或松手再点选，选中后与九键一样先结束组字，再上屏这个字母。长按取代这次点按，所以按键在这里记一次，菜单里选的那一项不再记。
   @objc private func handleFourteenKeyHold(_ gesture: UILongPressGestureRecognizer) {
-    guard gesture.state == .began, let button = gesture.view as? UIButton,
+    guard let button = gesture.view as? UIButton,
           let key = letterGridButtons.first(where: { $0.button === button })?.key, !key.holdLetters.isEmpty else { return }
-    countKeyPress(key.keyID)
-    showKeyHoldOptions(from: button, options: key.holdLetters)
+    trackKeyHoldLongPress(gesture, keyID: key.keyID, options: key.holdLetters)
   }
 
   /// 18 键双拼的横滑：拖动时键面换成选中的字母，松手时把它作为精确组码（大写）交给当前双拼网格；回到起点附近或被取消时什么也不输入。这一下记在这个键上，与点按同一个统计 id。
