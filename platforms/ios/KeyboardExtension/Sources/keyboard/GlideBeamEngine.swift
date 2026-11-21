@@ -21,11 +21,17 @@ final class GlideBeamEngine {
   static let shared = GlideBeamEngine()
 
   private let queue = DispatchQueue(label: "keyboard.glideBeamEngine")
+  private let readyLock = NSLock()
+  private var loadedReady = false
   private var handle: OpaquePointer?
   private var layoutSignature: String?
 
-  /// 词典是否已加载完。加载在后台队列进行；未就绪时解码调用直接返回 nil。
-  var isReady: Bool { queue.sync { handle != nil } }
+  /// 词典是否已加载完。用独立锁读取，避免后台正在加载时阻塞主线程。
+  var isReady: Bool {
+    readyLock.lock()
+    defer { readyLock.unlock() }
+    return loadedReady
+  }
 
   /// 键盘出现或滑行起手时调用：选择 GlideBeam 的用户第一次滑行前预热词典。
   /// 幂等；重复调用不重复加载。
@@ -49,53 +55,85 @@ final class GlideBeamEngine {
   private(set) var lastDecodeDiagnostics: (keysResult: Int32, decodeCount: Int32, candidateSize: Int32)?
 
   func decodeReading(samples: [GlideTyping.Sample], letters: [UInt32], frames: [CGRect]) -> String? {
+    decodeReadings(samples: samples, letters: letters, frames: frames, limit: 1).first
+  }
+
+  /// 轨迹 → 至多 `limit` 条按分数排序的拼音读音候选（去重、纯小写字母）。
+  func decodeReadings(samples: [GlideTyping.Sample], letters: [UInt32], frames: [CGRect], limit: Int = 5) -> [String] {
     queue.sync {
-      guard let handle, letters.count == frames.count, frames.count >= 20 else { return nil }
-      // 键位：中心 + 平均键宽（头文件要求坐标与宽度同一单位、同一坐标系），
-      // 且按键码点严格升序——调用方的顺序不保证（滑行手势按键位行给框），这里排序兜底。
-      var pairs = Array(zip(letters, frames))
-      guard pairs.count == letters.count else { return nil }
-      pairs.sort { $0.0 < $1.0 }
-      var keys = [GKKeyC]()
-      keys.reserveCapacity(pairs.count)
-      var width = Float(0)
-      for (letter, frame) in pairs {
-        keys.append(GKKeyC(codepoint: letter, x: Float(frame.midX), y: Float(frame.midY)))
-        width += Float(frame.width)
-      }
-      width = max(width / Float(frames.count), 1)
-      let signature = "\(width):" + keys.map { "\($0.codepoint),\($0.x),\($0.y)" }.joined(separator: ";")
-      var keysResult: Int32 = 0
-      if signature != layoutSignature {
-        keysResult = keys.withUnsafeBufferPointer {
-          gkSetKeys(handle, $0.baseAddress, $0.count, width)
-        }
-        guard keysResult == 0 else {
-          lastDecodeDiagnostics = (keysResult, -1, -1)
-          return nil
-        }
-        layoutSignature = signature
-      }
-      // 轨迹：Sample 的毫秒是 Double，C ABI 收 int64。
-      var points = [GKPointC]()
-      points.reserveCapacity(samples.count)
-      for sample in samples {
-        points.append(GKPointC(x: Float(sample.x), y: Float(sample.y),
-                               timeMS: Int64(sample.milliseconds)))
-      }
-      // 中文只要首选读音（水杉会话随后给出候选）；limit 1 是最省的解码深度。
-      let found = points.withUnsafeBufferPointer {
-        gkDecode(handle, $0.baseAddress, $0.count, 1)
-      }
-      var candidateSize: Int32 = -1
-      if found > 0 {
-        var score: Double = 0
-        candidateSize = gkCandidate(handle, 0, nil, 0, &score)
-      }
-      lastDecodeDiagnostics = (keysResult, found, candidateSize)
-      guard found > 0 else { return nil }
-      return Self.candidate(handle, 0)
+      decodeReadingsLocked(samples: samples, letters: letters, frames: frames, limit: limit)
     }
+  }
+
+  /// 异步解码：不阻塞主线程，完成后在主线程回调多条读音候选。
+  func decodeReadingsAsync(
+    samples: [GlideTyping.Sample],
+    letters: [UInt32],
+    frames: [CGRect],
+    limit: Int = 5,
+    completion: @escaping @MainActor ([String]) -> Void
+  ) {
+    queue.async { [weak self] in
+      let readings = self?.decodeReadingsLocked(samples: samples, letters: letters, frames: frames, limit: limit) ?? []
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          completion(readings)
+        }
+      }
+    }
+  }
+
+  private func decodeReadingsLocked(samples: [GlideTyping.Sample], letters: [UInt32], frames: [CGRect], limit: Int) -> [String] {
+    guard let handle, letters.count == frames.count, frames.count >= 20, limit >= 1 else { return [] }
+    var pairs = Array(zip(letters, frames))
+    guard pairs.count == letters.count else { return [] }
+    pairs.sort { $0.0 < $1.0 }
+    var keys = [GKKeyC]()
+    keys.reserveCapacity(pairs.count)
+    var width = Float(0)
+    for (letter, frame) in pairs {
+      keys.append(GKKeyC(codepoint: letter, x: Float(frame.midX), y: Float(frame.midY)))
+      width += Float(frame.width)
+    }
+    width = max(width / Float(frames.count), 1)
+    let signature = "\(width):" + keys.map { "\($0.codepoint),\($0.x),\($0.y)" }.joined(separator: ";")
+    var keysResult: Int32 = 0
+    if signature != layoutSignature {
+      keysResult = keys.withUnsafeBufferPointer {
+        gkSetKeys(handle, $0.baseAddress, $0.count, width)
+      }
+      guard keysResult == 0 else {
+        lastDecodeDiagnostics = (keysResult, -1, -1)
+        return []
+      }
+      layoutSignature = signature
+    }
+    var points = [GKPointC]()
+    points.reserveCapacity(samples.count)
+    for sample in samples {
+      points.append(GKPointC(x: Float(sample.x), y: Float(sample.y),
+                             timeMS: Int64(sample.milliseconds)))
+    }
+    let found = points.withUnsafeBufferPointer {
+      gkDecode(handle, $0.baseAddress, $0.count, limit)
+    }
+    var candidateSize: Int32 = -1
+    if found > 0 {
+      var score: Double = 0
+      candidateSize = gkCandidate(handle, 0, nil, 0, &score)
+    }
+    lastDecodeDiagnostics = (keysResult, found, candidateSize)
+    guard found > 0 else { return [] }
+    var seen: Set<String> = []
+    var results: [String] = []
+    for index in 0..<Int(found) {
+      guard let text = Self.candidate(handle, index),
+            !text.isEmpty,
+            text.utf8.allSatisfy({ (97...122).contains($0) }),
+            seen.insert(text).inserted else { continue }
+      results.append(text)
+    }
+    return results
   }
 
   /// 读一个候选。`gk_candidate` 的 size 语义按 GlideKeyboard 的 WMEngine：
@@ -131,6 +169,9 @@ final class GlideBeamEngine {
       return
     }
     handle = newHandle
+    readyLock.lock()
+    loadedReady = true
+    readyLock.unlock()
   }
 
   private static func asset(_ name: String, _ ext: String) -> Data? {

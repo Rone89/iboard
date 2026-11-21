@@ -27,11 +27,19 @@ enum GlideTyping {
     frames.firstIndex { !$0.isEmpty && $0.contains(point) }
   }
 
-  /// 在 `downKey` 上按下、从 `down` 移到 `current` 的一根手指是否开始滑行：手指此刻在另一个字母键上，而且横向离开按下点至少 `horizontalThreshold` 个键宽。
-  static func startsGlide(downKey: Int, down: CGPoint, current: CGPoint, frames: [CGRect]) -> Bool {
+  /// 在 `downKey` 上按下、从 `down` 移到 `current` 的一根手指是否开始滑行：手指此刻在另一个字母键上，且满足位移门槛。
+  /// 当 `allowsVerticalGlide` 为真时使用二维欧氏距离（支持 `e→d`、`u→j` 等上下排直滑）；若同键开启了同向角标纵滑，则要求横向达到 `horizontalThreshold` 个键宽或纵向跨越至少 0.85 个键高，避免误抢角标手势。
+  static func startsGlide(downKey: Int, down: CGPoint, current: CGPoint, frames: [CGRect],
+                          allowsVerticalGlide: Bool = true) -> Bool {
     guard frames.indices.contains(downKey), !frames[downKey].isEmpty,
           let key = keyIndex(at: current, in: frames), key != downKey else { return false }
-    return abs(current.x - down.x) >= frames[downKey].width * horizontalThreshold
+    let dx = abs(current.x - down.x)
+    let dy = abs(current.y - down.y)
+    let minDistance = frames[downKey].width * horizontalThreshold
+    if allowsVerticalGlide {
+      return hypot(dx, dy) >= minDistance
+    }
+    return dx >= minDistance || dy >= frames[downKey].height * 1.45
   }
 
   /// 均匀抽取至多 `limit` 个采样，第一个和最后一个总是保留；不超过上限时原样返回。

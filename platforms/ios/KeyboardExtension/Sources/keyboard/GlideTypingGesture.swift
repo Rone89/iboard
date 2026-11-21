@@ -10,6 +10,8 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
   var letterIndex: @MainActor (UIView) -> Int? = { _ in nil }
   /// 二十六个字母键在手势所在视图坐标里的布局矩形，按 a..z 排列；按下时取一次，整笔滑行都用它。
   var keyFrames: @MainActor () -> [CGRect] = { [] }
+  /// 按下键是否允许纵向直接起滑（当同键启用了同向角标纵滑时收紧）。
+  var allowsVerticalGlide: @MainActor (Int, CGPoint, CGPoint) -> Bool = { _, _, _ in true }
   var onBegan: @MainActor () -> Void = {}
   /// 滑行开始后每次移动都带着到目前为止的全部采样，用来画轨迹。
   var onMoved: @MainActor ([GlideTyping.Sample]) -> Void = { _ in }
@@ -73,12 +75,16 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
     if isGliding {
       state = .changed
       onMoved(samples)
-    } else if state == .possible,
-              GlideTyping.startsGlide(downKey: downKey, down: downLocation, current: touch.location(in: view), frames: frames) {
-      state = .began
-      unfinished = true
-      onBegan()
-      onMoved(samples)
+    } else if state == .possible {
+      let current = touch.location(in: view)
+      let allowVertical = allowsVerticalGlide(downKey, downLocation, current)
+      if GlideTyping.startsGlide(downKey: downKey, down: downLocation, current: current, frames: frames,
+                                 allowsVerticalGlide: allowVertical) {
+        state = .began
+        unfinished = true
+        onBegan()
+        onMoved(samples)
+      }
     }
   }
 
@@ -169,7 +175,8 @@ final class GlideTrailView: UIView {
   func draw(_ samples: [GlideTyping.Sample], color: UIColor) {
     shape.removeAnimation(forKey: "fade")
     geometry.reset()
-    for sample in samples { geometry.append(CGPoint(x: sample.x, y: sample.y)) }
+    let rawPoints = samples.map { CGPoint(x: $0.x, y: $0.y) }
+    for point in SwipeTrailGeometry.smoothed(rawPoints) { geometry.append(point) }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     shape.opacity = 1

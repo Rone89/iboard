@@ -9,13 +9,19 @@ final class CandidateStripVerticalSwipeRecognizer: UIGestureRecognizer {
     case up
   }
 
-  static let activationDistance: CGFloat = 6
+  static let activationDistance: CGFloat = 4
   var allowsDownward: () -> Bool = { true }
   var allowsUpward: () -> Bool = { false }
+  /// 为 true 时，向下滑动进入交互式拖拽（`.began` -> `.changed` -> `.ended`），让候选面板 1:1 跟随手指渐显。
+  var interactiveDownward = false
   private(set) var recognizedDirection: Direction?
   private(set) var isDirectionLockedOut = false
+  private(set) var translationY: CGFloat = 0
+  private(set) var velocityY: CGFloat = 0
   private var trackedTouch: UITouch?
   private var startLocation = CGPoint.zero
+  private var lastLocation = CGPoint.zero
+  private var lastTimestamp: TimeInterval = 0
 
   override init(target: Any?, action: Selector?) {
     super.init(target: target, action: action)
@@ -32,26 +38,46 @@ final class CandidateStripVerticalSwipeRecognizer: UIGestureRecognizer {
     }
     trackedTouch = touch
     startLocation = touch.location(in: view)
+    lastLocation = startLocation
+    lastTimestamp = event.timestamp
+    translationY = 0
+    velocityY = 0
     recognizedDirection = nil
     isDirectionLockedOut = false
   }
 
   override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-    guard state == .possible, !isDirectionLockedOut,
-          let touch = trackedTouch, touches.contains(touch) else { return }
-    evaluate(touch: touch, ended: false)
+    guard let touch = trackedTouch, touches.contains(touch) else { return }
+    if state == .began || state == .changed {
+      updateInteractiveMotion(touch: touch, timestamp: event.timestamp)
+      state = .changed
+      return
+    }
+    guard state == .possible, !isDirectionLockedOut else { return }
+    evaluate(touch: touch, timestamp: event.timestamp, ended: false)
   }
 
   override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+    if state == .began || state == .changed {
+      if let touch = trackedTouch, touches.contains(touch) {
+        updateInteractiveMotion(touch: touch, timestamp: event.timestamp)
+      }
+      state = .ended
+      return
+    }
     guard state == .possible else { return }
     if !isDirectionLockedOut, let touch = trackedTouch, touches.contains(touch) {
-      evaluate(touch: touch, ended: true)
+      evaluate(touch: touch, timestamp: event.timestamp, ended: true)
     } else {
       reject()
     }
   }
 
   override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+    if state == .began || state == .changed {
+      state = .cancelled
+      return
+    }
     if state == .possible { reject() }
   }
 
@@ -60,6 +86,8 @@ final class CandidateStripVerticalSwipeRecognizer: UIGestureRecognizer {
     trackedTouch = nil
     recognizedDirection = nil
     isDirectionLockedOut = false
+    translationY = 0
+    velocityY = 0
   }
 
   private func reject() {
@@ -67,7 +95,18 @@ final class CandidateStripVerticalSwipeRecognizer: UIGestureRecognizer {
     state = .failed
   }
 
-  private func evaluate(touch: UITouch, ended: Bool) {
+  private func updateInteractiveMotion(touch: UITouch, timestamp: TimeInterval) {
+    let location = touch.location(in: view)
+    translationY = max(0, location.y - startLocation.y)
+    let dt = timestamp - lastTimestamp
+    if dt > 0.001 {
+      velocityY = (location.y - lastLocation.y) / dt
+    }
+    lastLocation = location
+    lastTimestamp = timestamp
+  }
+
+  private func evaluate(touch: UITouch, timestamp: TimeInterval, ended: Bool) {
     let location = touch.location(in: view)
     let dx = abs(location.x - startLocation.x)
     let dy = location.y - startLocation.y
@@ -77,7 +116,12 @@ final class CandidateStripVerticalSwipeRecognizer: UIGestureRecognizer {
     }
     if dy > dx, allowsDownward() {
       recognizedDirection = .down
-      state = .recognized
+      if interactiveDownward && !ended {
+        updateInteractiveMotion(touch: touch, timestamp: timestamp)
+        state = .began
+      } else {
+        state = .recognized
+      }
     } else if -dy > dx, allowsUpward() {
       recognizedDirection = .up
       state = .recognized

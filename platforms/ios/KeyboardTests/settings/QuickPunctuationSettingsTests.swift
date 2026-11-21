@@ -55,8 +55,9 @@ final class QuickPunctuationSettingsTests: XCTestCase {
     let key = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "quickPunctuationKey" } as? KeyboardKeyButton)
     XCTAssertFalse(key.isHidden)
     XCTAssertEqual(key.configuration?.title, "☆")
-    XCTAssertEqual(key.menu?.children.map(\.title), ["☆", "=", "！"])
-    XCTAssertNil(key.onCornerHint, "自定义菜单使用系统长按，不与固定句号手势竞争")
+    XCTAssertNil(key.menu, "长按常用标点已迁移为 KeyActionCalloutView，不再挂载系统菜单")
+    XCTAssertEqual(KeyHoldCalloutPolicy.quickPunctuationOptions(symbols: KeyboardLayoutPreference.quickPunctuationSymbols), ["☆", "=", "！"])
+    XCTAssertNil(key.onCornerHint, "自定义菜单使用长按气泡，不与固定句号手势竞争")
     controller.viewDidDisappear(false)
   }
 

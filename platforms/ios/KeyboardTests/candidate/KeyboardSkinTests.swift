@@ -124,7 +124,7 @@ final class KeyboardSkinTests: XCTestCase {
       XCTAssertLessThanOrEqual(fill.cgColor.alpha, KeyboardTheme.nativeBackgroundFillAlpha + 0.0001)
       XCTAssertEqual(packed(fill), packed(skin.background.resolvedColor(with: traits)), "填充用键盘自己的底色")
       let enter = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "returnKey" } as? UIButton)
-      XCTAssertEqual(enter.configuration?.background.backgroundColor?.resolvedColor(with: traits), skin.actionBackground.resolvedColor(with: traits))
+      XCTAssertEqual(enter.configuration?.background.backgroundColor?.resolvedColor(with: traits), skin.functionKeyBackground.resolvedColor(with: traits), "原生皮肤默认换行态回归功能键底色")
       XCTAssertEqual(enter.layer.shadowOpacity, skin.hasShadow ? 1 : 0)
       let shift = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "shiftButton" } as? UIButton)
       XCTAssertEqual(shift.configuration?.background.backgroundColor?.resolvedColor(with: traits), skin.functionKeyBackground.resolvedColor(with: traits))
@@ -790,9 +790,10 @@ final class KeyboardSkinTests: XCTestCase {
       XCTAssertEqual(key.configuration?.background.cornerRadius, skin.cornerRadius, id)
       XCTAssertEqual(key.configuration?.background.strokeWidth, skin.borderWidth, id)
       XCTAssertEqual(key.layer.shadowOpacity, skin.hasShadow ? 1 : 0, id)
-      // 回车键无论空闲还是组字中都用主题的操作色（dc.html `retBg`）。
+      // 非原生主题回车在所有状态下保持动作强调色；原生皮肤在默认换行态回归功能键底色。
+      let expectedReturn = skin.isNative ? skin.functionKeyBackground : skin.actionBackground
       XCTAssertEqual(key.configuration?.background.backgroundColor?.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)),
-        skin.actionBackground.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)), id)
+        expectedReturn.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)), id)
       let shift = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "shiftButton" } as? UIButton)
       XCTAssertEqual(shift.configuration?.background.backgroundColor?.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)),
         skin.functionKeyBackground.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)), id)

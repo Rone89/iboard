@@ -242,10 +242,24 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
   }
 
   func updateAnnotations(_ annotations: [KeyboardCandidateAnnotation]) {
+    guard self.annotations != annotations else { return }
+    let layoutChanged = annotations.count != self.annotations.count || zip(self.annotations, annotations).contains { old, new in
+      let oldLines = old.text.isEmpty ? 0 : old.text.split(separator: "\n", omittingEmptySubsequences: false).count
+      let newLines = new.text.isEmpty ? 0 : new.text.split(separator: "\n", omittingEmptySubsequences: false).count
+      return oldLines != newLines
+    }
     self.annotations = annotations
-    rebuildChips()
-    // 候选块刚被替换，重新出现的那些还没有 frame。主动请求一次布局，而不是等下一次碰巧让面板变脏的操作。
-    setNeedsLayout()
+    if layoutChanged {
+      rebuildChips()
+      // 候选块刚被替换，重新出现的那些还没有 frame。主动请求一次布局，而不是等下一次碰巧让面板变脏的操作。
+      setNeedsLayout()
+      return
+    }
+    for indexPath in scrollView.indexPathsForVisibleItems where candidates.indices.contains(indexPath.item) {
+      if let cell = scrollView.cellForItem(at: indexPath) as? CandidateGridCell {
+        _ = makeChip(candidate: candidates[indexPath.item], index: indexPath.item, reusing: cell.chip)
+      }
+    }
   }
 
   /// 换成另一代候选，面板不关。九键面板里选拼音、退格或筛选之后回到列表开头；只是 AI 行变了（回答插进第一页最后一格、多出来的接在末尾）时 `keepingScrollPosition` 留在原处，不跳回开头（#6888）。
@@ -264,6 +278,8 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
     setNeedsLayout()
   }
 
+  private var interactiveRevealMask: CALayer?
+
   func prepareExpandTransition() {
     if savedClipsToBoundsBeforeTransition == nil {
       savedClipsToBoundsBeforeTransition = clipsToBounds
@@ -276,13 +292,48 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
     for column in sideColumns { column.transform = shift }
   }
 
+  /// 交互式下拉过程按 `0...1` 进度自上而下渐显候选面板并跟随位移。
+  func applyInteractiveExpandProgress(_ progress: CGFloat) {
+    let clamped = min(1, max(0, progress))
+    if savedClipsToBoundsBeforeTransition == nil {
+      savedClipsToBoundsBeforeTransition = clipsToBounds
+    }
+    clipsToBounds = true
+    alpha = min(1, clamped * 1.25)
+    let shift = CGAffineTransform(translationX: 0, y: -22 * (1 - clamped))
+    scrollView.transform = shift
+    for column in sideColumns { column.transform = shift }
+
+    guard bounds.width > 0, bounds.height > 0 else { return }
+    let mask = interactiveRevealMask ?? {
+      let layer = CALayer()
+      layer.backgroundColor = UIColor.black.cgColor
+      interactiveRevealMask = layer
+      return layer
+    }()
+    if self.layer.mask !== mask {
+      self.layer.mask = mask
+    }
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    mask.frame = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height * max(0.02, clamped))
+    CATransaction.commit()
+  }
+
   func commitExpandTransition() {
     alpha = 1
     scrollView.transform = .identity
     for column in sideColumns { column.transform = .identity }
+    if let mask = interactiveRevealMask, bounds.width > 0, bounds.height > 0 {
+      mask.frame = bounds
+    }
   }
 
   func finishExpandTransition() {
+    if layer.mask != nil {
+      layer.mask = nil
+    }
+    interactiveRevealMask = nil
     if let savedClipsToBoundsBeforeTransition {
       clipsToBounds = savedClipsToBoundsBeforeTransition
       self.savedClipsToBoundsBeforeTransition = nil
@@ -388,7 +439,6 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
       rowStart = rowEnd
     }
     gridLayout.replace(frames: frames, size: CGSize(width: width, height: max(0, y - spacing) + padding))
-    scrollView.layoutIfNeeded()
     // 旋转或换代后收窄偏移，避免旧列表末尾的偏移把较短的新列表留在空白处。
     let offset = min(max(0, (pendingScrollOffset ?? scrollView.contentOffset).y),
                      max(0, gridLayout.collectionViewContentSize.height - scrollView.bounds.height))
@@ -428,7 +478,6 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
     if selected { font = Self.semibold(font) }
     var title = AttributedString(text, attributes: AttributeContainer([.font: font, .paragraphStyle: paragraph]))
     title += KeyboardViewController.markerRun(marks, color: secondary, scale: candidateScale)
-    let titleWidth = ceil(NSAttributedString(title).size().width) + Self.cellInsets.leading + Self.cellInsets.trailing
     let glossLines = annotation.text.isEmpty
       ? 0 : annotation.text.split(separator: "\n", omittingEmptySubsequences: false).count
     if glossLines > 0 {
@@ -464,7 +513,6 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
     chip.configurationUpdateHandler = { button in
       button.configuration?.background.backgroundColor = button.isHighlighted ? fill.keyboardPressedBrightness(0.88) : fill
     }
-    chip.titleWidth = titleWidth
     chip.titleLineHeight = font.lineHeight
     chip.glossLines = glossLines
     chip.titleLineCount = 1 + glossLines
@@ -480,22 +528,24 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
     chip.accessibilityTraits = selected ? [.button, .selected] : [.button]
     // 测量复用同一个按钮，不创建交互闭包；复用可见格子时先移除上一条候选的选择动作。
     if interactive {
-      let action = UIAction.Identifier("candidateSelect")
-      chip.removeAction(identifiedBy: action, for: .primaryActionTriggered)
-      chip.addAction(UIAction(identifier: action) { [weak self] _ in self?.onSelect(index) }, for: .primaryActionTriggered)
       chip.candidateIndex = index
-      if chip.gestureRecognizers?.contains(where: { $0 is UILongPressGestureRecognizer }) != true {
+      if !chip.hasSelectAction {
+        chip.hasSelectAction = true
+        chip.addAction(UIAction(identifier: UIAction.Identifier("candidateSelect")) { [weak self, weak chip] _ in
+          guard let self, let chip else { return }
+          self.onSelect(chip.candidateIndex)
+        }, for: .primaryActionTriggered)
         let hold = UILongPressGestureRecognizer(target: self, action: #selector(holdCandidate(_:)))
         hold.minimumPressDuration = 0.5
         chip.addGestureRecognizer(hold)
+        chip.accessibilityCustomActions = [
+          UIAccessibilityCustomAction(name: "查看释义") { [weak self, weak chip] _ in
+            guard let self, let chip else { return false }
+            onLongPress(chip.candidateIndex)
+            return true
+          },
+        ]
       }
-      chip.accessibilityCustomActions = [
-        UIAccessibilityCustomAction(name: "查看释义") { [weak self, weak chip] _ in
-          guard let self, let chip else { return false }
-          onLongPress(chip.candidateIndex)
-          return true
-        },
-      ]
     }
     return chip
   }
@@ -573,8 +623,7 @@ private final class CandidateGridLayout: UICollectionViewLayout {
 private final class CandidateGridButton: UIButton {
   /// 格子随单元格复用，长按时按它找到当前显示的是哪个候选。
   var candidateIndex = 0
-  /// 第一行加上格子内边距后的宽度，决定占几列。
-  var titleWidth: CGFloat = 0
+  var hasSelectAction = false
   var titleLineHeight: CGFloat = 0
   var glossLines = 0
   var drawsKeyShadow = false {

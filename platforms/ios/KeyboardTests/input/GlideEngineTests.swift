@@ -112,4 +112,29 @@ final class GlideEngineTests: XCTestCase {
                                       letters: frames.map { UInt32($0.0.asciiValue!) },
                                       frames: frames.map { $0.1 }))
   }
+
+  func testDecodeReadingsReturnsMultipleCandidatesAndAsyncDoesNotBlock() {
+    let engine = GlideBeamEngine.shared
+    engine.prepareAndWait()
+    XCTAssertTrue(engine.isReady)
+
+    let frames = Self.letterFrames()
+    let centers = Dictionary(uniqueKeysWithValues: frames.map { ($0.0, CGPoint(x: $0.1.midX, y: $0.1.midY)) })
+    let letters = frames.map { UInt32($0.0.asciiValue!) }
+    let rects = frames.map { $0.1 }
+    let samples = Self.trajectory(for: "xian", centers: centers)
+
+    let readings = engine.decodeReadings(samples: samples, letters: letters, frames: rects, limit: 5)
+    XCTAssertFalse(readings.isEmpty)
+    XCTAssertEqual(readings.first, "xian")
+    XCTAssertEqual(Set(readings).count, readings.count)
+
+    let expectation = expectation(description: "async glide decode")
+    engine.decodeReadingsAsync(samples: samples, letters: letters, frames: rects, limit: 5) { asyncReadings in
+      XCTAssertTrue(Thread.isMainThread)
+      XCTAssertEqual(asyncReadings, readings)
+      expectation.fulfill()
+    }
+    wait(for: [expectation], timeout: 5)
+  }
 }

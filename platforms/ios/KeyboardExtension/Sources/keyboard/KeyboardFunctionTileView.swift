@@ -74,8 +74,12 @@ final class KeyboardFunctionTileView: UIControl {
     self.tool = tool
     self.skin = skin
     titleLabel.text = tool.title
-    // 图标是 `CAShapeLayer`，#7682 在真机上看到只挂这种图层的按钮收不到触摸；把背景交给系统底板的皮肤下格子整格铺一层几乎看不出的底色，点在格子任何一处都落在它自己的内容上（#10173）。其他皮肤保持无背景。
+    // 图标是 `CAShapeLayer`，#7682 在真机上看到只挂这种图层的按钮收不到触摸；把背景交给系统底板的皮肤下格子整格铺一层几乎看不出的底色，点在格子任何一处都落在它自己的内容上（#10173）。原生 Liquid Glass 激活磁贴保持透明底色透出系统毛玻璃，并用连续圆角与 0.5pt 细边突出选中态。
+    let usesGlassSelectedCard = skin.isNative && SystemKeyboardTokens.drawsLiquidGlassKeyboard && tool.selected
     backgroundColor = skin.drawsNativeBackground ? skin.nativeBackgroundFill : .clear
+    layer.cornerRadius = usesGlassSelectedCard ? skin.cornerRadius : 0
+    layer.cornerCurve = .continuous
+    layer.borderWidth = usesGlassSelectedCard ? 0.5 : 0
     applyFonts()
     switch tool.face {
     case .glyph(let glyph):
@@ -202,6 +206,11 @@ final class KeyboardFunctionTileView: UIControl {
     badgeLayer.fillColor = accent
     badgeLayer.strokeColor = background
     badgeCheckLayer.strokeColor = background
+    if skin.isNative && SystemKeyboardTokens.drawsLiquidGlassKeyboard && tool.selected {
+      layer.borderColor = skin.calloutBorder.resolvedColor(with: traitCollection).cgColor
+    } else {
+      layer.borderColor = nil
+    }
     CATransaction.commit()
   }
 

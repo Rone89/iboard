@@ -78,11 +78,12 @@ final class GlideTypingTests: XCTestCase {
     XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: down, current: Self.center("h"), frames: frames))
     // 键距里的点不在任何键上。
     XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: frames[g].maxX + 3, y: down.y), frames: frames))
-    // 竖直往上滑到 t 上，横向只挪了不到 0.4 个键宽：留给同一个键上的竖直手势，不算滑行。
+    // 竖直往上滑到 t 上：关闭纵向保护时支持二维直滑起滑；开启角标纵滑保护时留给同一个键上的竖直手势。
     let t = Self.frames[GlideTyping.letters.firstIndex(of: "t")!]
     XCTAssertTrue(t.contains(CGPoint(x: down.x - 6, y: t.midY)))
-    XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x - 6, y: t.midY), frames: frames))
-    XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x - 12, y: t.midY), frames: frames))
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x - 6, y: t.midY), frames: frames))
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x - 6, y: t.midY), frames: frames, allowsVerticalGlide: false))
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x - 12, y: t.midY), frames: frames, allowsVerticalGlide: false))
     XCTAssertFalse(GlideTyping.startsGlide(downKey: 26, down: down, current: Self.center("h"), frames: frames), "按下的键不存在")
   }
 

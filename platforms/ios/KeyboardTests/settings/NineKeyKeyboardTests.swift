@@ -588,7 +588,8 @@ final class NineKeyKeyboardTests: XCTestCase {
         XCTAssertEqual(q.bounds.height, try button("returnKey", in: controller).bounds.height, accuracy: 0.5)
         XCTAssertGreaterThanOrEqual(q.bounds.height, 43.5)
         if type != .asciiCapable { XCTAssertEqual(q.configuration?.title, "q") }
-        XCTAssertEqual(try button("quickPunctuationKey", in: controller).configuration?.title, ",")
+        let expectedPunctuation = type == .emailAddress ? "@" : type == .URL ? "/" : ","
+        XCTAssertEqual(try button("quickPunctuationKey", in: controller).configuration?.title, expectedPunctuation)
         q.sendActions(for: .primaryActionTriggered)
         XCTAssertEqual(try button("preeditButton", in: controller).configuration?.title, "英文输入")
         try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
@@ -939,7 +940,7 @@ final class NineKeyKeyboardTests: XCTestCase {
     XCTAssertEqual(try button("symbolPanelKey", in: controller).bounds.width, unit * 1.05, accuracy: 0.5)
     XCTAssertTrue(try button("layerEmojiKey", in: controller).isHidden)
     XCTAssertEqual(try button("returnKey", in: controller).bounds.width, unit * 1.9, accuracy: 0.5)
-    XCTAssertEqual(try button("spaceKey", in: controller).configuration?.title, "空格")
+    XCTAssertNil(try button("spaceKey", in: controller).configuration?.title)
 
     let mark = try button("symbolLayerKey2_0", in: controller)
     for id in ["symbolLayerToggle", "symbolLayerDeleteKey"] {
@@ -1237,6 +1238,7 @@ final class NineKeyKeyboardTests: XCTestCase {
       if pinned.characterSet { expected.append("characterSetShortcut") }
       if pinned.fullwidth { expected.append("fullwidthShortcut") }
       if pinned.punctuation { expected.append("punctuationShortcut") }
+      if TouchToolbarLocalPreference.language { expected.append("languageShortcut") }
       expected.append("dismissShortcut")
       let visible = toolbar.arrangedSubviews.filter { !$0.isHidden }
       XCTAssertEqual(visible.compactMap(\.accessibilityIdentifier), expected)
@@ -2593,7 +2595,8 @@ final class NineKeyKeyboardTests: XCTestCase {
             XCTAssertEqual(punctuation.bounds.width, space.bounds.width * expectedPunctuationWeight, accuracy: 0.5)
             XCTAssertGreaterThanOrEqual(space.bounds.width, 79.2)
             let secondary = ![.handwriting, .fourteenKey, .eighteenKey, .zhuyin].contains(scheme)
-            XCTAssertEqual(punctuation.menu?.children.count, secondary ? nil : 7)
+            // 常用标点键已统一改用 `KeyActionCalloutView` 长按横滑直选，不再挂系统 `UIMenu`。
+            XCTAssertNil(punctuation.menu)
             XCTAssertEqual((punctuation as? KeyboardKeyButton)?.cornerHint != nil, secondary)
           }
           // 底行的 ⌫ 给九键/笔画数字层和注音符号页使用；其他符号层的 ⌫ 在第三排右侧。
@@ -3006,10 +3009,12 @@ final class NineKeyKeyboardTests: XCTestCase {
     controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
     controller.view.layoutIfNeeded()
     let toolbar = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "keyboardShortcutBar" } as? UIStackView)
-    // 工具栏包含一个用于把按钮推到右侧的 spacer；13 个按钮（工具栏上没有 符）长按都打开工具栏设置。
-    XCTAssertEqual(toolbar.arrangedSubviews.count, 14)
-    let buttons = toolbar.arrangedSubviews.compactMap { $0 as? UIButton }
-    XCTAssertEqual(buttons.count, 13)
+    // 工具栏包含一个把按钮推到右侧的 spacer 和一个按需出现的一键粘贴胶囊；其余 14 个工具栏按钮（含中英文切换，不含 符）长按都打开工具栏设置。
+    XCTAssertEqual(toolbar.arrangedSubviews.count, 16)
+    let buttons = toolbar.arrangedSubviews
+      .compactMap { $0 as? UIButton }
+      .filter { $0.accessibilityIdentifier != "quickPasteShortcut" }
+    XCTAssertEqual(buttons.count, 14)
     for item in buttons {
       let id = item.accessibilityIdentifier ?? "\(item)"
       let hold = try XCTUnwrap(item.gestureRecognizers?.compactMap { $0 as? UILongPressGestureRecognizer }
@@ -3840,21 +3845,21 @@ final class NineKeyKeyboardTests: XCTestCase {
     let strip = try XCTUnwrap(descendants(controller.view).first {
       $0.accessibilityIdentifier == "nineKeySpellingStrip"
     })
-    // 完整布局会重建标点菜单；拼音侧栏切换只需更新它自己，不应重写整套键盘。
-    let menu = try XCTUnwrap(punctuation.menu)
+    // 完整布局会重建底部键行；拼音侧栏切换只需更新它自己，不应重写整套键盘。
+    let initialGestures = punctuation.gestureRecognizers ?? []
     let frame = digit.convert(digit.bounds, to: controller.view)
     for _ in 0..<3 {
       digit.sendActions(for: .primaryActionTriggered)
       controller.view.layoutIfNeeded()
       XCTAssertFalse(strip.isHidden)
-      XCTAssertTrue(punctuation.menu === menu)
+      XCTAssertEqual(punctuation.gestureRecognizers ?? [], initialGestures)
       XCTAssertEqual(digit.convert(digit.bounds, to: controller.view), frame)
       let delete = try button("nineKeyDelete", in: controller)
       delete.sendActions(for: .touchDown)
       delete.sendActions(for: .touchUpInside)
       controller.view.layoutIfNeeded()
       XCTAssertTrue(strip.isHidden)
-      XCTAssertTrue(punctuation.menu === menu)
+      XCTAssertEqual(punctuation.gestureRecognizers ?? [], initialGestures)
       XCTAssertEqual(digit.convert(digit.bounds, to: controller.view), frame)
     }
   }
@@ -4144,7 +4149,7 @@ final class NineKeyKeyboardTests: XCTestCase {
     XCTAssertTrue(try button("symbolPanelKey", in: controller).isHidden)
     XCTAssertTrue(try button("bottomPeriodKey", in: controller).isHidden)
     XCTAssertTrue(try button("quickPunctuationKey", in: controller).isHidden)
-    XCTAssertEqual(try button("spaceKey", in: controller).configuration?.title, "space")
+    XCTAssertNil(try button("spaceKey", in: controller).configuration?.title)
     XCTAssertEqual(try button("returnKey", in: controller).configuration?.title, "return")
     let englishUnit = try button("spaceKey", in: controller).bounds.width / TouchBottomRowLayout.englishTwentySixKeySpaceWeight
     XCTAssertEqual(try button("layoutToggleButton", in: controller).bounds.width,
@@ -4221,7 +4226,7 @@ final class NineKeyKeyboardTests: XCTestCase {
       XCTAssertTrue(try button("symbolPanelKey", in: controller).isHidden)
       XCTAssertTrue(try button("bottomPeriodKey", in: controller).isHidden)
       XCTAssertTrue(try button("quickPunctuationKey", in: controller).isHidden)
-      XCTAssertEqual(try button("spaceKey", in: controller).configuration?.title, "space")
+      XCTAssertNil(try button("spaceKey", in: controller).configuration?.title)
       XCTAssertEqual(try button("returnKey", in: controller).configuration?.title, "return")
       let unit = try button("layoutToggleButton", in: controller).bounds.width / TouchBottomRowLayout.standardTwentySixKeyLayerWeight
       XCTAssertEqual(try button("bottomLanguageKey", in: controller).bounds.width, unit * TouchBottomRowLayout.languageWeight, accuracy: 0.5)
@@ -4349,28 +4354,26 @@ final class NineKeyKeyboardTests: XCTestCase {
     assertAccent("composing")
   }
 
-  /// 空格键带麦克风图标和方案简称，英文下为 `space`，符号层上为 空格；关掉长按空格语音后不带麦克风；VoiceOver 仍读作 空格。
+  /// 空格键无论中英文或符号层均不显示文字；开启长按语音时保留麦克风图标，关掉后图标一并隐藏；VoiceOver 仍读作 空格。
   func testSpaceFaceNamesTheScheme() throws {
     XCTAssertEqual(KeyboardViewController.spaceKeyFace(scheme: .quanpin, chinese: true, symbols: false, composing: false, voice: true),
-                   .init(label: "全拼", mic: true))
+                   .init(label: "", mic: true))
     XCTAssertEqual(KeyboardViewController.spaceKeyFace(scheme: .shuangpin, chinese: true, symbols: false, composing: false, voice: true).label,
-                   ChineseInputScheme.shuangpin.shortLabel)
+                   "")
     XCTAssertEqual(KeyboardViewController.spaceKeyFace(scheme: .quanpin, chinese: false, symbols: false, composing: false, voice: true),
-                   .init(label: "space", mic: true))
+                   .init(label: "", mic: true))
     XCTAssertEqual(KeyboardViewController.spaceKeyFace(scheme: .quanpin, chinese: true, symbols: true, composing: false, voice: true),
-                   .init(label: "空格", mic: true))
-    // 手写板的空格键同样显示方案名，与 Android 的 SpaceKeyFace.schemeLabel 给 HANDWRITING 的 手写 一致。
+                   .init(label: "", mic: true))
     XCTAssertEqual(KeyboardViewController.spaceKeyFace(scheme: .handwriting, chinese: true, symbols: false, composing: false, voice: true),
-                   .init(label: "手写", mic: true))
+                   .init(label: "", mic: true))
     XCTAssertEqual(KeyboardViewController.spaceKeyFace(scheme: .japanese, chinese: true, symbols: false, composing: true, voice: true),
-                   .init(label: "変換", mic: false))
-    // 关掉「长按空格语音输入」后长按空格不进语音，键面只留文字（#10143）。
+                   .init(label: "", mic: false))
     XCTAssertEqual(KeyboardViewController.spaceKeyFace(scheme: .quanpin, chinese: true, symbols: false, composing: false, voice: false),
-                   .init(label: "全拼", mic: false))
+                   .init(label: "", mic: false))
     XCTAssertEqual(KeyboardViewController.spaceKeyFace(scheme: .quanpin, chinese: false, symbols: false, composing: false, voice: false),
-                   .init(label: "space", mic: false))
+                   .init(label: "", mic: false))
     XCTAssertEqual(KeyboardViewController.spaceKeyFace(scheme: .quanpin, chinese: true, symbols: true, composing: false, voice: false),
-                   .init(label: "空格", mic: false))
+                   .init(label: "", mic: false))
 
     let previous = InputSchemePreference.scheme
     defer { InputSchemePreference.scheme = previous }
@@ -4380,11 +4383,11 @@ final class NineKeyKeyboardTests: XCTestCase {
     controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
     controller.view.layoutIfNeeded()
     let space = try button("spaceKey", in: controller)
-    XCTAssertEqual(space.configuration?.title, "全拼")
+    XCTAssertNil(space.configuration?.title)
     XCTAssertNotNil(space.configuration?.image)
     XCTAssertEqual(space.accessibilityLabel, "空格")
     try button("bottomLanguageKey", in: controller).sendActions(for: .primaryActionTriggered)
-    XCTAssertEqual(space.configuration?.title, "space")
+    XCTAssertNil(space.configuration?.title)
     XCTAssertEqual(space.accessibilityLabel, "空格")
   }
 

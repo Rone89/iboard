@@ -65,7 +65,7 @@ final class SpaceVoicePanelTests: XCTestCase {
     XCTAssertEqual(space.accessibilityCustomActions?.map(\.name), ["光标左移", "光标右移"])
     XCTAssertTrue(space.accessibilityHint?.contains("长按移动光标") ?? false)
     XCTAssertNil(space.configuration?.image, "no mic while long-press space voice is off")
-    XCTAssertFalse(space.configuration?.title?.isEmpty ?? true, "the scheme label stays")
+    XCTAssertTrue(space.configuration?.title?.isEmpty ?? true, "space bar stays blank without voice mic")
     let hold = try XCTUnwrap(space.gestureRecognizers?.first { $0.name == "spaceVoiceHold" })
     XCTAssertTrue(controller.gestureRecognizerShouldBegin(hold))
     KeyboardLayoutPreference.spaceVoice = true

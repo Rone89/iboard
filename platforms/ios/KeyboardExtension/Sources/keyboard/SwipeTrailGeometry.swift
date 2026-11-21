@@ -140,6 +140,30 @@ struct SwipeTrailGeometry {
     return (left, right)
   }
 
+  /// Chaikin 拐角平滑：保留首尾端点不变，将折线尖角切圆以消除急转弯棱角，供屏幕轨迹渲染使用。
+  static func smoothed(_ points: [CGPoint], iterations: Int = 1) -> [CGPoint] {
+    guard points.count >= 3, iterations > 0 else { return points }
+    var current = points
+    for _ in 0..<iterations {
+      guard current.count >= 3 else { break }
+      var next: [CGPoint] = [current[0]]
+      next.reserveCapacity(current.count * 2)
+      for index in 0..<(current.count - 1) {
+        let a = current[index]
+        let b = current[index + 1]
+        if index > 0 {
+          next.append(CGPoint(x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25))
+        }
+        if index < current.count - 2 {
+          next.append(CGPoint(x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75))
+        }
+      }
+      next.append(current[current.count - 1])
+      current = next
+    }
+    return current
+  }
+
   /// 填充的色带路径，构造步骤与参照的重画完全一致（0x1004846cc）：左边缘
   /// 尾→头、半圆笔帽、右边缘 头→尾、闭合。少于两个点（或零长度）时参照
   /// 不画，这里同样。

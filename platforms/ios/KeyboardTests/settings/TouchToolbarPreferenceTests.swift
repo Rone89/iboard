@@ -53,13 +53,17 @@ final class TouchToolbarPreferenceTests: XCTestCase {
     keys.forEach(defaults.removeObject(forKey:))
     XCTAssertTrue(TouchToolbarLocalPreference.phrases)
     XCTAssertTrue(TouchToolbarLocalPreference.scheme)
+    XCTAssertFalse(TouchToolbarLocalPreference.language)
     XCTAssertFalse(TouchToolbarLocalPreference.hidden)
     TouchToolbarLocalPreference.hidden = true
     TouchToolbarLocalPreference.scheme = false
+    TouchToolbarLocalPreference.language = true
     XCTAssertEqual(defaults.object(forKey: "keyboard.toolbar.hidden") as? Bool, true)
     XCTAssertEqual(defaults.object(forKey: "keyboard.toolbar.scheme") as? Bool, false)
+    XCTAssertEqual(defaults.object(forKey: "keyboard.toolbar.language") as? Bool, true)
     XCTAssertTrue(TouchToolbarLocalPreference.hidden)
     XCTAssertFalse(TouchToolbarLocalPreference.scheme)
+    XCTAssertTrue(TouchToolbarLocalPreference.language)
     defaults.set("yes", forKey: TouchToolbarLocalPreference.phrasesKey)
     XCTAssertTrue(TouchToolbarLocalPreference.phrases, "a value that is not a Bool reads as the default")
   }

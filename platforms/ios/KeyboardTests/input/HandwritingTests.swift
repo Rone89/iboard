@@ -317,12 +317,10 @@ final class HandwritingTests: XCTestCase {
       XCTAssertEqual(rewrite.bounds.width, unit * KeyboardViewController.handwritingRewriteWeight, accuracy: 0.5)
       XCTAssertEqual(delete.bounds.width, unit * KeyboardViewController.handwritingDeleteWeight, accuracy: 0.5)
       XCTAssertEqual(enter.bounds.width, unit * KeyboardViewController.handwritingReturnWeight, accuracy: 0.5)
-      // 最窄的 320pt 上 ， 和 。 仍有约一个 26 键字母键宽，空格放得下麦克风和完整的「手写」。
+      // 最窄的 320pt 上 ， 和 。 仍有约一个 26 键字母键宽；空格键默认不显示文字，仅保留语音麦克风图标。
       XCTAssertGreaterThanOrEqual(comma.bounds.width, 24, "\(Int(width))pt")
-      let spaceTitle = try XCTUnwrap(space.titleLabel)
-      XCTAssertEqual(spaceTitle.text, "手写")
-      XCTAssertGreaterThanOrEqual(spaceTitle.bounds.width + 0.5, spaceTitle.intrinsicContentSize.width,
-                                  "the space label is clipped at \(Int(width))pt")
+      XCTAssertTrue(space.configuration?.title?.isEmpty ?? true)
+      XCTAssertNotNil(space.configuration?.image, "the space bar keeps its mic at \(Int(width))pt")
       // ？ 和 ！ 是 ， 和 。 的长按角标。
       let commaKey = try XCTUnwrap(comma as? KeyboardKeyButton)
       let periodKey = try XCTUnwrap(period as? KeyboardKeyButton)
@@ -341,7 +339,7 @@ final class HandwritingTests: XCTestCase {
     XCTAssertTrue(KeyboardViewController.usesPhoneBottomRow(formFactor: .tablet, nineKeyFrame: false, handwriting: true, kana: false))
     let controller = try handwritingController(width: 390)
     let space = try control("spaceKey", in: controller)
-    XCTAssertEqual(space.configuration?.title, "手写")
+    XCTAssertTrue(space.configuration?.title?.isEmpty ?? true)
     XCTAssertNotNil(space.configuration?.image, "the space bar keeps its mic")
   }
 

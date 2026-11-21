@@ -70,8 +70,9 @@ enum TouchToolbarLocalPreference {
   static var defaults: UserDefaults { InputSchemePreference.appGroupDefaults }
   static let phrasesKey = "keyboard.toolbar.phrases"
   static let schemeKey = "keyboard.toolbar.scheme"
+  static let languageKey = "keyboard.toolbar.language"
   static let hiddenKey = "keyboard.toolbar.hidden"
-  static var keys: [String] { [phrasesKey, schemeKey, hiddenKey] }
+  static var keys: [String] { [phrasesKey, schemeKey, languageKey, hiddenKey] }
 
   static var phrases: Bool {
     get { defaults.object(forKey: phrasesKey) as? Bool ?? true }
@@ -83,6 +84,12 @@ enum TouchToolbarLocalPreference {
     set { defaults.set(newValue, forKey: schemeKey) }
   }
 
+  /// 工具栏「中英文切换」按钮，默认关闭以保证 320pt 窄屏默认工具栏不溢出，可在「键盘工具栏」设置页开启。
+  static var language: Bool {
+    get { defaults.object(forKey: languageKey) as? Bool ?? false }
+    set { defaults.set(newValue, forKey: languageKey) }
+  }
+
   /// 显示方式：false 为「输入时显示」，true 为「隐藏」。
   static var hidden: Bool {
     get { defaults.object(forKey: hiddenKey) as? Bool ?? false }
@@ -92,7 +99,7 @@ enum TouchToolbarLocalPreference {
 
 /// 键盘预览里的一个工具栏按钮。图标与键盘自己的工具栏一致；字符类项目画单个字符而不是符号。放在 SharedUI 里，`KeyboardToolbarPreviewRow` 的规则才能在键盘测试里直接测。
 enum KeyboardPreviewToolbarItem: String, CaseIterable {
-  case emoji, phrases, clipboard, skin, scheme, ai, characterSet, fullwidth, punctuation
+  case emoji, phrases, clipboard, skin, scheme, ai, characterSet, fullwidth, punctuation, language
 
   /// 该项目的 SF Symbol；画成字符的项目为 nil。
   var symbol: String? {
@@ -103,7 +110,7 @@ enum KeyboardPreviewToolbarItem: String, CaseIterable {
     case .skin: "paintpalette"
     case .scheme: "keyboard"
     case .ai: "sparkles"
-    case .characterSet, .fullwidth, .punctuation: nil
+    case .characterSet, .fullwidth, .punctuation, .language: nil
     }
   }
 
@@ -113,6 +120,7 @@ enum KeyboardPreviewToolbarItem: String, CaseIterable {
     case .characterSet: "简"
     case .fullwidth: "全"
     case .punctuation: "，"
+    case .language: "中"
     default: ""
     }
   }
@@ -120,13 +128,14 @@ enum KeyboardPreviewToolbarItem: String, CaseIterable {
 
 /// 「键盘工具栏」设置页预览里，品牌键和收起键之间画哪些按钮；nil 表示空闲时不画工具栏内容，只保留顶栏高度。规则与键盘的 `toolbarRowHidden` 相同。工具栏上没有 符：符号面板从长按 123 和功能菜单进。见 .agents/notes/implemented/bug-fix/2026-10-29-keyboard-previews-follow-layout.md。
 enum KeyboardToolbarPreviewRow {
-  static func items(_ toolbar: TouchToolbarPreference, phrases: Bool, scheme: Bool, hidden: Bool,
+  static func items(_ toolbar: TouchToolbarPreference, phrases: Bool, scheme: Bool,
+                    language: Bool = false, hidden: Bool,
                     keyLayout: TouchKeyLayoutStyle) -> [KeyboardPreviewToolbarItem]? {
     // 按键盘绘制顺序：表情、常用语、剪贴板、皮肤、输入方式，然后是 iOS 独有项。
     let ordered: [(enabled: Bool, item: KeyboardPreviewToolbarItem)] = [
       (toolbar.emoji, .emoji), (phrases, .phrases), (toolbar.clipboard, .clipboard), (toolbar.skin, .skin),
       (scheme, .scheme), (toolbar.ai, .ai), (toolbar.characterSet, .characterSet),
-      (toolbar.fullwidth, .fullwidth), (toolbar.punctuation, .punctuation),
+      (toolbar.fullwidth, .fullwidth), (toolbar.punctuation, .punctuation), (language, .language),
     ]
     let tools = hidden ? [] : ordered.filter(\.enabled).map(\.item)
     return tools.isEmpty ? nil : tools

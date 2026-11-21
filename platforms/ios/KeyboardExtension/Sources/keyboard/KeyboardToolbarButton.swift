@@ -6,6 +6,7 @@ final class KeyboardToolbarButton: UIButton {
   static let iconSide: CGFloat = 26
   static let collapseIconSide: CGFloat = 25
   static let padSide: CGFloat = 40
+  static let nativeGlassPadSide: CGFloat = 36
   static let padRadius: CGFloat = 12
   static let pressScale: CGFloat = 0.92
   static let pressDuration: TimeInterval = 0.1
@@ -22,6 +23,9 @@ final class KeyboardToolbarButton: UIButton {
   private let pad = UIView()
   private var renderedSize = CGSize.zero
   private var skin = KeyboardTheme.current
+
+  var activePadCornerRadius: CGFloat { pad.layer.cornerRadius }
+  var activePadBorderWidth: CGFloat { pad.layer.borderWidth }
 
   /// 对应面板打开时显示底板和强调色。
   var isActive = false {
@@ -44,6 +48,7 @@ final class KeyboardToolbarButton: UIButton {
     accessibilityTraits = .button
     registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (button: KeyboardToolbarButton, _: UITraitCollection) in
       button.tintColor = button.iconColor
+      button.updateActiveBorder()
     }
     renderIcon(size: CGSize(width: Self.padSide, height: Self.padSide))
     apply(skin: skin)
@@ -54,6 +59,7 @@ final class KeyboardToolbarButton: UIButton {
   func apply(skin: KeyboardTheme) {
     self.skin = skin
     updateActive(animated: false)
+    setNeedsLayout()
   }
 
   override var isHighlighted: Bool {
@@ -85,10 +91,12 @@ final class KeyboardToolbarButton: UIButton {
       super.layoutSubviews()
     }
     let scale = Self.contentScale(rowHeight: bounds.height)
-    let side = min(Self.padSide * scale, bounds.width, bounds.height)
+    let usesGlassPill = skin.isNative && SystemKeyboardTokens.drawsLiquidGlassKeyboard
+    let baseSide = usesGlassPill ? Self.nativeGlassPadSide : Self.padSide
+    let side = min(baseSide * scale, bounds.width, bounds.height)
     pad.bounds = CGRect(x: 0, y: 0, width: side, height: side)
     pad.center = CGPoint(x: bounds.midX, y: bounds.midY)
-    pad.layer.cornerRadius = min(Self.padRadius * scale, side / 2)
+    pad.layer.cornerRadius = usesGlassPill ? side / 2 : min(Self.padRadius * scale, side / 2)
   }
 
   /// UIKit 的跨进程键盘命中使用按钮的原生内容；仅挂 CAShapeLayer 的空按钮在真机上收不到触摸。
@@ -127,8 +135,15 @@ final class KeyboardToolbarButton: UIButton {
     return icon == .collapse ? skin.keyForeground : skin.secondary
   }
 
+  private func updateActiveBorder() {
+    let usesGlassBorder = isActive && skin.isNative && SystemKeyboardTokens.drawsLiquidGlassKeyboard
+    pad.layer.borderWidth = usesGlassBorder ? 0.5 : 0
+    pad.layer.borderColor = usesGlassBorder ? skin.calloutBorder.resolvedColor(with: traitCollection).cgColor : nil
+  }
+
   private func updateActive(animated: Bool) {
     let background = isActive ? skin.toolbarActiveBackground : .clear
+    updateActiveBorder()
     guard animated else {
       pad.backgroundColor = background
       tintColor = iconColor

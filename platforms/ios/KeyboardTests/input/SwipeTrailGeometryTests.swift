@@ -166,4 +166,17 @@ final class SwipeTrailGeometryTests: XCTestCase {
     XCTAssertEqual(geometry.points.first!.x, 110, accuracy: 1e-9)
     XCTAssertEqual(geometry.totalLength, 150, accuracy: 1e-9)
   }
+
+  func testSmoothedRoundsInteriorCornersAndPreservesEndpoints() {
+    let pair = [CGPoint(x: 0, y: 0), CGPoint(x: 40, y: 40)]
+    XCTAssertEqual(SwipeTrailGeometry.smoothed(pair), pair)
+
+    let corner = [CGPoint(x: 0, y: 0), CGPoint(x: 40, y: 0), CGPoint(x: 40, y: 40)]
+    let smoothed = SwipeTrailGeometry.smoothed(corner)
+    XCTAssertEqual(smoothed.first, corner.first)
+    XCTAssertEqual(smoothed.last, corner.last)
+    XCTAssertEqual(smoothed.count, 4)
+    XCTAssertEqual(smoothed[1], CGPoint(x: 30, y: 0))
+    XCTAssertEqual(smoothed[2], CGPoint(x: 40, y: 10))
+  }
 }

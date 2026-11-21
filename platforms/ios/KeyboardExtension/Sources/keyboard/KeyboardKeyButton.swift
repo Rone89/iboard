@@ -595,6 +595,11 @@ final class KeyboardKeyButton: UIButton {
     pressPreview = nil
   }
 
+  /// 外部弹出长按选择气泡（`KeyActionCalloutView`）时收起按键放大预览，避免两层气泡重叠。
+  func cancelPressPreview() {
+    removePressPreview()
+  }
+
   /// The keyboard's root view: the callout reaches above the key's row, so it cannot live inside the row's stack view.
   private var pressPreviewHost: UIView? {
     var responder: UIResponder? = next
@@ -811,7 +816,8 @@ final class KeyActionCalloutView: UIStackView {
     super.init(frame: .zero)
     axis = .horizontal
     spacing = 4
-    distribution = .fillEqually
+    let hasWideOption = options.contains { $0.count > 1 }
+    distribution = hasWideOption ? .fill : .fillEqually
     accessibilityIdentifier = "nineKeyHoldOptions"
     backgroundColor = skin.calloutBackground
     layer.cornerRadius = KeyPressPreviewView.topRadius
@@ -828,13 +834,14 @@ final class KeyActionCalloutView: UIStackView {
 
     for option in options {
       var config = UIButton.Configuration.plain()
-      config.contentInsets = .zero
+      config.contentInsets = option.count > 1 ? NSDirectionalEdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6) : .zero
       config.baseForegroundColor = skin.keyForeground
       config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
         var outgoing = incoming
+        let size: CGFloat = option.count > 1 ? 15 : 20
         outgoing.font = skin.usesMonospacedFont
-          ? .monospacedSystemFont(ofSize: 20, weight: .regular)
-          : .systemFont(ofSize: 20, weight: .regular)
+          ? .monospacedSystemFont(ofSize: size, weight: .regular)
+          : .systemFont(ofSize: size, weight: .regular)
         return outgoing
       }
       let item = UIButton(configuration: config, primaryAction: UIAction(title: option) { _ in onSelect(option) })
@@ -843,7 +850,7 @@ final class KeyActionCalloutView: UIStackView {
       item.layer.cornerRadius = 7
       item.layer.cornerCurve = .continuous
       item.clipsToBounds = true
-      item.widthAnchor.constraint(equalToConstant: Self.itemSize.width).isActive = true
+      item.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.itemSize.width).isActive = true
       item.heightAnchor.constraint(equalToConstant: Self.itemSize.height).isActive = true
       optionButtons.append(item)
       addArrangedSubview(item)

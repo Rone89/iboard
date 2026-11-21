@@ -26,6 +26,17 @@ final class KeyboardSoundPlayer {
     MetasequoiaInputSessionBridge.keySoundPack($0)
   }) {
     self.resolve = resolve
+    NotificationCenter.default.addObserver(
+      forName: AVAudioSession.mediaServicesWereResetNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self, let pack = self.target else { return }
+        self.release()
+        self.want(pack)
+      }
+    }
   }
 
   /// 要 `pack` 的样本，nil 时放掉已加载的。同一个包已经加载或正在加载时什么也不做，所以键盘每次出现、每次重读偏好后都可以调用。`completion` 只给测试等加载结束，在主线程调用。
@@ -53,7 +64,7 @@ final class KeyboardSoundPlayer {
     }
   }
 
-  /// 播放一个样本，`file` 来自 `KeySoundPackPolicy.playback`。这个样本没能加载时用普通键的；什么都没有或播放失败时返回 false，调用方退回系统按键声。
+  /// 播放一个样本，`file` 来自 `KeySoundPackPolicy.playback`。这个样本没能加载时用普通键的；播放失败时尝试恢复 `.ambient` 音频会话并重试一次。
   func play(_ file: URL, gain: Float) -> Bool {
     guard let loaded, let players = voices[file] ?? voices[loaded.standard], !players.isEmpty else { return false }
     let index = cursor[file, default: 0] % players.count
@@ -61,10 +72,25 @@ final class KeyboardSoundPlayer {
     let player = players[index]
     player.volume = gain
     player.currentTime = 0
+    if player.play() { return true }
+    // 宿主 App（如语音消息、视频播放）打断或重置音频会话后，`play()` 可能失败；重设 `.ambient` 并重新预热后重试一次。
+    try? AVAudioSession.sharedInstance().setCategory(.ambient)
+    try? AVAudioSession.sharedInstance().setActive(true)
+    player.prepareToPlay()
+    player.currentTime = 0
     return player.play()
   }
 
-  /// 放掉播放器，还在路上的加载回来后也丢掉；下一次 `want` 重新加载。收到内存警告时调用。
+  /// 内存警告时每个样本只保留 1 只播放器，既释放多余内存又不让自定义按键音退回系统音。
+  func trimVoicesForMemoryPressure() {
+    guard !voices.isEmpty else { return }
+    for (file, players) in voices where players.count > 1 {
+      voices[file] = [players[0]]
+    }
+    cursor = [:]
+  }
+
+  /// 放掉播放器，还在路上的加载回来后也丢掉；下一次 `want` 重新加载。
   func release() {
     target = nil
     generation &+= 1

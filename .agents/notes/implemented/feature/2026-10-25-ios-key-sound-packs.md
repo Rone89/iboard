@@ -10,7 +10,7 @@ Status: implemented
 
 **打包位置。** `stage-resources.sh` 把 `resources/sound-packs` 里 `kind = "sound"`、`mode = "keys"` 的包整目录（样本连同写着许可的 `plugin.toml`）暂存到 `target/ios/sound-packs`，`project.yml` 把它作为文件夹放进键盘扩展和键盘测试宿主，缺了 `default` 就让暂存失败。设置 App 自己不带，`KeySoundPackPolicy.bundledDirectory` 先找本 bundle 的 `sound-packs/`，再找内嵌的 `PlugIns/*.appex/sound-packs/`，与 App 读键盘扩展里的 `EngineResources` 和词书是同一个办法。旋律包和音乐包不打包。
 
-**键盘播放。** `KeyboardSoundPlayer` 在后台队列上经 `msime_client_key_sound_pack`（`state_root` 是 App Group 的共享状态目录，`sound_packs` 是上面的目录）取校验过的样本路径，每个样本建 3 只 `AVAudioPlayer` 并 `prepareToPlay`，按键时主线程只挑一只从头重放。音频会话设为 `.ambient`：与别的应用正在放的音乐混音、不打断它，静音开关打开时不响。键盘每次出现、每次重读共享偏好、在功能面板切换按键音时调 `synchronizeKeySoundPack`，同一个包不重新加载；内存警告时放掉播放器，下次出现再建。
+**键盘播放。** `KeyboardSoundPlayer` 在后台队列上经 `msime_client_key_sound_pack`（`state_root` 是 App Group 的共享状态目录，`sound_packs` 是上面的目录）取校验过的样本路径，每个样本建 3 只 `AVAudioPlayer` 并 `prepareToPlay`，按键时主线程只挑一只从头重放。音频会话设为 `.ambient`：与别的应用正在放的音乐混音、不打断它，静音开关打开时不响。键盘每次出现、每次重读共享偏好、在功能面板切换按键音时调 `synchronizeKeySoundPack`，同一个包不重新加载；收到 `mediaServicesWereResetNotification` 时释放并重建当前包，宿主应用打断音频会话导致 `play()` 失败时重设 `.ambient`、重新 `prepareToPlay()` 并重试一次；内存警告时调用 `trimVoicesForMemoryPressure()` 为每个样本保留 1 只播放器而非清空，避免自定义按键音静默退回系统按键声。
 
 **哪一下播什么**，由不碰音频的 `KeySoundPackPolicy` 决定，单元测试直接测它：
 

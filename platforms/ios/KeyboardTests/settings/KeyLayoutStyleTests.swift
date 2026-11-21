@@ -290,7 +290,7 @@ final class KeyLayoutStyleTests: XCTestCase {
       switch style {
       case .commaPeriod:
         XCTAssertNil(comma.cornerHint, style.rawValue)
-        XCTAssertNotNil(comma.menu, "the comma opens the quick punctuation menu")
+        XCTAssertNil(comma.menu, "长按常用标点已迁移为 KeyActionCalloutView，不再挂载系统菜单")
         XCTAssertFalse(try button("bottomPeriodKey", in: controller).isHidden)
       case .longSpace:
         XCTAssertEqual(comma.cornerHint, "。")
@@ -359,7 +359,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     let ids: [KeyboardPreviewToolbarItem: String] = [
       .emoji: "emojiShortcut", .phrases: "phrasesShortcut", .clipboard: "clipboardShortcut",
       .skin: "skinShortcut", .scheme: "schemeButton", .ai: "aiShortcut", .characterSet: "characterSetShortcut",
-      .fullwidth: "fullwidthShortcut", .punctuation: "punctuationShortcut",
+      .fullwidth: "fullwidthShortcut", .punctuation: "punctuationShortcut", .language: "languageShortcut",
     ]
     XCTAssertEqual(Set(ids.keys), Set(KeyboardPreviewToolbarItem.allCases))
     for hidden in [false, true] {
@@ -371,7 +371,8 @@ final class KeyLayoutStyleTests: XCTestCase {
         let label = "\(style.rawValue), hidden \(hidden)"
         let bar = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "keyboardShortcutBar" } as? UIStackView)
         let preview = KeyboardToolbarPreviewRow.items(TouchToolbarPreference.load(), phrases: TouchToolbarLocalPreference.phrases,
-                                                      scheme: TouchToolbarLocalPreference.scheme, hidden: hidden, keyLayout: layout)
+                                                      scheme: TouchToolbarLocalPreference.scheme,
+                                                      language: TouchToolbarLocalPreference.language, hidden: hidden, keyLayout: layout)
         XCTAssertEqual(bar.isHidden, preview == nil, label)
         if let preview {
           // 品牌键、收起键以及预览不画的回复和语音入口不比。
@@ -423,7 +424,8 @@ final class KeyLayoutStyleTests: XCTestCase {
             // ， 与手机底行一样跟随标点：中文标点时印 ，，长按仍是常用标点菜单。
             let comma = try button("quickPunctuationKey", in: controller)
             XCTAssertEqual(comma.configuration?.title, "，")
-            XCTAssertNotNil(comma.menu)
+            XCTAssertNil(comma.menu, "长按常用标点已迁移为 KeyActionCalloutView，不再挂载系统菜单")
+            XCTAssertTrue(comma.gestureRecognizers?.contains { $0 is UILongPressGestureRecognizer } == true)
           }
           // 数字层不跟样式：返回 |（🌐）| 0 | ⌫ 等宽（iOS 原生数字键盘的底排），左侧栏和右列隐藏。
           try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
@@ -1160,7 +1162,7 @@ final class KeyLayoutStyleTests: XCTestCase {
         let controller = keyboard()
         let label = "\(scheme.rawValue) \(style.rawValue)"
         let comma = try XCTUnwrap(try button("quickPunctuationKey", in: controller) as? KeyboardKeyButton)
-        XCTAssertNotNil(comma.menu, "long-press opens the quick punctuation menu: \(label)")
+        XCTAssertNil(comma.menu, "long-press uses KeyActionCalloutView instead of UIMenu: \(label)")
         if style == .longSpace {
           XCTAssertEqual(comma.cornerHint, "。", label)
           XCTAssertNotNil(comma.onCornerHint, label)
@@ -1186,7 +1188,8 @@ final class KeyLayoutStyleTests: XCTestCase {
     let controller = keyboard()
     let comma = try XCTUnwrap(try button("quickPunctuationKey", in: controller) as? KeyboardKeyButton)
     XCTAssertEqual(comma.configuration?.title, "☆")
-    XCTAssertEqual(comma.menu?.children.map(\.title), ["☆", "=", "！"])
+    XCTAssertNil(comma.menu, "长按常用标点已迁移为 KeyActionCalloutView，不再挂载系统菜单")
+    XCTAssertEqual(KeyHoldCalloutPolicy.quickPunctuationOptions(symbols: KeyboardLayoutPreference.quickPunctuationSymbols), ["☆", "=", "！"])
     XCTAssertEqual(comma.cornerHint, "。")
     XCTAssertNotNil(comma.onCornerHint)
     XCTAssertTrue(comma.swipesCornerHint, "the custom list keeps the swipe for the full stop")
