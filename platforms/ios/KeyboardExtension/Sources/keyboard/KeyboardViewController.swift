@@ -844,6 +844,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var soundEnabled: Bool { KeyboardFeedbackPreference.soundEnabled(in: feedbackDefaults) }
   private var hapticsEnabled: Bool { KeyboardFeedbackPreference.hapticsEnabled(in: feedbackDefaults) }
   private var hapticStrength: KeyboardHapticStrength { KeyboardFeedbackPreference.hapticStrength(in: feedbackDefaults) }
+  private let hapticsEngine = KeyboardHapticsEngine()
   private var feedbackStrength: KeyboardHapticStrength?
   private var feedbackGenerator: UIImpactFeedbackGenerator?
   private var keyFeedback: UIImpactFeedbackGenerator {
@@ -1250,8 +1251,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     closeKeyboardService()
     handwriting.deactivate()
     snapshotWorker.stop()
-    // 内存紧张时裁剪多余声道，保留自定义按键音不退回系统音。
+    // 内存紧张时裁剪多余声道，保留自定义按键音不退回系统音；同时停掉 CoreHaptics 释放缓存播放器。
     keySounds.trimVoicesForMemoryPressure()
+    hapticsEngine.stop()
     candidateGlossEpoch &+= 1
     candidateGlossRequestedGeneration = nil
     translations.clearCacheForMemoryPressure()
@@ -1473,6 +1475,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
     guard !isPresented else { return }
+    hapticsEngine.stop()
     releaseDictionarySession()
     endLockActivityIfReleased()
   }
@@ -1914,10 +1917,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       glideActive = true
       updateKeyHitSuppression()
       if hapticsEnabled {
-        if hapticStrength == .system {
-          keyFeedback.impactOccurred()
-        } else {
-          keyFeedback.impactOccurred(intensity: 0.45)
+        if !hapticsEngine.play(strength: hapticStrength, event: .glideStart) {
+          if hapticStrength == .system {
+            keyFeedback.impactOccurred()
+          } else {
+            keyFeedback.impactOccurred(intensity: 0.45)
+          }
         }
       }
       // 选了 GlideBeam 就趁起手到抬手这一两秒预热词典；未就绪的第一笔会回退水杉引擎。
@@ -11466,8 +11471,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     case .sample(let file): if !keySounds.play(file, gain: keySoundGain) { UIDevice.current.playInputClick() }
     }
     if hapticsEnabled {
-      hapticStrength.impact(keyFeedback)
-      keyFeedback.prepare()
+      if !hapticsEngine.play(strength: hapticStrength, event: .key(keyClass)) {
+        hapticStrength.impact(keyFeedback)
+        keyFeedback.prepare()
+      }
     }
   }
 }

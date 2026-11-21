@@ -143,7 +143,7 @@ final class KeyboardFormFactorTests: XCTestCase {
     XCTAssertEqual(phone.space.minY - phone.key.maxY, KeyboardLayoutPreference.rowSpacing, accuracy: 0.5)
     XCTAssertEqual(phone.key.height, phoneLetterKeyHeight, accuracy: 0.5)
     XCTAssertEqual(phone.space.height, phoneLetterKeyHeight, accuracy: 0.5)
-    XCTAssertEqual(phone.strip.minY, 2, accuracy: 0.5)
+    XCTAssertEqual(phone.strip.minY, KeyboardFormFactor.phone.padding.top, accuracy: 0.5)
     let phoneLargeScreen = KeyboardFormFactor.isLargeScreen(idiom: .phone, screenSize: UIScreen.main.bounds.size)
     let expectedSide = KeyboardFormFactor.phone.padding(landscape: false, largeScreen: phoneLargeScreen).leading
     XCTAssertEqual(phone.strip.minX, expectedSide, accuracy: 0.5)

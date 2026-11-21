@@ -185,6 +185,35 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
   }
 
   @MainActor
+  func testCoreHapticsEngineProfilesAndCooldown() {
+    // 跟随系统不走 CoreHaptics 脉冲表，交由原生 UIImpactFeedbackGenerator。
+    XCTAssertTrue(KeyboardHapticsEngine.pulses(for: .system, event: .key(.standard)).isEmpty)
+
+    // 轻/中/强三档普通键强度递增，强档使用双脉冲模拟机械段落。
+    let lightStd = KeyboardHapticsEngine.pulses(for: .light, event: .key(.standard))
+    let medStd = KeyboardHapticsEngine.pulses(for: .medium, event: .key(.standard))
+    let strongStd = KeyboardHapticsEngine.pulses(for: .strong, event: .key(.standard))
+    XCTAssertEqual(lightStd.count, 1)
+    XCTAssertEqual(medStd.count, 1)
+    XCTAssertEqual(strongStd.count, 2)
+    XCTAssertLessThan(lightStd[0].intensity, medStd[0].intensity)
+    XCTAssertLessThan(medStd[0].intensity, strongStd[0].intensity)
+
+    // 空格/回车比字母键更沉稳（更低 sharpness、更高 intensity）。
+    let medSpace = KeyboardHapticsEngine.pulses(for: .medium, event: .key(.space))
+    XCTAssertGreaterThan(medSpace[0].intensity, medStd[0].intensity)
+    XCTAssertLessThan(medSpace[0].sharpness, medStd[0].sharpness)
+
+    // 12ms 防抖冷却门控。
+    XCTAssertFalse(KeyboardHapticsEngine.allowsTrigger(now: 1.005, last: 1.000))
+    XCTAssertTrue(KeyboardHapticsEngine.allowsTrigger(now: 1.015, last: 1.000))
+
+    // 硬件不支持 CoreHaptics 时安全返回 false，交由调用方回退 UIImpactFeedbackGenerator。
+    let unsupported = KeyboardHapticsEngine(supportsCoreHaptics: false)
+    XCTAssertFalse(unsupported.play(strength: .medium, event: .key(.standard), now: 10.0))
+  }
+
+  @MainActor
   private func allSubviews(in view: UIView) -> [UIView] {
     [view] + view.subviews.flatMap { allSubviews(in: $0) }
   }

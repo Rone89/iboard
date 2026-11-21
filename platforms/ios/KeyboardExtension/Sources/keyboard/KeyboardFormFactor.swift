@@ -66,7 +66,7 @@ enum KeyboardFormFactor: Equatable {
     padding()
   }
 
-  /// 按当前屏幕方向和是否为大屏手机计算键盘内边距：大屏竖屏与横屏把手机左右边距从 6pt 收紧到 3pt。
+  /// 按当前屏幕方向和是否为大屏手机计算键盘内边距：手机上下保持 2pt / 4pt，使叠加系统 Liquid Glass 顶部圆角留白后总高与原生键盘一致；大屏竖屏与横屏把左右边距从 6pt 收紧到 3pt。
   func padding(landscape: Bool = false, largeScreen: Bool = false) -> NSDirectionalEdgeInsets {
     switch self {
     case .phone:
@@ -119,9 +119,10 @@ enum KeyboardFormFactor: Equatable {
       rows: rows, rowSpacing: rowSpacing)
     // 手机竖屏 26 键直接按分档键帽高度计算紧凑高度，不再加回 52pt 标准键帽多出的留白。
     let letterHeightCompensation: CGFloat = 0
-    return padding.top + topRow + (topRow > 0 ? topRowGap : 0)
+    let insets = padding(landscape: landscape, largeScreen: largeScreen)
+    return insets.top + topRow + (topRow > 0 ? topRowGap : 0)
       + keyBlock + letterHeightCompensation
-      + padding.bottom
+      + insets.bottom
   }
 
   /// Whether the third letter row carries the comma and full-stop keys, as the iPad system keyboard does.
