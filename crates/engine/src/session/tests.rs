@@ -1167,10 +1167,20 @@ fn a_pending_touch_reaches_only_the_next_shuangpin_letter() {
     assert!(request_touches(&session).is_empty());
     session.command(Command::Cancel);
 
-    // 全拼不收触点。
+    // 26 键全拼同样接收触点并按退格同步裁切，没有几何时不带触点。
     let mut quanpin = fixture.session_with(|_| {});
+    quanpin.set_key_touch(touch);
+    quanpin.character(b'n', false);
+    assert!(quanpin.input.engine.request().key_touches.is_empty());
+    quanpin.command(Command::Cancel);
+
     quanpin.set_key_geometry(Some(touch_geometry()));
     quanpin.set_key_touch(touch);
+    quanpin.character(b'n', false);
+    quanpin.character(b'i', false);
+    assert_eq!(quanpin.input.engine.request().key_touches, [touch, None]);
+    quanpin.command(Command::Backspace);
+    quanpin.command(Command::Backspace);
     quanpin.character(b'n', false);
     assert!(quanpin.input.engine.request().key_touches.is_empty());
 }

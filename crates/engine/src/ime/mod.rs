@@ -960,13 +960,15 @@ impl ImeSession {
         )
     }
 
-    /// 大写段按当时的触发方式解析，方案层要拿到和敲键时一致的设置（`configure_shuangpin_scheme`）。键位几何同样跟着方案走。
+    /// 大写段按当时的触发方式解析，方案层要拿到和敲键时一致的设置（`configure_shuangpin_scheme`）。键位几何同样同步给全拼与双拼方案。
     fn bind_shuangpin_scheme(&mut self) {
         let triggers = self.helpcode_uppercase_triggers();
         let geometry = self.key_geometry.clone();
         if let Some(shuangpin) = self.scheme.as_shuangpin_mut() {
             shuangpin.set_helpcode_uppercase_triggers(triggers);
             shuangpin.set_key_geometry(geometry);
+        } else if let Some(quanpin) = self.scheme.as_quanpin_mut() {
+            quanpin.set_key_geometry(geometry);
         }
     }
 
@@ -980,10 +982,12 @@ impl ImeSession {
         self.touch_tuning = tuning;
     }
 
-    /// 紧接着的那一次 `handle_key` 的触点；只有双拼方案收，其余方案没有触点可用。
+    /// 紧接着的那一次 `handle_key` 的触点；26 键双拼与 26 键全拼均可接收，其余方案忽略。
     pub fn set_pending_touch(&mut self, touch: Option<KeyTouch>) {
         if let Some(shuangpin) = self.scheme.as_shuangpin_mut() {
             shuangpin.set_pending_touch(touch);
+        } else if let Some(quanpin) = self.scheme.as_quanpin_mut() {
+            quanpin.set_pending_touch(touch);
         }
     }
 
@@ -1241,6 +1245,8 @@ impl ImeSession {
         }
         request.enable_quanpin_autocorrect_transposition = false;
         request.enable_quanpin_autocorrect_neighbor = false;
+        request.key_touches.clear();
+        request.key_geometry = None;
         QuanpinScheme::apply_literal_segmentation(request);
     }
 

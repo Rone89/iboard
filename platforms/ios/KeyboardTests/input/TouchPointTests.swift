@@ -41,12 +41,18 @@ final class TouchPointTests: XCTestCase {
     for key in ["a", "q", "z", ";"] {
       XCTAssertTrue(TouchPointPolicy.sendsTouch(character: key, shuangpinLetters: true, hasTouchDown: true, voiceOver: false), key)
     }
+    // 26 键全拼同样发送小写字母触点，但不带微软双拼专属的 `;`。
+    for key in ["a", "q", "z"] {
+      XCTAssertTrue(TouchPointPolicy.sendsTouch(character: key, shuangpinLetters: false, quanpinLetters: true, hasTouchDown: true, voiceOver: false), key)
+    }
+    XCTAssertFalse(TouchPointPolicy.sendsTouch(character: ";", shuangpinLetters: false, quanpinLetters: true, hasTouchDown: true, voiceOver: false))
     // 辅助码的大写、分词的 `'`、数字和标点照常走 msime_client_character。
     for key in ["A", "'", "1", ",", "", "ab"] {
       XCTAssertFalse(TouchPointPolicy.sendsTouch(character: key, shuangpinLetters: true, hasTouchDown: true, voiceOver: false), key)
+      XCTAssertFalse(TouchPointPolicy.sendsTouch(character: key, shuangpinLetters: false, quanpinLetters: true, hasTouchDown: true, voiceOver: false), key)
     }
     XCTAssertFalse(TouchPointPolicy.sendsTouch(character: "a", shuangpinLetters: false, hasTouchDown: true, voiceOver: false),
-                   "全拼、14/18 键、本地模式和英文不带落点")
+                   "14/18 键、本地模式和英文不带落点")
     XCTAssertFalse(TouchPointPolicy.sendsTouch(character: "a", shuangpinLetters: true, hasTouchDown: false, voiceOver: false),
                    "sendActions 这类激活没有按下点")
     XCTAssertFalse(TouchPointPolicy.sendsTouch(character: "a", shuangpinLetters: true, hasTouchDown: true, voiceOver: true),
@@ -575,7 +581,7 @@ final class TouchPointTests: XCTestCase {
     XCTAssertEqual(controller.touchCharacterCount, 5)
   }
 
-  /// 全拼、双拼 14 键、本地模式下字母键的按下点不进引擎，也不注册几何。
+  /// 26 键全拼现在同样注册键位几何并发送按键落点；双拼 14 键、本地模式下字母键的按下点不进引擎，也不注册几何。
   func testOtherKeyboardsNeverTakeTheTouchEntry() throws {
     let document = try XCTUnwrap(MetasequoiaInputSessionBridge.loadSharedPreferences())
     let previous = InputSchemePreference.scheme
@@ -589,8 +595,8 @@ final class TouchPointTests: XCTestCase {
 
     let quanpin = keyboard(.quanpin)
     for letter in "nihao" { try press(letter, in: quanpin) }
-    XCTAssertEqual(quanpin.touchCharacterCount, 0, "全拼")
-    XCTAssertEqual(quanpin.keyGeometryRegistration.id, 0)
+    XCTAssertEqual(quanpin.touchCharacterCount, 5, "26 键全拼启用空间触点纠错")
+    XCTAssertEqual(quanpin.keyGeometryRegistration.id, 1)
 
     let local = keyboard(.shuangpin)
     local.openLocalInputMode("U")

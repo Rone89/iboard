@@ -69,6 +69,12 @@ impl QuanpinEngine {
             0
         };
         if helpcode_length == 0 {
+            self.dictionary.set_key_touches(
+                &request.key_touches,
+                &request.raw_input,
+                request.key_geometry.as_ref(),
+                request.touch_tuning,
+            );
             return self.dictionary.query(
                 &request.raw_input,
                 &request.segmentation,
@@ -76,6 +82,9 @@ impl QuanpinEngine {
                 request.fuzzy_pinyin,
             );
         }
+
+        self.dictionary
+            .set_key_touches(&[], "", None, request.touch_tuning);
 
         let base = strip_active_helpcodes(&request.raw_input, &request.raw_input_with_cases);
         // An active helpcode follows complete pinyin, so the base always has a cut.

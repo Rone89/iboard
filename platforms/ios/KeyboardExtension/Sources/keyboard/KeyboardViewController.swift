@@ -181,6 +181,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var glideLivePreviewLastPoint: CGPoint?
   private var glideLivePreviewCanQuerySession = false
   private var glideUndoTracker = GlideUndoTracker()
+  private var englishTypingAssist = EnglishTypingAssistTracker()
   private let systemLexicon = SystemLexiconStore()
   private var visibleLexiconOverrides: [Int: String] = [:]
   private var clipboardPanel: KeyboardClipboardView?
@@ -1349,6 +1350,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       englishCorrectionRejectedPrefix = ""
       clearUndoDeleteShortcut()
       glideUndoTracker.clearAll()
+      englishTypingAssist.clearAll()
     }
     replyModel.invalidateContext()
     handwriting.clear()
@@ -1364,6 +1366,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     if ownEditEcho.isEcho(at: ProcessInfo.processInfo.systemUptime) { return }
     clearUndoDeleteShortcut()
     glideUndoTracker.clearAll()
+    englishTypingAssist.clearAll()
     // 会话在键盘出现前或收起后没有组字可结束；此时不能问已销毁的句柄，否则宿主的焦点回调会把「尚未准备完成」画出来。
     guard !session.dictionarySessionSuspended else { return }
     session.flushPendingCharacters()
@@ -1481,6 +1484,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     clearUndoDeleteShortcut()
     stopGlideLivePreview()
     glideUndoTracker.clearAll()
+    englishTypingAssist.clearAll()
     diagnosticDismissTimer?.invalidate()
     diagnosticDismissTimer = nil
     keyPressFlushTimer?.invalidate()
@@ -2203,6 +2207,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   /// 字母键此刻是不是 26 键双拼：中文模式、双拼方案、不画 14/18 键网格、不在本地模式。
   private var typesShuangpinLetters: Bool { isChineseMode && usesShuangpin && !usesLetterGrid && !isInLocalMode }
+
+  /// 字母键此刻是不是 26 键全拼：中文模式、全拼方案、不画 14/18 键网格、不在本地模式。
+  private var typesQuanpinLetters: Bool { isChineseMode && inputScheme == .quanpin && !usesLetterGrid && !isInLocalMode }
 
   /// 已注册给会话的键位几何（#10018）。代次每注册一次加一，测试据此数注册了几次。
   private(set) var keyGeometryRegistration = TouchPointPolicy.Registration()
@@ -4977,6 +4984,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// `touchDown` 是这一键按下时手指在键区里的位置（`KeyboardKeyButton.touchDownLocation`），只有 26 键的字母键和 `;` 的真实触摸才有；它只用于 26 键双拼的纠错计价（`TouchPointPolicy.sendsTouch`），其余情况照常输入这个字符。
   private func handleCharacter(_ character: String, touchDown: CGPoint? = nil) {
     glideUndoTracker.clearAll()
+    englishTypingAssist.clearAll()
     playInputClick()
     if isChineseMode {
       synchronizeInputSchemePreference()
@@ -5026,10 +5034,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         }
         return
       }
-      // 26 键双拼的字母和 `;` 带上按下点，引擎按落点给按错邻键的纠错计价（#10018）。拿不到几何时退回不带落点，与 `sendActions` 和读屏的激活一样。几何要变时 `registeredKeyGeometryID` 先同步注册，排在此前已投递的按键之后、这一键之前。
+      // 26 键双拼与 26 键全拼的字母（双拼含 `;`）带上按下点，引擎按落点给按错邻键的纠错计价。拿不到几何时退回不带落点，与 `sendActions` 和读屏的激活一样。几何要变时 `registeredKeyGeometryID` 先同步注册，排在此前已投递的按键之后、这一键之前。
       var touch: MetasequoiaInputSessionBridge.TouchPoint?
       if let touchDown,
-         TouchPointPolicy.sendsTouch(character: character, shuangpinLetters: typesShuangpinLetters, hasTouchDown: true,
+         TouchPointPolicy.sendsTouch(character: character, shuangpinLetters: typesShuangpinLetters,
+                                     quanpinLetters: typesQuanpinLetters, hasTouchDown: true,
                                      voiceOver: isVoiceOverRunning()),
          let geometryID = registeredKeyGeometryID() {
         touch = .init(geometryID: geometryID, x: Float(touchDown.x), y: Float(touchDown.y))
@@ -5123,6 +5132,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             prefix == englishWordBeforeCursor else { return }
       englishSuggestionCorrected = suggestions.corrected
       var mergedEnglish = suggestions.items
+      if !englishSuggestionCorrected, mergedEnglish == [prefix],
+         let contraction = EnglishTypingAssistPolicy.contractionFallback(for: prefix) {
+        englishSuggestionCorrected = true
+        mergedEnglish = [prefix, contraction]
+      }
       let lexiconMatches = systemLexicon.matches(forInput: prefix)
       if !lexiconMatches.isEmpty {
         let insertAt = mergedEnglish.first == prefix ? 1 : 0
@@ -5154,7 +5168,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       && englishCorrectionRejectedDocument == KeyboardHostContext.documentIdentifier(for: textDocumentProxy)
     let items = rejected ? [typed] : session.englishCorrections(forPrefix: typed)
     let lexiconMatch = boundary == " " ? systemLexicon.matches(forInput: typed).first : nil
-    let candidate = lexiconMatch ?? (items.first == typed && items.count == 2 ? items[1] : typed)
+    let engineCandidate = items.first == typed && items.count == 2 ? items[1] : nil
+    let contractionCandidate = (!rejected && engineCandidate == nil)
+      ? EnglishTypingAssistPolicy.contractionFallback(for: typed) : nil
+    let candidate = lexiconMatch ?? engineCandidate ?? contractionCandidate ?? typed
     guard typed == englishWordBeforeCursor else { return false }
     let replacement = EnglishSuggestionPolicy.replacement(
       typed: typed, candidate: candidate, startedCapitalized: typed.first?.isUppercase ?? false)
@@ -5255,6 +5272,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     if !isChineseMode {
       if session.sharedPreferences?["punctuation_lock"] as? String != "chinese",
          commitEnglishBoundary(symbol) { return }
+      if englishCorrectionsEnabled,
+         session.sharedPreferences?["punctuation_lock"] as? String != "chinese",
+         englishTypingAssist.consumeAutoSpacePullback(
+           for: symbol,
+           beforeCursor: textDocumentProxy.documentContextBeforeInput,
+           document: KeyboardHostContext.documentIdentifier(for: textDocumentProxy)
+         ) {
+        deleteOwnBackward()
+        insertDirectText(symbol)
+        refreshEnglishSuggestions()
+        return
+      }
       // 标点锁定为中文 keeps Chinese marks in English mode too; the shared route decides, as it does in Chinese mode.
       if session.sharedPreferences?["punctuation_lock"] as? String == "chinese",
          let punctuation = Self.lockedEnglishPunctuationInput(
@@ -8404,6 +8433,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // Deleting document text may take the opening half of a pair with it; a backspace inside a spelling only edits the spelling.
     if !hasComposition { pairedPunctuation.clear() }
     if !isChineseMode {
+      let document = KeyboardHostContext.documentIdentifier(for: textDocumentProxy)
+      if englishTypingAssist.consumeDoubleSpacePeriodUndo(
+        beforeCursor: textDocumentProxy.documentContextBeforeInput,
+        document: document
+      ) {
+        deleteOwnBackward()
+        deleteOwnBackward()
+        insertOwnText(" ")
+        updateAutomaticCapitalization()
+        refreshEnglishSuggestions()
+        return
+      }
       deleteOwnBackward()
       refreshEnglishSuggestions()
       return
@@ -8455,6 +8496,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   @objc private func repeatBackspace() {
     glideUndoTracker.clearAll()
+    englishTypingAssist.clearAll()
     backspaceRepeatSteps += 1
     // 手写板上按住 ⌫ 一笔一笔撤回笔迹，笔迹撤完这次按住就结束，不会接着删文档里已经上屏的文字；要删文字得再按一次。
     if !handwriting.isHidden && handwriting.hasInk {
@@ -8557,6 +8599,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func performBackspaceSwipeDeleteStep() {
     glideUndoTracker.clearAll()
+    englishTypingAssist.clearAll()
     session.flushPendingCharacters()
     flushDeferredInputSnapshot()
     if hasComposition {
@@ -8728,6 +8771,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard offset != 0 else { return }
     clearUndoDeleteShortcut()
     glideUndoTracker.clearAll()
+    englishTypingAssist.clearAll()
     guard let document = KeyboardHostContext.documentIdentifier(for: textDocumentProxy) else { return }
     if hasComposition { render(session.finishComposition()) }
     guard KeyboardHostContext.documentIdentifier(for: textDocumentProxy) == document else { return }
@@ -8834,10 +8878,27 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     clearSmartPunctuationArming()
     if !isChineseMode {
+      let document = KeyboardHostContext.documentIdentifier(for: textDocumentProxy)
+      let now = ProcessInfo.processInfo.systemUptime
+      if englishCorrectionsEnabled,
+         englishTypingAssist.shouldTriggerDoubleSpacePeriod(
+           now: now,
+           beforeCursor: textDocumentProxy.documentContextBeforeInput,
+           document: document
+         ) {
+        deleteOwnBackward()
+        insertOwnText(". ")
+        englishTypingAssist.recordDoubleSpacePeriodApplied(document: document)
+        updateAutomaticCapitalization()
+        refreshEnglishSuggestions()
+        return
+      }
       if commitEnglishBoundary(" ") {
+        englishTypingAssist.recordSingleSpace(now: now, document: document, autoInserted: true)
         return
       }
       insertDirectText(" ")
+      englishTypingAssist.recordSingleSpace(now: now, document: document, autoInserted: false)
       refreshEnglishSuggestions()
       return
     }
@@ -8932,6 +8993,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                              cursorSuffix: String? = nil, continuesComposition: Bool = false) {
     clearUndoDeleteShortcut()
     glideUndoTracker.clearAll()
+    englishTypingAssist.clearAll()
     let cursor = cursorSuffix.flatMap { suffix -> Int? in
       guard !suffix.isEmpty, text.utf16.suffix(suffix.utf16.count).elementsEqual(suffix.utf16) else { return nil }
       return text.utf16.count - suffix.utf16.count

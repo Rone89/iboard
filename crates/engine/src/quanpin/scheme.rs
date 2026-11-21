@@ -1,8 +1,11 @@
 //! Quanpin key handling and request building (`R/schemes/quanpin_scheme.cpp`, quanpin.md §3.5).
 
+use std::sync::Arc;
+
 use crate::pinyin::active_helpcode::{detect_active_helpcode_length, strip_active_helpcodes};
 use crate::pinyin::segment::{cut_pinyin_by_mode, join_segments, CutMode};
 use crate::shuangpin::query::{apply_segmentation_cases_into, remove_manual_delimiters};
+use crate::touch::{KeyGeometry, KeyTouch};
 use crate::types::{QueryRequest, SchemeKey, SchemeType};
 
 fn replace_string(target: &mut String, source: String) {
@@ -16,6 +19,10 @@ fn replace_string(target: &mut String, source: String) {
 #[derive(Debug, Clone, Default)]
 pub struct QuanpinScheme {
     raw: String,
+    /// 与 `raw` 逐字节对齐的触点：仅 26 键小写字母携带，没有触点时保持为空，桌面端零额外分配。
+    touches: Vec<Option<KeyTouch>>,
+    pending_touch: Option<KeyTouch>,
+    key_geometry: Option<Arc<KeyGeometry>>,
 }
 
 impl QuanpinScheme {
@@ -23,32 +30,68 @@ impl QuanpinScheme {
         Self::default()
     }
 
-    pub fn reset(&mut self) {
-        self.raw.clear();
+    /// 宿主注册或清除的键位几何；布局或代次变化后清掉旧触点，保留已有按键串。
+    pub fn set_key_geometry(&mut self, geometry: Option<Arc<KeyGeometry>>) {
+        if self.key_geometry != geometry {
+            self.touches.clear();
+            self.pending_touch = None;
+        }
+        self.key_geometry = geometry;
     }
 
-    /// Letters keep their case; `'` is appended unless the last character already is one; Backspace pops; Escape and Return reset.
+    /// 下一次 `handle_key` 的触点，只对紧接着的那一键有效。
+    pub fn set_pending_touch(&mut self, touch: Option<KeyTouch>) {
+        self.pending_touch = touch;
+    }
+
+    fn push_touch(&mut self, touch: Option<KeyTouch>) {
+        if self.touches.is_empty() {
+            if touch.is_none() {
+                return;
+            }
+            self.touches.resize(self.raw.len() - 1, None);
+        }
+        self.touches.push(touch);
+        debug_assert_eq!(self.touches.len(), self.raw.len());
+    }
+
+    pub fn reset(&mut self) {
+        self.raw.clear();
+        self.touches.clear();
+        self.pending_touch = None;
+    }
+
+    /// 字母保留大小写；`'` 在末尾尚无分隔符时追加；退格弹出末字节并同步截断触点。
     pub fn handle_key(&mut self, key: SchemeKey) -> bool {
-        match key {
+        let touch = self.pending_touch.take();
+        let pushed = match key {
             SchemeKey::Letter(letter) if letter.is_ascii_alphabetic() => {
                 self.raw.push(char::from(letter));
-                true
+                touch.filter(|_| letter.is_ascii_lowercase())
             }
             SchemeKey::Apostrophe => {
                 if !self.raw.ends_with('\'') {
                     self.raw.push('\'');
-                    true
+                    None
                 } else {
-                    false
+                    return false;
                 }
             }
-            SchemeKey::Backspace => self.raw.pop().is_some(),
+            SchemeKey::Backspace => {
+                if self.raw.pop().is_none() {
+                    return false;
+                }
+                self.touches.truncate(self.raw.len());
+                return true;
+            }
             SchemeKey::Letter(_)
             | SchemeKey::Semicolon
             | SchemeKey::Minus
             | SchemeKey::Symbol(_)
-            | SchemeKey::Requery => false,
-        }
+            | SchemeKey::Requery => return false,
+        };
+        self.push_touch(pushed);
+        true
     }
 
     /// The correction-mode request (QS:142-155).
@@ -58,9 +101,22 @@ impl QuanpinScheme {
         request
     }
 
-    /// 将全拼请求写入已有存储，避免逐键刷新重复分配按键和切分字符串。
+    /// 将全拼请求写入已有存储，避免逐键刷新重复分配按键和切分字符串；有触点时同步附带键位几何。
     pub fn build_request_into(&self, request: &mut QueryRequest) {
         Self::build_request_from_raw_into(&self.raw, &self.raw, request);
+        request.key_touches.clear();
+        request.key_geometry = None;
+        let Some(geometry) = &self.key_geometry else {
+            return;
+        };
+        if request.valid
+            && self.touches.iter().any(Option::is_some)
+            && request.raw_input.len() == self.touches.len()
+            && !self.raw.contains('\'')
+        {
+            request.key_touches.extend_from_slice(&self.touches);
+            request.key_geometry = Some(Arc::clone(geometry));
+        }
     }
 
     /// 从原文直接写入查询请求，光标前缀查询不必创建临时方案。
@@ -90,7 +146,7 @@ impl QuanpinScheme {
         self.raw.clone()
     }
 
-    /// Host editing replaces the composition; `raw_with_cases` wins when non-empty.
+    /// 宿主替换组字内容时清掉旧触点，`raw_with_cases` 非空时优先。
     pub fn set_raw_input(&mut self, raw: &str, raw_with_cases: &str) {
         let source = if raw_with_cases.is_empty() {
             raw
@@ -100,6 +156,8 @@ impl QuanpinScheme {
         self.raw.clear();
         self.raw.reserve(source.len());
         self.raw.push_str(source);
+        self.touches.clear();
+        self.pending_touch = None;
     }
 
     /// Fill a request's segmentation fields from its raw input with the given cut (QS:82-139): active helpcodes stripped, cases re-applied, trailing `'` and helpcode letters re-appended.

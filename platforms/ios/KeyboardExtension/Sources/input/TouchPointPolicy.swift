@@ -18,13 +18,21 @@ enum TouchPointPolicy {
   private static let touchKeys = Set("abcdefghijklmnopqrstuvwxyz;")
 
   /// 这一键是否带着按下点走 `msime_client_touch_character`。要同时满足：
-  /// - 字母键显示的是 26 键双拼（`shuangpinLetters`：中文模式、双拼方案、不是 14/18 键网格、不在本地模式）；
-  /// - 这一键是小写字母或 `;`（辅助码的大写、`'` 和其他键照常走 `msime_client_character`）；
+  /// - 字母键显示的是 26 键双拼（`shuangpinLetters`）或 26 键全拼（`quanpinLetters`），非 14/18 键网格、非本地模式；
+  /// - 这一键是小写字母（双拼还包含微软双拼的 `;`；辅助码的大写、`'` 和其他键照常走 `msime_client_character`）；
   /// - 按键记下了这一次触摸的按下点（`sendActions` 和程序化的激活没有）；
   /// - 没开 VoiceOver：读屏的双击落在键的激活点，不是手指的落点。
-  static func sendsTouch(character: String, shuangpinLetters: Bool, hasTouchDown: Bool, voiceOver: Bool) -> Bool {
-    guard shuangpinLetters, hasTouchDown, !voiceOver, character.count == 1, let key = character.first else { return false }
-    return touchKeys.contains(key)
+  static func sendsTouch(
+    character: String,
+    shuangpinLetters: Bool,
+    quanpinLetters: Bool = false,
+    hasTouchDown: Bool,
+    voiceOver: Bool
+  ) -> Bool {
+    guard hasTouchDown, !voiceOver, character.count == 1, let key = character.first else { return false }
+    if shuangpinLetters { return touchKeys.contains(key) }
+    if quanpinLetters { return key != ";" && touchKeys.contains(key) }
+    return false
   }
 
   /// `msime_client_set_key_geometry` 的请求：`{"id":u32,"keys":[[cx,cy,w,h] × 26，按 a..z],"semicolon":[cx,cy,w,h] 或 null,"duplicates":[]}`，坐标保留一位小数。`id` 为 0（那是清除）、不是 26 个字母键、某个字母键是空矩形或有非有限值时为 nil；`;` 键是空矩形或有非有限值时写 null，这时按 `;` 不带落点，字母照常。

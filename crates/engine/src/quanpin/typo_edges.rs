@@ -1,11 +1,20 @@
 //! Typo edges for the lattice's typo sentence (quanpin.md §10.5, QD:1056-1182): legal-to-legal syllable swaps, weak positions first, priced by kind and discounted by how often the user accepted that typo.
 
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 use crate::cache::FifoCache;
 use crate::dictionary::pinyin::PinyinDatabase;
 use crate::dictionary::DictRow;
 use crate::lattice::{SentencePath, TypoEdge};
-use crate::pinyin::typos::{autocorrect_bit, base_cost, discounted, syllable_typos, SyllableTypo};
+use crate::pinyin::syllables::{intact_pinyin_list, normalized_syllable};
+use crate::pinyin::typos::{
+    autocorrect_bit, base_cost, discounted, syllable_typos, SyllableTypo, SyllableTypoKind,
+    NEIGHBOR_COST,
+};
 use crate::text::count_utf8_chars;
+use crate::touch::{KeyGeometry, KeyTouch, TouchTuning};
+use crate::types::autocorrect_type;
 use crate::user_dictionary::typo_profile::PersonalTypoProfile;
 
 /// Typo edges are looked up for at most this many variant keys per query, most of them cache hits while typing on.
@@ -239,7 +248,170 @@ pub(crate) struct PricedTypo<'a> {
     pub penalty: f64,
 }
 
-/// 双拼带触点时的规划与查词。`variants_at(i)` 给出第 i 个音节已经按纠错开关筛过、按罚分计过价的变体。与 [`collect_span_typo_edges`] 不同，所有位置的所有变体按罚分全局升序排，罚分相同时弱位置优先，所以 96 个键的预算不会被前一两个位置的便宜类型吃光；跨度、去重、查词和缓存相同。
+/// 静态合法全拼音节查表，返回 `'static` 规范音节切片以便零分配构造 `PricedTypo<'static>`。
+fn canonical_intact_syllable(candidate: &str) -> Option<&'static str> {
+    static TABLE: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    let table = TABLE.get_or_init(|| {
+        intact_pinyin_list()
+            .iter()
+            .map(|&syllable| (syllable, syllable))
+            .collect()
+    });
+    let normalized = normalized_syllable(candidate);
+    table.get(normalized.as_str()).copied()
+}
+
+/// 26 键全拼带触点时，按每个按键在 `KeyGeometry` 上的真实落点给单音节变体计价：
+/// - 邻键替换若对应位置带有触点，按 `KeyGeometry::penalty` 计算各向异性空间罚分（手指偏靠目标邻键时罚分从 20 降至 ~4–8，按在键心仍保持 ~20）；
+/// - 同时补入真实键位下罚分不超过 `tuning.cut` 的斜邻键合法音节；
+/// - 个人纠错接受次数按原有折扣曲线扣减，并钳位到 `tuning.min_penalty` 以上。
+pub(crate) fn priced_quanpin_variants(
+    segments: &[String],
+    touches: &[Option<KeyTouch>],
+    geometry: &KeyGeometry,
+    tuning: &TouchTuning,
+    profile: &PersonalTypoProfile,
+    autocorrect_types: u32,
+) -> Vec<Vec<PricedTypo<'static>>> {
+    let mut offset = 0usize;
+    let mut all_variants = Vec::with_capacity(segments.len());
+    let mut edited = Vec::with_capacity(8);
+
+    for segment in segments {
+        let seg_len = segment.len();
+        let seg_touches = if offset + seg_len <= touches.len() {
+            &touches[offset..offset + seg_len]
+        } else {
+            &[]
+        };
+        offset += seg_len;
+
+        let typed_bytes = segment.as_bytes();
+        let mut variants: Vec<PricedTypo<'static>> = Vec::new();
+        let mut upsert = |syllable: &'static str, penalty: f64| {
+            if let Some(existing) = variants.iter_mut().find(|item| item.syllable == syllable) {
+                if penalty < existing.penalty {
+                    existing.penalty = penalty;
+                }
+            } else {
+                variants.push(PricedTypo { syllable, penalty });
+            }
+        };
+
+        for typo in syllable_typos(segment) {
+            if autocorrect_types & autocorrect_bit(typo.kind) == 0 {
+                continue;
+            }
+            let accepted = profile.accepted(segment, &typo.syllable);
+            let penalty = if typo.kind == SyllableTypoKind::Neighbor
+                && typo.syllable.len() == seg_len
+                && seg_touches.len() == seg_len
+            {
+                let intended_bytes = typo.syllable.as_bytes();
+                let mut diff_pos = None;
+                let mut diff_count = 0usize;
+                for idx in 0..seg_len {
+                    if typed_bytes[idx] != intended_bytes[idx] {
+                        diff_pos = Some(idx);
+                        diff_count += 1;
+                    }
+                }
+                if diff_count == 1 {
+                    let pos = diff_pos.unwrap();
+                    if let Some(touch) = seg_touches[pos] {
+                        let raw_penalty = if geometry.adjacent(
+                            typed_bytes[pos],
+                            touch,
+                            intended_bytes[pos],
+                        ) {
+                            geometry
+                                .penalty(typed_bytes[pos], touch, intended_bytes[pos], tuning)
+                                .unwrap_or(NEIGHBOR_COST)
+                        } else {
+                            tuning.max_penalty
+                        };
+                        let discount = NEIGHBOR_COST - discounted(NEIGHBOR_COST, accepted);
+                        (raw_penalty - discount).max(tuning.min_penalty.min(raw_penalty))
+                    } else {
+                        discounted(NEIGHBOR_COST, accepted)
+                    }
+                } else {
+                    discounted(NEIGHBOR_COST, accepted)
+                }
+            } else {
+                discounted(base_cost(typo.kind), accepted)
+            };
+            upsert(typo.syllable.as_str(), penalty);
+        }
+
+        // 补入平面邻键表之外但在当前真实布局上距离够近（<= tuning.cut）的合法音节。
+        if autocorrect_types & autocorrect_type::NEIGHBOR != 0
+            && seg_len >= 2
+            && seg_touches.len() == seg_len
+        {
+            for pos in 0..seg_len {
+                let Some(touch) = seg_touches[pos] else {
+                    continue;
+                };
+                for candidate in b'a'..=b'z' {
+                    if candidate == typed_bytes[pos] {
+                        continue;
+                    }
+                    let Some(raw_penalty) =
+                        geometry.penalty(typed_bytes[pos], touch, candidate, tuning)
+                    else {
+                        continue;
+                    };
+                    if raw_penalty > tuning.cut {
+                        continue;
+                    }
+                    edited.clear();
+                    edited.extend_from_slice(typed_bytes);
+                    edited[pos] = candidate;
+                    let Ok(candidate_str) = std::str::from_utf8(&edited) else {
+                        continue;
+                    };
+                    let Some(canonical) = canonical_intact_syllable(candidate_str) else {
+                        continue;
+                    };
+                    if canonical == segment.as_str() {
+                        continue;
+                    }
+                    let accepted = profile.accepted(segment, canonical);
+                    let discount = NEIGHBOR_COST - discounted(NEIGHBOR_COST, accepted);
+                    let penalty =
+                        (raw_penalty - discount).max(tuning.min_penalty.min(raw_penalty));
+                    upsert(canonical, penalty);
+                }
+            }
+        }
+
+        variants.sort_by(|left, right| {
+            left.penalty
+                .total_cmp(&right.penalty)
+                .then_with(|| left.syllable.cmp(right.syllable))
+        });
+        all_variants.push(variants);
+    }
+
+    all_variants
+}
+
+/// 26 键全拼带触点时的纠错边规划与查词：按触点罚分全局排序，优先查询触点最偏靠目标键的音节变体。
+pub(crate) fn collect_priced_quanpin_typo_edges(
+    database: &PinyinDatabase,
+    span_cache: &mut FifoCache<String, Vec<DictRow>>,
+    variants: &[Vec<PricedTypo<'static>>],
+    segments: &[String],
+    literal_best: &SentencePath,
+) -> Vec<TypoEdge> {
+    debug_assert_eq!(variants.len(), segments.len());
+    collect_priced_span_typo_edges(database, span_cache, segments, literal_best, |position| {
+        variants[position].as_slice()
+    })
+}
+
+/// 全拼和双拼带触点时的规划与查词。`variants_at(i)` 给出第 i 个音节已经按纠错开关筛过、按罚分计过价的变体。与 [`collect_span_typo_edges`] 不同，所有位置的所有变体按罚分全局升序排，罚分相同时弱位置优先，所以 96 个键的预算不会被前一两个位置的便宜类型吃光；跨度、去重、查词和缓存相同。
 pub(crate) fn collect_priced_span_typo_edges<'t>(
     database: &PinyinDatabase,
     span_cache: &mut FifoCache<String, Vec<DictRow>>,
@@ -555,5 +727,51 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn priced_quanpin_variants_lower_penalty_when_touch_leans_toward_neighbor() {
+        let rows: [&[u8]; 3] = [b"qwertyuiop", b"asdfghjkl", b"zxcvbnm"];
+        let mut keys = [[0.0f32; 4]; 26];
+        for (r, row) in rows.iter().enumerate() {
+            let indent = match r {
+                0 => 0.0,
+                1 => 0.5,
+                _ => 1.5,
+            };
+            for (c, &byte) in row.iter().enumerate() {
+                keys[(byte - b'a') as usize] = [(c as f32 + indent) * 36.0, r as f32 * 48.0, 30.0, 40.0];
+            }
+        }
+        let geometry = KeyGeometry::new(1, &keys, None, &[]).unwrap();
+        let tuning = TouchTuning::default();
+        let dir = tempfile::tempdir().unwrap();
+        let profile = PersonalTypoProfile::shared(&dir.path().join("journal.db"));
+        let segments = vec!["ni".to_owned(), "gao".to_owned()];
+
+        // 按在 g 靠右边缘（偏向 h）：`gao -> hao` 空间罚分应明显低于键心（~20）且排在反方向邻键 `fao` 前面。
+        let lean_right = geometry.touch(b'g', keys[(b'g' - b'a') as usize][0] + 13.0, keys[(b'g' - b'a') as usize][1]);
+        let center = geometry.touch(b'g', keys[(b'g' - b'a') as usize][0], keys[(b'g' - b'a') as usize][1]);
+        let leaned = priced_quanpin_variants(
+            &segments,
+            &[None, None, lean_right, None, None],
+            &geometry,
+            &tuning,
+            &profile,
+            autocorrect_type::NEIGHBOR | autocorrect_type::TRANSPOSITION,
+        );
+        let centered = priced_quanpin_variants(
+            &segments,
+            &[None, None, center, None, None],
+            &geometry,
+            &tuning,
+            &profile,
+            autocorrect_type::NEIGHBOR | autocorrect_type::TRANSPOSITION,
+        );
+        let hao_leaned = leaned[1].iter().find(|v| v.syllable == "hao").unwrap().penalty;
+        let hao_centered = centered[1].iter().find(|v| v.syllable == "hao").unwrap().penalty;
+        assert!(hao_leaned < 14.0, "偏靠 h 的落点罚分应显著下降，实际 {hao_leaned}");
+        assert!(hao_centered > 20.0, "按在键心的落点罚分应高于桌面基线，实际 {hao_centered}");
+        assert!(hao_leaned + 10.0 < hao_centered);
     }
 }

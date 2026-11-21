@@ -61,7 +61,10 @@ use super::series::{
     AUTOCORRECT_CUT_KBEST, LONGER_PHRASE_EXTRA_SYLLABLES, LONGER_PHRASE_LIMIT,
     MAX_SYLLABLES_FOR_MULTIPLE_SEGMENTATIONS,
 };
-use super::typo_edges::collect_typo_edges;
+use crate::touch::{KeyGeometry, KeyTouch, TouchTuning};
+use super::typo_edges::{
+    collect_priced_quanpin_typo_edges, collect_typo_edges, priced_quanpin_variants,
+};
 
 #[cfg(test)]
 mod marking_buffer_tests;
@@ -277,6 +280,12 @@ pub struct QuanpinDictionary {
     /// Every non-primary correction cut, joined; marking compares against them on every query, cached or not.
     alternative_segmentations: Vec<String>,
     current_autocorrect_types: u32,
+    /// 当前 26 键全拼请求携带的按键触点与键位几何；桌面端恒为空，零额外分配。
+    key_touches: Vec<Option<KeyTouch>>,
+    touch_input: String,
+    key_geometry: Option<Arc<KeyGeometry>>,
+    touch_tuning: TouchTuning,
+    touch_signature: Option<String>,
 }
 
 impl QuanpinDictionary {
@@ -336,6 +345,11 @@ impl QuanpinDictionary {
             pinyin_segmentation: String::new(),
             alternative_segmentations: Vec::new(),
             current_autocorrect_types: 0,
+            key_touches: Vec::new(),
+            touch_input: String::new(),
+            key_geometry: None,
+            touch_tuning: TouchTuning::default(),
+            touch_signature: None,
         };
         dictionary.reset_cache_if_database_changed();
         dictionary
@@ -865,14 +879,50 @@ impl QuanpinDictionary {
         }
     }
 
+    /// 绑定本次全拼请求的触点、原文与键位几何；无触点时直接清空，桌面查询零分配、缓存键逐字节不变。
+    pub fn set_key_touches(
+        &mut self,
+        touches: &[Option<KeyTouch>],
+        input: &str,
+        geometry: Option<&Arc<KeyGeometry>>,
+        tuning: TouchTuning,
+    ) {
+        if self.touch_tuning != tuning {
+            self.touch_tuning = tuning;
+            self.series_cache.clear();
+            self.sentence_decode_cache.clear();
+        }
+        self.key_touches.clear();
+        self.touch_input.clear();
+        self.key_geometry = None;
+        self.touch_signature = None;
+        let Some(geometry) = geometry else {
+            return;
+        };
+        if touches.is_empty()
+            || touches.len() != input.len()
+            || !touches.iter().any(Option::is_some)
+        {
+            return;
+        }
+        self.key_touches.extend_from_slice(touches);
+        self.touch_input.push_str(input);
+        self.key_geometry = Some(Arc::clone(geometry));
+        self.touch_signature = Some(build_quanpin_touch_signature(touches, geometry));
+    }
+
     /// The series cache slot of a resolution's key (overlays.md §1.6.2). The association switches decide which sentence rows a list carries, so they are always part of the slot. The reference bypassed the cache while a neural model ran, because its scores came from an asynchronous worker; scoring here is synchronous, so a reranked list is cached under the trimmed context it was scored with and a commit moves the next query to a fresh slot instead of clearing every list.
     fn series_slot(&self, cache_key: &str) -> String {
-        series_slot_key(
+        let mut slot = series_slot_key(
             cache_key,
             &self.sentence_association,
             !self.rerankers.is_empty() || self.sentence_scorer.0.is_some(),
             &self.rescoring_context,
-        )
+        );
+        if let Some(signature) = &self.touch_signature {
+            slot.push_str(signature);
+        }
+        slot
     }
 
     /// Clears everything except the resolution memo (QD:1400-1407).
@@ -1426,8 +1476,40 @@ impl QuanpinDictionary {
         let database = &self.database;
         let span_cache = &mut self.typo_span_cache;
         let profile = &*self.typo_profile;
-        let mut typo_edges = |literal_best: &SentencePath| {
-            collect_typo_edges(database, span_cache, profile, segments, literal_best, types)
+        let segment_bytes: usize = segments.iter().map(String::len).sum();
+        let touched = if !self.key_touches.is_empty()
+            && raw == self.touch_input
+            && segment_bytes == self.key_touches.len()
+        {
+            self.key_geometry
+                .as_deref()
+                .map(|geometry| (self.key_touches.as_slice(), geometry))
+        } else {
+            None
+        };
+        let touch_tuning = self.touch_tuning;
+        let mut priced_variants = None;
+        let mut typo_edges = |literal_best: &SentencePath| match touched {
+            Some((touches, geometry)) => {
+                let variants = priced_variants.get_or_insert_with(|| {
+                    priced_quanpin_variants(
+                        segments,
+                        touches,
+                        geometry,
+                        &touch_tuning,
+                        profile,
+                        types,
+                    )
+                });
+                collect_priced_quanpin_typo_edges(
+                    database,
+                    span_cache,
+                    variants,
+                    segments,
+                    literal_best,
+                )
+            }
+            None => collect_typo_edges(database, span_cache, profile, segments, literal_best, types),
         };
         let typo_source: Option<&mut TypoEdgeSource<'_>> = if typo_eligible {
             Some(&mut typo_edges)
@@ -1436,13 +1518,18 @@ impl QuanpinDictionary {
         };
         // 模型已按需重载，此刻的版本就是这次解码用的版本。
         let personal_version = personal.version();
-        let decode_key = sentence_decode_key(
+        let mut decode_key = sentence_decode_key(
             segments,
             types,
             typo_eligible,
             options.opens_sentence,
             options.beam_model.map(|model| model.context),
         );
+        if touched.is_some() {
+            if let Some(signature) = &self.touch_signature {
+                decode_key.push_str(signature);
+            }
+        }
         let cached = self
             .sentence_decode_cache
             .get_ref(&decode_key)
@@ -2048,6 +2135,26 @@ fn series_slot_key(
         slot.push_str(rescoring_context);
     }
     slot
+}
+
+/// 生成 26 键全拼触点缓存签名：含键位几何代次、内容指纹与逐键量化触点，防止不同落点命中旧缓存。
+fn build_quanpin_touch_signature(touches: &[Option<KeyTouch>], geometry: &KeyGeometry) -> String {
+    use std::fmt::Write as _;
+    let mut signature = String::with_capacity(32 + touches.len() * 4);
+    signature.push('\u{2}');
+    let _ = write!(
+        signature,
+        "{}:{:016x}",
+        geometry.id(),
+        geometry.fingerprint()
+    );
+    for touch in touches {
+        signature.push(',');
+        if let Some(point) = touch {
+            let _ = write!(signature, "{}:{}:{}", point.dx, point.dy, point.copy);
+        }
+    }
+    signature
 }
 
 fn fuzzy_segmentation<'a>(segmentation: &'a str, normalized_segments: &[String]) -> Cow<'a, str> {
