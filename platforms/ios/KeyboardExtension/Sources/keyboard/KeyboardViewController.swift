@@ -172,6 +172,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private let quickPasteShortcut = QuickPasteToolbarButton()
   private var cachedQuickPasteChangeCount: Int?
   private var cachedQuickPastePreview: QuickPastePreview?
+  private let undoDeleteShortcut = UndoDeleteToolbarButton()
+  private var undoDeleteRecord: BackspaceUndoRecord?
   private let systemLexicon = SystemLexiconStore()
   private var visibleLexiconOverrides: [Int: String] = [:]
   private var clipboardPanel: KeyboardClipboardView?
@@ -427,6 +429,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var backspaceRepeatTimer: Timer?
   private var didRepeatBackspace = false
   private var backspaceRepeatSteps = 0
+  private var backspaceSwipeSession = BackspaceSwipeDeleteSession()
   private let cursorSelectionFeedback = UISelectionFeedbackGenerator()
   private var spaceCursorDimmed = false
   private var renderedComposition = false
@@ -1337,6 +1340,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     super.selectionWillChange(textInput)
     if !ownEditEcho.isEcho(at: ProcessInfo.processInfo.systemUptime) {
       englishCorrectionRejectedPrefix = ""
+      clearUndoDeleteShortcut()
     }
     replyModel.invalidateContext()
     handwriting.clear()
@@ -1350,6 +1354,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     closeKeyboardService()
     // 自己改动的回声：那次改动之后的组字仍是当前的组字。
     if ownEditEcho.isEcho(at: ProcessInfo.processInfo.systemUptime) { return }
+    clearUndoDeleteShortcut()
     // 会话在键盘出现前或收起后没有组字可结束；此时不能问已销毁的句柄，否则宿主的焦点回调会把「尚未准备完成」画出来。
     guard !session.dictionarySessionSuspended else { return }
     session.flushPendingCharacters()
@@ -1401,6 +1406,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     // 换了输入框，释义卡片对应的候选已经不属于眼前这个输入框。
     if glossCard != nil, document != glossCardDocument { closeGlossCard() }
+    if let undo = undoDeleteRecord, undo.document != document { clearUndoDeleteShortcut() }
     synchronizeInputContext()
     // 宿主可能把焦点换到了凭据输入框，诊断日志跟着当前输入框开关；只在闸门的判断变了时重新配置，不必每次按键都去读偏好。
     if privacyGate.allows(.diagnosticLog) == diagnosticLogSuppressed { configureDiagnosticLog() }
@@ -1462,6 +1468,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     endLockActivityIfReleased()
     ownEditEcho.reset()
     cancelBackspacePress()
+    backspaceSwipeSession.cancel()
+    clearUndoDeleteShortcut()
     diagnosticDismissTimer?.invalidate()
     diagnosticDismissTimer = nil
     keyPressFlushTimer?.invalidate()
@@ -3082,6 +3090,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     quickPasteShortcut.isHidden = true
     quickPasteShortcut.addAction(UIAction { [weak self] _ in self?.performQuickPaste() }, for: .primaryActionTriggered)
     shortcutBar.addArrangedSubview(quickPasteShortcut)
+    undoDeleteShortcut.isHidden = true
+    undoDeleteShortcut.addAction(UIAction { [weak self] _ in self?.performUndoDelete() }, for: .primaryActionTriggered)
+    shortcutBar.addArrangedSubview(undoDeleteShortcut)
     shortcutBar.addArrangedSubview(shortcutSpacer)
     for button in shortcuts.dropFirst() {
       shortcutBar.addArrangedSubview(button)
@@ -3190,6 +3201,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     moreShortcut.apply(skin: skin)
     moreShortcut.accessibilityLabel = "功能"
     quickPasteShortcut.apply(skin: skin)
+    undoDeleteShortcut.apply(skin: skin)
     refreshQuickPasteShortcut()
     // iOS 的语音入口是长按空格，工具栏不放语音按钮：共享文档里的 `touch_voice_shortcut` 是 Android 的「启动方式」，iOS 设置里没有对应的开关，按它显示就成了关不掉的按钮。关掉长按空格时从功能菜单的「语音输入」开始说话。简繁是设一次就很少再动的开关，和其他开关一起放在功能菜单里。
     configure(scriptShortcut, title: nil, symbol: "waveform", label: "语音输入", id: "layoutVoiceShortcut")
@@ -3255,6 +3267,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   /// 根据 `UIPasteboard.general.changeCount` 刷新工具栏「一键粘贴」按钮显隐与预览；按 `changeCount` 缓存预览，避免重复读取剪贴板。
   private func refreshQuickPasteShortcut() {
+    if undoDeleteRecord != nil {
+      quickPasteShortcut.isHidden = true
+      return
+    }
     let pasteboard = UIPasteboard.general
     let changeCount = pasteboard.changeCount
     let hasStrings = pasteboard.hasStrings
@@ -4779,6 +4795,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       self,
       action: #selector(cancelBackspacePress),
       for: [.touchUpOutside, .touchCancel, .touchDragExit])
+    let swipeDelete = UIPanGestureRecognizer(target: self, action: #selector(handleBackspaceSwipePan(_:)))
+    swipeDelete.name = "backspaceSwipeDelete"
+    swipeDelete.maximumNumberOfTouches = 1
+    swipeDelete.cancelsTouchesInView = true
+    swipeDelete.delegate = self
+    delete.addGestureRecognizer(swipeDelete)
     return delete
   }
 
@@ -8225,6 +8247,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func handleBackspace() {
+    clearUndoDeleteShortcut()
     session.flushPendingCharacters()
     flushDeferredInputSnapshot()
     if !handwriting.isHidden && handwriting.hasInk { handwriting.canvas.undo(); return }
@@ -8339,6 +8362,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func deleteWordBackward() {
+    clearUndoDeleteShortcut()
     playInputClick(.backspace)
     pairedPunctuation.clear()
     let count = BackspaceRepeatPolicy.wordDeleteCount(beforeCursor: textDocumentProxy.documentContextBeforeInput)
@@ -8347,6 +8371,108 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     noteOwnEdit()
     refreshEnglishSuggestions()
+  }
+
+  /// 退格键左滑删除手势：组字中一次清掉整段组字，非组字时按词/中文短句分块回删并在工具栏露出「撤销删除」胶囊。
+  @objc private func handleBackspaceSwipePan(_ pan: UIPanGestureRecognizer) {
+    let translationX = pan.translation(in: view).x
+    switch pan.state {
+    case .began:
+      cancelBackspacePress()
+      clearUndoDeleteShortcut()
+      let document = KeyboardHostContext.documentIdentifier(for: textDocumentProxy)
+      backspaceSwipeSession.begin(at: translationX, document: document)
+    case .changed:
+      let steps = backspaceSwipeSession.advance(to: translationX)
+      for _ in 0..<steps {
+        performBackspaceSwipeDeleteStep()
+      }
+    case .ended:
+      if backspaceSwipeSession.shouldTriggerFlickOnEnd(at: translationX, velocityX: pan.velocity(in: view).x) {
+        performBackspaceSwipeDeleteStep()
+      }
+      let record = backspaceSwipeSession.finish(allowsUndoRecord: !isCredentialField)
+      if let record {
+        showUndoDeleteShortcut(record)
+      }
+    case .cancelled, .failed:
+      let record = backspaceSwipeSession.finish(allowsUndoRecord: !isCredentialField)
+      if let record {
+        showUndoDeleteShortcut(record)
+      }
+    default:
+      break
+    }
+  }
+
+  private func performBackspaceSwipeDeleteStep() {
+    session.flushPendingCharacters()
+    flushDeferredInputSnapshot()
+    if hasComposition {
+      backspaceSwipeSession.markClearedComposition()
+      emitSpecialKeyFeedback(soundClass: .backspace, hapticEvent: .swipeDelete)
+      render(discardComposition())
+      return
+    }
+    guard let chunk = BackspaceSwipeDeletePolicy.chunkToDelete(beforeCursor: textDocumentProxy.documentContextBeforeInput),
+          !chunk.isEmpty else { return }
+    pairedPunctuation.clear()
+    showInlineComposition("")
+    for _ in 0..<chunk.count {
+      textDocumentProxy.deleteBackward()
+    }
+    noteOwnEdit()
+    backspaceSwipeSession.recordDeletedChunk(chunk)
+    emitSpecialKeyFeedback(soundClass: .backspace, hapticEvent: .swipeDelete)
+    if !isChineseMode {
+      refreshEnglishSuggestions()
+    }
+  }
+
+  private func showUndoDeleteShortcut(_ record: BackspaceUndoRecord) {
+    undoDeleteRecord = record
+    undoDeleteShortcut.configure(record: record)
+    undoDeleteShortcut.isHidden = false
+    quickPasteShortcut.isHidden = true
+  }
+
+  private func clearUndoDeleteShortcut() {
+    guard undoDeleteRecord != nil else { return }
+    undoDeleteRecord = nil
+    undoDeleteShortcut.isHidden = true
+    undoDeleteShortcut.configure(record: nil)
+    refreshQuickPasteShortcut()
+  }
+
+  private func performUndoDelete() {
+    guard let record = undoDeleteRecord else { return }
+    clearUndoDeleteShortcut()
+    emitSpecialKeyFeedback(soundClass: .standard, hapticEvent: .undo)
+    insertOwnText(record.deletedText)
+    if !isChineseMode {
+      refreshEnglishSuggestions()
+    }
+  }
+
+  /// 退格左滑删除与撤销按钮的组合声振反馈：声音按 `KeySoundPackPolicy`，震动走专属 CoreHaptics 脉冲（不支持时回退原生反馈）。
+  private func emitSpecialKeyFeedback(soundClass: KeySoundClass, hapticEvent: KeyboardHapticsEngine.EventKind) {
+    if let wantedKeySoundPack, keySounds.loaded == nil {
+      keySounds.want(wantedKeySoundPack)
+    }
+    let playback = KeySoundPackPolicy.playback(
+      soundEnabled: soundEnabled, wanted: wantedKeySoundPack, loaded: keySounds.loaded,
+      keyClass: soundClass, secure: soundClass != .standard && isCredentialField)
+    switch playback {
+    case .silent: break
+    case .system: UIDevice.current.playInputClick()
+    case .sample(let file): if !keySounds.play(file, gain: keySoundGain) { UIDevice.current.playInputClick() }
+    }
+    if hapticsEnabled {
+      if !hapticsEngine.play(strength: hapticStrength, event: hapticEvent) {
+        hapticStrength.impact(keyFeedback)
+        keyFeedback.prepare()
+      }
+    }
   }
 
   // Space means "commit the leading candidate". The strip no longer pages, so the leading chip is
@@ -8358,6 +8484,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    if gestureRecognizer.name == "backspaceSwipeDelete", let pan = gestureRecognizer as? UIPanGestureRecognizer {
+      guard !cursorMovement.isActive, !didRepeatBackspace,
+            handwriting.isHidden || !handwriting.hasInk else { return false }
+      return BackspaceSwipeDeletePolicy.shouldBegin(velocity: pan.velocity(in: view))
+    }
     if gestureRecognizer.name == "keyboardCursorPan", let pan = gestureRecognizer as? UIPanGestureRecognizer {
       let velocity = pan.velocity(in: view)
       return cursorSwipeAllowed && !cursorMovement.isActive
@@ -8443,6 +8574,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func moveCursor(by offset: Int) {
     guard offset != 0 else { return }
+    clearUndoDeleteShortcut()
     guard let document = KeyboardHostContext.documentIdentifier(for: textDocumentProxy) else { return }
     if hasComposition { render(session.finishComposition()) }
     guard KeyboardHostContext.documentIdentifier(for: textDocumentProxy) == document else { return }
@@ -8483,7 +8615,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       setSpaceCursorDimmed(true)
       if hapticsEnabled {
         cursorSelectionFeedback.prepare()
-        hapticStrength.impact(keyFeedback)
+        if !hapticsEngine.play(strength: hapticStrength, event: .glideStart) {
+          hapticStrength.impact(keyFeedback)
+        }
       }
     case .changed:
       let steps = cursorMovement.advance(to: position, document: document)
@@ -8494,7 +8628,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       } else {
         moveCursor(by: steps)
       }
-      if steps != 0 && hapticsEnabled { cursorSelectionFeedback.selectionChanged() }
+      if steps != 0 && hapticsEnabled {
+        if !hapticsEngine.play(strength: hapticStrength, event: .cursorTick) {
+          cursorSelectionFeedback.selectionChanged()
+        }
+      }
       if !cursorMovement.isActive {
         setSpaceCursorDimmed(false)
         updateSpaceKeyTitle()
@@ -8639,6 +8777,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// 运行时提交替换行内预编辑；显式定位在同一次临时标记里指定选区，再取消标记提交完整正文。`continuesComposition` 表示同一次渲染随后还要标记剩下的组字（部分选词）。
   private func insertOwnText(_ text: String, source: TypingSource? = nil, replacingComposition: Bool = false,
                              cursorSuffix: String? = nil, continuesComposition: Bool = false) {
+    clearUndoDeleteShortcut()
     let cursor = cursorSuffix.flatMap { suffix -> Int? in
       guard !suffix.isEmpty, text.utf16.suffix(suffix.utf16.count).elementsEqual(suffix.utf16) else { return nil }
       return text.utf16.count - suffix.utf16.count

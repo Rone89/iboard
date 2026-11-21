@@ -18,6 +18,9 @@ final class KeyboardHapticsEngine {
   enum EventKind: Hashable {
     case key(KeySoundClass)
     case glideStart
+    case cursorTick
+    case swipeDelete
+    case undo
   }
 
   private struct CacheKey: Hashable {
@@ -41,6 +44,18 @@ final class KeyboardHapticsEngine {
       return [Pulse(relativeTime: 0, intensity: 0.38, sharpness: 0.90)]
     case (.light, .glideStart):
       return [Pulse(relativeTime: 0, intensity: 0.30, sharpness: 0.75)]
+    case (.light, .cursorTick):
+      return [Pulse(relativeTime: 0, intensity: 0.24, sharpness: 0.92)]
+    case (.light, .swipeDelete):
+      return [
+        Pulse(relativeTime: 0, intensity: 0.44, sharpness: 0.72),
+        Pulse(relativeTime: 0.018, intensity: 0.28, sharpness: 0.45),
+      ]
+    case (.light, .undo):
+      return [
+        Pulse(relativeTime: 0, intensity: 0.32, sharpness: 0.65),
+        Pulse(relativeTime: 0.020, intensity: 0.46, sharpness: 0.88),
+      ]
 
     case (.medium, .key(.standard)):
       return [Pulse(relativeTime: 0, intensity: 0.62, sharpness: 0.78)]
@@ -50,6 +65,18 @@ final class KeyboardHapticsEngine {
       return [Pulse(relativeTime: 0, intensity: 0.56, sharpness: 0.85)]
     case (.medium, .glideStart):
       return [Pulse(relativeTime: 0, intensity: 0.40, sharpness: 0.75)]
+    case (.medium, .cursorTick):
+      return [Pulse(relativeTime: 0, intensity: 0.34, sharpness: 0.94)]
+    case (.medium, .swipeDelete):
+      return [
+        Pulse(relativeTime: 0, intensity: 0.64, sharpness: 0.72),
+        Pulse(relativeTime: 0.018, intensity: 0.38, sharpness: 0.42),
+      ]
+    case (.medium, .undo):
+      return [
+        Pulse(relativeTime: 0, intensity: 0.45, sharpness: 0.65),
+        Pulse(relativeTime: 0.020, intensity: 0.65, sharpness: 0.90),
+      ]
 
     case (.strong, .key(.standard)):
       // 双脉冲：先一声高锐度触发点，12ms 后叠加略低沉的触底回弹，模拟机械段落轴。
@@ -63,6 +90,18 @@ final class KeyboardHapticsEngine {
       return [Pulse(relativeTime: 0, intensity: 0.78, sharpness: 0.80)]
     case (.strong, .glideStart):
       return [Pulse(relativeTime: 0, intensity: 0.50, sharpness: 0.75)]
+    case (.strong, .cursorTick):
+      return [Pulse(relativeTime: 0, intensity: 0.46, sharpness: 0.96)]
+    case (.strong, .swipeDelete):
+      return [
+        Pulse(relativeTime: 0, intensity: 0.84, sharpness: 0.75),
+        Pulse(relativeTime: 0.018, intensity: 0.50, sharpness: 0.40),
+      ]
+    case (.strong, .undo):
+      return [
+        Pulse(relativeTime: 0, intensity: 0.60, sharpness: 0.68),
+        Pulse(relativeTime: 0.020, intensity: 0.82, sharpness: 0.92),
+      ]
     }
   }
 
