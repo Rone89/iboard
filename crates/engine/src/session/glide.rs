@@ -148,14 +148,50 @@ impl InputSession {
             return KeyResult::unhandled();
         }
         // 一笔滑行写进组字，与键入字母一样先退出整句改字。
+        let had_composition = self.has_composition();
         self.leave_conversion();
         let hypotheses = decode_glide(keyboard, points, GLIDE_HYPOTHESES);
-        let engine = &self.engine;
-        let ranked = rank_by_dictionary(hypotheses, |keys| engine.quanpin_best_weights(keys));
-        let Some(best) = ranked.into_iter().next() else {
+        let ranked = {
+            let engine = &self.engine;
+            rank_by_dictionary(hypotheses, |keys| engine.quanpin_best_weights(keys))
+        };
+        let mut ranked_iter = ranked.into_iter();
+        let Some(best) = ranked_iter.next() else {
             return KeyResult::unhandled();
         };
-        self.insert_glide_letters(&best.letters)
+        let result = self.insert_glide_letters(&best.letters);
+        if !had_composition && result.handled {
+            // 共线或相近读音（如 `r->u->i` 同时匹配 `ri` 与 `rui`）保留代价相近的次优读音候选，并插到前排，避免被主读音 20+ 个候选挤到屏幕外。
+            let secondary_limit = best.cost + 5.5;
+            let mut merged = self.candidates().to_vec();
+            let mut insert_at = merged.len().min(2);
+            let mut added_secondary = false;
+            for alt in ranked_iter
+                .filter(|alt| alt.letters != best.letters && alt.cost <= secondary_limit)
+                .take(2)
+            {
+                let rows = self
+                    .engine
+                    .query_raw_candidates(&alt.letters, &alt.letters);
+                for mut row in rows
+                    .into_iter()
+                    .filter(|row| complete_chinese_glide_candidate(row, &alt.letters))
+                    .take(3)
+                {
+                    if !merged.iter().any(|existing| existing.word == row.word) {
+                        row.source = CandidateSource::Generated;
+                        merged.insert(insert_at, row);
+                        insert_at += 1;
+                        added_secondary = true;
+                    }
+                }
+            }
+            if added_secondary {
+                self.glide_candidates = Some((best.letters, merged));
+                self.glide_selection_pending = true;
+            }
+        }
+        result
     }
 
     /// 把 `letters`（小写、非空）写到光标处。新组字的第一个字母按打字的方式输入，所以它的开始和打字时一样；滑进已有组字时，凡是挨着其他字母的一侧都加 `'` 隔开，两次滑行不会被读成一个音节（先 `xi` 再 `an` 仍是 `xi'an`）。

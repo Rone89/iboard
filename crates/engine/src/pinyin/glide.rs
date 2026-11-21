@@ -48,7 +48,7 @@ const BEAM: f32 = 10.0;
 /// 考虑的最长字母串；拼出更长的笔画不解码。
 pub const MAX_GLIDE_LETTERS: usize = 30;
 /// 手指在离停下处 [`DWELL_RADIUS`] 以内停这么久算一次停留。
-const DWELL_MS: u32 = 120;
+const DWELL_MS: u32 = 58;
 const DWELL_RADIUS: f32 = 0.35;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

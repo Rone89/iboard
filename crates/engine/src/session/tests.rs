@@ -13423,6 +13423,25 @@ fn a_glide_types_the_letters_the_dictionary_prefers() {
 }
 
 #[test]
+fn collinear_glide_rui_keeps_secondary_reading_candidates() {
+    let fixture = Fixture::new(
+        "CREATE TABLE tbl_1_r(key TEXT, jp TEXT, value TEXT, weight INTEGER);
+         INSERT INTO tbl_1_r VALUES('ri','r','日',5000),('rui','r','瑞',1000);",
+    );
+    let mut session = fixture.session();
+    assert!(glide(&mut session, "rui").handled);
+    let candidates = words(&session);
+    assert!(
+        candidates.iter().any(|word| word == "日"),
+        "expected primary reading candidate 日, got {candidates:?}"
+    );
+    assert!(
+        candidates.iter().any(|word| word == "瑞"),
+        "expected secondary collinear reading candidate 瑞, got {candidates:?}"
+    );
+}
+
+#[test]
 fn a_glide_into_a_composition_starts_a_new_syllable() {
     let fixture = Fixture::new(GLIDE_FIXTURE);
     let mut session = fixture.session();
