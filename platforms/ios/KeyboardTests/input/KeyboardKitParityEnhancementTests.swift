@@ -214,6 +214,65 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
   }
 
   @MainActor
+  func testBrandMarkButtonRendersAdaptiveIBLiquidGlassIconForLightDarkAndActive() throws {
+    let button = KeyboardBrandMarkButton(frame: CGRect(x: 0, y: 0, width: 42, height: 42))
+    button.traitOverrides.userInterfaceStyle = .light
+    button.updateTraitsIfNeeded()
+    button.apply(skin: .resolvedForTests(id: GlobalThemeCatalog.nativeId))
+    button.layoutIfNeeded()
+    let lightImage = try XCTUnwrap(button.image(for: .normal))
+    XCTAssertEqual(lightImage.size, CGSize(width: 42, height: 42))
+    XCTAssertEqual(button.imageView?.accessibilityIdentifier, "keyboardBrandIcon")
+
+    button.traitOverrides.userInterfaceStyle = .dark
+    button.updateTraitsIfNeeded()
+    button.apply(skin: .resolvedForTests(id: GlobalThemeCatalog.nativeId))
+    let darkImage = try XCTUnwrap(button.image(for: .normal))
+    XCTAssertNotEqual(lightImage.pngData(), darkImage.pngData(), "亮暗色 iB 液态玻璃键帽应自适应不同配色")
+
+    button.isActive = true
+    let activeImage = try XCTUnwrap(button.image(for: .normal))
+    XCTAssertNotEqual(darkImage.pngData(), activeImage.pngData(), "展开功能菜单激活态应绘制强调光环")
+  }
+
+  @MainActor
+  func testNativeFirstCandidateChipUsesLiquidGlassCapsuleStroke() throws {
+    let previousDoc = MetasequoiaInputSessionBridge.loadSharedPreferences()
+    let previousFollows = CandidatePalette.defaults.object(forKey: CandidatePalette.followsDesktopKey)
+    defer {
+      if let previousDoc {
+        _ = MetasequoiaInputSessionBridge.updateSharedPreferences { $0 = previousDoc }
+      }
+      CandidatePalette.defaults.set(previousFollows, forKey: CandidatePalette.followsDesktopKey)
+      KeyboardTheme.reload(previousDoc)
+    }
+    XCTAssertTrue(GlobalThemePreference.save(GlobalThemeCatalog.nativeId))
+    KeyboardTheme.reload(MetasequoiaInputSessionBridge.loadSharedPreferences())
+    CandidatePalette.defaults.set(false, forKey: CandidatePalette.followsDesktopKey)
+
+    let controller = KeyboardViewController()
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
+    controller.viewWillAppear(false)
+    controller.render(MetasequoiaInputSnapshot(
+      isHandled: true, preedit: "nihao", candidates: ["你好", "你号"],
+      candidateGlosses: ["", ""], candidateAnnotations: ["", ""],
+      candidateSources: [0, 0], candidatePageCount: 1, editingText: "nihao", caretPosition: 5))
+    controller.view.layoutIfNeeded()
+
+    let first = try XCTUnwrap(allSubviews(in: controller.view).first {
+      $0.accessibilityIdentifier == "candidate-1" && !$0.isHidden
+    } as? UIButton)
+    let second = try XCTUnwrap(allSubviews(in: controller.view).first {
+      $0.accessibilityIdentifier == "candidate-2" && !$0.isHidden
+    } as? UIButton)
+    XCTAssertEqual(first.configuration?.background.cornerRadius, 15)
+    XCTAssertEqual(first.configuration?.background.strokeWidth, 0.5)
+    XCTAssertEqual(second.configuration?.background.strokeWidth, 0)
+    controller.viewDidDisappear(false)
+  }
+
+  @MainActor
   private func allSubviews(in view: UIView) -> [UIView] {
     [view] + view.subviews.flatMap { allSubviews(in: $0) }
   }

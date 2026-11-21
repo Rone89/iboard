@@ -10167,11 +10167,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       button.layer.shadowOpacity = 0
     } else {
       // 设计稿的候选条：首个词块（空格会上屏的那个）放在按键颜色的底块上，其余直接放在键盘上；日语转换时标出当前所在的词块。
+      // 原生 Liquid Glass 皮肤下，首选与转换中的词块升级为胶囊圆角配 0.5pt 高光描边，与工具栏胶囊视觉统一。
       configuration.background.customView = nil
       configuration.background.backgroundColor = converting ? skin.accent.withAlphaComponent(0.22)
         : number == 1 ? skin.keyBackground : .clear
-      configuration.background.cornerRadius = Self.candidateChipRadius
-      configuration.background.strokeWidth = 0
+      let isNativeGlassCapsule = skin.isNative && (number == 1 || converting)
+      configuration.background.cornerRadius = isNativeGlassCapsule ? 15 : Self.candidateChipRadius
+      configuration.background.strokeWidth = isNativeGlassCapsule ? 0.5 : 0
+      configuration.background.strokeColor = isNativeGlassCapsule ? skin.calloutBorder : nil
       button.layer.shadowOpacity = 0
     }
     let annotation = hint

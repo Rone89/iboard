@@ -985,8 +985,21 @@ enum KeyPressMotion {
       return
     }
     guard view.transform != target else { return }
-    UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveLinear]) {
-      view.transform = target
+    if scale == 1 {
+      // 松手复原采用轻度阻尼弹簧曲线，贴合 Liquid Glass 按键与胶囊回弹质感；按下瞬间仍保持 duration == 0 零延迟。
+      UIView.animate(
+        withDuration: max(duration, 0.14),
+        delay: 0,
+        usingSpringWithDamping: 0.86,
+        initialSpringVelocity: 0.4,
+        options: [.allowUserInteraction, .beginFromCurrentState]
+      ) {
+        view.transform = target
+      }
+    } else {
+      UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveLinear]) {
+        view.transform = target
+      }
     }
   }
 }
