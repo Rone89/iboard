@@ -4,8 +4,8 @@
     {
       "name": "msime-pinyin.db",
       "url": "https://github.com/metasequoiaime/msime-dictionary/releases/download/dict-v2.1.2/msime-pinyin.db",
-      "sha256": "69a09c58978b402399c241a5553ca2beff1b8cb756e3ec635184178ccb1c140d",
-      "size": 73891840
+      "sha256": "e3501e4123a3a254fddc5e005f803a4928121a393e8f0a8065d2895697369aaa",
+      "size": 79941632
     },
     {
       "name": "msime-wubi.db",
