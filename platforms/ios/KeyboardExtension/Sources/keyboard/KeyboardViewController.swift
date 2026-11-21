@@ -964,25 +964,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-    super.traitCollectionDidChange(previousTraitCollection)
-    if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
-      // 强制硬重置主题：绕过所有缓存，根据当前 trait 显式重解析
-      let isDark = traitCollection.userInterfaceStyle == .dark
-      KeyboardTheme.reload(session.sharedPreferences, dark: isDark, force: true)
-      
-      // 强制 UI 组件感知变化
-      self.view.overrideUserInterfaceStyle = traitCollection.userInterfaceStyle
-      applyKeyboardSkin(onlyIfChanged: false)
-      self.view.setNeedsDisplay()
-      self.updateKeyboardLayout()
-    }
-  }
-
   override func viewDidLoad() {
     super.viewDidLoad()
-    
-    // 原代码...
     registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitHorizontalSizeClass.self]) {
       (controller: KeyboardViewController, previous: UITraitCollection) in controller.refreshTraits(previous)
     }
@@ -1094,6 +1077,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     synchronizeInputContext()
     prepareKeyFeedback()
+    // 首帧提交后再异步预热 CoreHaptics 引擎与高频按键播放器，既不拖慢首帧，也消除第一键的马达冷启动延迟。
+    if hapticsEnabled {
+      DispatchQueue.main.async { [weak self] in
+        guard let self, self.isPresented, self.hapticsEnabled else { return }
+        self.hapticsEngine.warmUp(strength: self.hapticStrength)
+      }
+    }
     // 收起之后才到的 `viewDidAppear` 不再开始维护：`viewWillDisappear` 已经停了定时器、放了锁，这里再开一轮会把锁重新取回来，而键盘已经不在屏幕上。
     guard isPresented else { return }
     // 出现时先跑一轮词库维护，不必等两秒的定时器：两份队列文件在后台读，个人词库只在有待应用的编辑、设置页要求刷新或上次列出已超过 15 分钟（`PersonalDictionaryStore.listingLifetime`）时才同步，快照版本照常按 `DictionarySnapshotWorker.idleVersionPollInterval`（已有版本、没有活动请求时一分钟）节流。以前这里每次出现都在主线程上强制同步一次个人词库、强制重算一次词库版本，没有任何变化时也要读写共享文件、查询引擎。
@@ -2220,13 +2210,45 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// 此刻是否开着 VoiceOver：读屏的双击落在键的激活点，不是手指的落点。测试替换它来模拟读屏。
   var isVoiceOverRunning: () -> Bool = { UIAccessibility.isVoiceOverRunning }
 
+  /// 键位几何缓存键：只要键区尺寸、单手/位置/方案或微软 `;` 显隐未变，逐键无需重复做 26 次坐标变换。
+  private struct KeyLayoutCacheKey: Equatable {
+    let rootSize: CGSize
+    let oneHanded: KeyboardOneHandedMode
+    let placement: KeyboardPlacement
+    let scheme: ChineseInputScheme
+    let semicolonHidden: Bool
+    let firstLetterFrame: CGRect
+  }
+  private var cachedKeyLayoutKey: KeyLayoutCacheKey?
+  private var cachedKeyLayout: TouchPointPolicy.Layout?
+
   /// 键区里此刻 26 个字母键和显示中的 `;` 键（微软双拼、粤语双拼）的布局矩形，坐标系与按键记下的按下点相同；字母行没在显示时为 nil。
   private var currentKeyLayout: TouchPointPolicy.Layout? {
     guard let root = keyboardRoot as? KeyAreaStackView, glideLetterKeys.count == GlideTyping.letters.count,
-          !letterRowViews.isEmpty, letterRowViews.allSatisfy({ !$0.isHidden }) else { return nil }
+          !letterRowViews.isEmpty, letterRowViews.allSatisfy({ !$0.isHidden }) else {
+      cachedKeyLayoutKey = nil
+      cachedKeyLayout = nil
+      return nil
+    }
+    let semicolonHidden = microsoftFinalKey?.isHidden ?? true
+    let firstFrame = KeyAreaStackView.layoutFrame(of: glideLetterKeys[0], in: root)
+    let key = KeyLayoutCacheKey(
+      rootSize: root.bounds.size,
+      oneHanded: oneHandedMode,
+      placement: keyboardPlacement,
+      scheme: inputScheme,
+      semicolonHidden: semicolonHidden,
+      firstLetterFrame: firstFrame
+    )
+    if key == cachedKeyLayoutKey, let cachedKeyLayout {
+      return cachedKeyLayout
+    }
     let letters = glideLetterKeys.map { KeyAreaStackView.layoutFrame(of: $0, in: root) }
-    let semicolon = microsoftFinalKey.flatMap { $0.isHidden ? nil : KeyAreaStackView.layoutFrame(of: $0, in: root) }
-    return TouchPointPolicy.Layout(letters: letters, semicolon: semicolon)
+    let semicolon = semicolonHidden ? nil : microsoftFinalKey.map { KeyAreaStackView.layoutFrame(of: $0, in: root) }
+    let layout = TouchPointPolicy.Layout(letters: letters, semicolon: semicolon)
+    cachedKeyLayoutKey = key
+    cachedKeyLayout = layout
+    return layout
   }
 
   /// 保证会话里注册着键区此刻的几何，返回它的代次。旋转、单手、分离、键距和行距调整、微软 `;` 显隐都会改变布局矩形，这时换一个代次重新注册；没变、会话里也还是这份几何时不发。拼不出几何或引擎拒绝时为 nil，这一键不带落点。
@@ -3393,7 +3415,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     refreshQuickPasteShortcut()
   }
 
-  /// 根据 `UIPasteboard.general.changeCount` 刷新工具栏「一键粘贴」按钮显隐与预览；按 `changeCount` 缓存预览，避免重复读取剪贴板。
+  /// 根据 `UIPasteboard.general.changeCount` 刷新工具栏「一键粘贴」按钮显隐与预览；先以轻量 `changeCount` 短路，避免无新复制时触发跨进程 XPC 查询。
   private func refreshQuickPasteShortcut() {
     if undoDeleteRecord != nil {
       quickPasteShortcut.isHidden = true
@@ -3401,13 +3423,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     let pasteboard = UIPasteboard.general
     let changeCount = pasteboard.changeCount
-    let hasStrings = pasteboard.hasStrings
-    let hasImages = pasteboard.hasImages
-    guard QuickPasteToolbarPolicy.shouldShow(
-      changeCount: changeCount,
-      hasStrings: hasStrings,
-      hasImages: hasImages
-    ) else {
+    guard QuickPasteToolbarPolicy.isUnhandled(changeCount: changeCount) else {
       quickPasteShortcut.isHidden = true
       quickPasteShortcut.configure(preview: nil)
       if cachedQuickPasteChangeCount != changeCount {
@@ -3417,6 +3433,19 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return
     }
     if cachedQuickPasteChangeCount != changeCount {
+      let hasStrings = pasteboard.hasStrings
+      let hasImages = pasteboard.hasImages
+      guard QuickPasteToolbarPolicy.shouldShow(
+        changeCount: changeCount,
+        hasStrings: hasStrings,
+        hasImages: hasImages
+      ) else {
+        quickPasteShortcut.isHidden = true
+        quickPasteShortcut.configure(preview: nil)
+        cachedQuickPasteChangeCount = changeCount
+        cachedQuickPastePreview = nil
+        return
+      }
       var preview: QuickPastePreview?
       if hasStrings, let text = pasteboard.string {
         let summary = QuickPasteToolbarPolicy.truncatedTextPreview(text)
@@ -11767,7 +11796,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
        previousTraitCollection.userInterfaceStyle != traitCollection.userInterfaceStyle {
       // 明暗变了，实际生效的主题可能跟着变：所选主题属于另一种明暗时换成跟随系统，切回来时换回所选主题。
       KeyboardTheme.reload(session.sharedPreferences, dark: drawsDark, force: true)
-      applyKeyboardSkin()
+      applyKeyboardSkin(onlyIfChanged: false)
+      view.setNeedsDisplay()
       // 键盘的明暗变了，表情面板是否与它一致也要重新判断。
       if let emojiPicker { applyEmojiPickerAppearance(emojiPicker) }
     }

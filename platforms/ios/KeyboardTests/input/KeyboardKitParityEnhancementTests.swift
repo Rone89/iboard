@@ -139,7 +139,10 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
     XCTAssertTrue(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: true, hasImages: false, defaults: defaults))
     XCTAssertTrue(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: false, hasImages: true, defaults: defaults))
 
+    XCTAssertFalse(QuickPasteToolbarPolicy.isUnhandled(changeCount: 0, defaults: defaults))
+    XCTAssertTrue(QuickPasteToolbarPolicy.isUnhandled(changeCount: 3, defaults: defaults))
     QuickPasteToolbarPolicy.markHandled(changeCount: 3, defaults: defaults)
+    XCTAssertFalse(QuickPasteToolbarPolicy.isUnhandled(changeCount: 3, defaults: defaults))
     XCTAssertFalse(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: true, hasImages: true, defaults: defaults))
 
     XCTAssertTrue(QuickPasteToolbarPolicy.shouldShow(changeCount: 4, hasStrings: false, hasImages: true, defaults: defaults))
@@ -208,8 +211,9 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
     XCTAssertFalse(KeyboardHapticsEngine.allowsTrigger(now: 1.005, last: 1.000))
     XCTAssertTrue(KeyboardHapticsEngine.allowsTrigger(now: 1.015, last: 1.000))
 
-    // 硬件不支持 CoreHaptics 时安全返回 false，交由调用方回退 UIImpactFeedbackGenerator。
+    // 硬件不支持 CoreHaptics 时安全返回 false，预热也安全为空操作，交由调用方回退 UIImpactFeedbackGenerator。
     let unsupported = KeyboardHapticsEngine(supportsCoreHaptics: false)
+    unsupported.warmUp(strength: .medium)
     XCTAssertFalse(unsupported.play(strength: .medium, event: .key(.standard), now: 10.0))
   }
 

@@ -13,14 +13,20 @@ enum QuickPasteToolbarPolicy {
   static let handledChangeCountKey = "toolbar.quickPaste.handledChangeCount"
   static let maxPreviewCharacters = 5
 
+  /// 先按轻量 `changeCount` 判断是否有尚未处理的剪贴板变更，避免在未复制新内容时发起跨进程 `hasStrings`/`hasImages` XPC 查询。
+  static func isUnhandled(changeCount: Int, defaults: UserDefaults = .standard) -> Bool {
+    guard changeCount > 0 else { return false }
+    return defaults.object(forKey: handledChangeCountKey) as? Int != changeCount
+  }
+
   static func shouldShow(
     changeCount: Int,
     hasStrings: Bool,
     hasImages: Bool = false,
     defaults: UserDefaults = .standard
   ) -> Bool {
-    guard (hasStrings || hasImages), changeCount > 0 else { return false }
-    return defaults.object(forKey: handledChangeCountKey) as? Int != changeCount
+    guard hasStrings || hasImages else { return false }
+    return isUnhandled(changeCount: changeCount, defaults: defaults)
   }
 
   static func markHandled(changeCount: Int, defaults: UserDefaults = .standard) {

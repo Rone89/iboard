@@ -141,6 +141,19 @@ final class KeyboardHapticsEngine {
     }
   }
 
+  /// 在键盘首帧渲染完成后提前异步拉起 `CHHapticEngine` 并预编译高频按键播放器，消除首次按键时的冷启动毛刺。
+  func warmUp(strength: KeyboardHapticStrength) {
+    guard supportsCoreHaptics, strength != .system else { return }
+    guard ensureStarted() else { return }
+    let hotEvents: [EventKind] = [.key(.standard), .key(.space), .key(.backspace), .cursorTick]
+    for event in hotEvents {
+      let pulses = Self.pulses(for: strength, event: event)
+      if !pulses.isEmpty {
+        _ = cachedPlayer(for: CacheKey(strength: strength, event: event), pulses: pulses)
+      }
+    }
+  }
+
   /// 键盘收起或收到内存警告时停掉引擎并清掉缓存播放器，下次按下按需重建。
   func stop() {
     players.removeAll(keepingCapacity: false)
