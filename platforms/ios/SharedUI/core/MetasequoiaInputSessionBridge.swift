@@ -1220,6 +1220,112 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
     }
   }
 
+  /// 滑行实时候选预览结果（只读，不修改最终组字状态）。
+  struct GlideLivePreview: Equatable {
+    let reading: String
+    let candidates: [String]
+    var isEmpty: Bool { reading.isEmpty && candidates.isEmpty }
+  }
+
+  /// 在独立输入线程上原子执行一次「滑行试解码 -> 提取候选 -> 立刻取消」，确保不残留任何临时组字也不阻塞主线程。
+  /// 调用方需保证当前会话没有正在进行的正式组字。
+  @MainActor
+  func previewGlideAsync(
+    _ request: Data,
+    maxCandidates: Int = 4,
+    completion: @escaping @MainActor (GlideLivePreview?) -> Void
+  ) {
+    precondition(Thread.isMainThread)
+    guard handle != 0, !request.isEmpty, request.count <= 65_536 else {
+      completion(nil)
+      return
+    }
+    let sessionHandle = handle
+    MSIMEInputThread.shared.async {
+      var preview: GlideLivePreview?
+      let rawResponse: UnsafeMutablePointer<CChar>? = request.withUnsafeBytes { bytes in
+        msimeClientGlideRaw(sessionHandle, bytes.bindMemory(to: MSIMEByte.self).baseAddress, UInt(request.count))
+      }
+      if let value = try? Self.decode(rawResponse) as? [String: Any],
+         let snapshot = try? Self.snapshot(value),
+         snapshot.isHandled {
+        let reading = !snapshot.nineKeyReading.isEmpty ? snapshot.nineKeyReading : snapshot.preedit
+        let candidates = Array(snapshot.candidates.prefix(maxCandidates))
+        if !reading.isEmpty || !candidates.isEmpty {
+          preview = GlideLivePreview(reading: reading, candidates: candidates)
+        }
+      }
+      if let cancelResponse = msimeClientCommandRaw(sessionHandle, 3) {
+        msimeClientStringFree(cancelResponse)
+      }
+      let delivered = preview
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          completion(delivered)
+        }
+      }
+    }
+  }
+
+  /// 在独立输入线程上原子试算一串滑行读音（如 GlideBeam 实时解出的拼音）的中文候选预览，读完立即取消不留残态。
+  @MainActor
+  func previewCharactersAsync(
+    _ text: String,
+    maxCandidates: Int = 4,
+    completion: @escaping @MainActor (GlideLivePreview?) -> Void
+  ) {
+    precondition(Thread.isMainThread)
+    guard handle != 0, !text.isEmpty else {
+      completion(nil)
+      return
+    }
+    var bytes: [UInt8] = []
+    bytes.reserveCapacity(text.utf8.count)
+    for scalar in text.unicodeScalars {
+      guard scalar.isASCII else {
+        completion(nil)
+        return
+      }
+      let byte = UInt8(scalar.value)
+      guard Self.acceptsAsynchronousCharacter(byte, grid: keyGrid, touched: false) else {
+        completion(nil)
+        return
+      }
+      bytes.append(byte)
+    }
+    let sessionHandle = handle
+    MSIMEInputThread.shared.async {
+      var preview: GlideLivePreview?
+      var finalResponse: UnsafeMutablePointer<CChar>?
+      for (index, byte) in bytes.enumerated() {
+        let response = msimeClientCharacterRaw(sessionHandle, byte, false)
+        if index == bytes.count - 1 {
+          finalResponse = response
+        } else if let response {
+          msimeClientStringFree(response)
+        }
+      }
+      if let value = try? Self.decode(finalResponse) as? [String: Any],
+         let snapshot = try? Self.snapshot(value),
+         snapshot.isHandled {
+        let reading = !snapshot.nineKeyReading.isEmpty ? snapshot.nineKeyReading : snapshot.preedit
+        let candidates = Array(snapshot.candidates.prefix(maxCandidates))
+        if !reading.isEmpty || !candidates.isEmpty {
+          preview = GlideLivePreview(reading: reading, candidates: candidates)
+        }
+      }
+      if let cancelResponse = msimeClientCommandRaw(sessionHandle, 3) {
+        msimeClientStringFree(cancelResponse)
+      }
+      let delivered = preview
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          completion(delivered)
+        }
+      }
+    }
+  }
+
   /// 滑行输入：抬手时把一笔滑行的请求（`GlideTyping.request`）交给 Engine，回应与 `handleCharacter` 的一样。方案不是全拼、处于本地模式或这一笔解不出音节时 Engine 不处理（`isHandled` 为 false），宿主丢掉这一笔。
   func glide(_ request: Data) -> MetasequoiaInputSnapshot {
     guard !request.isEmpty, request.count <= 65_536 else { return diagnostic("滑行输入无效") }

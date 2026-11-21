@@ -174,6 +174,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var cachedQuickPastePreview: QuickPastePreview?
   private let undoDeleteShortcut = UndoDeleteToolbarButton()
   private var undoDeleteRecord: BackspaceUndoRecord?
+  private let glideLivePreviewBar = GlideLivePreviewBar()
+  private var glideLivePreviewGeneration: UInt64 = 0
+  private var glideLivePreviewInFlight = false
+  private var glideLivePreviewLastTime: TimeInterval = -.infinity
+  private var glideLivePreviewLastPoint: CGPoint?
+  private var glideLivePreviewCanQuerySession = false
+  private var glideUndoTracker = GlideUndoTracker()
   private let systemLexicon = SystemLexiconStore()
   private var visibleLexiconOverrides: [Int: String] = [:]
   private var clipboardPanel: KeyboardClipboardView?
@@ -1341,6 +1348,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     if !ownEditEcho.isEcho(at: ProcessInfo.processInfo.systemUptime) {
       englishCorrectionRejectedPrefix = ""
       clearUndoDeleteShortcut()
+      glideUndoTracker.clearAll()
     }
     replyModel.invalidateContext()
     handwriting.clear()
@@ -1355,6 +1363,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // 自己改动的回声：那次改动之后的组字仍是当前的组字。
     if ownEditEcho.isEcho(at: ProcessInfo.processInfo.systemUptime) { return }
     clearUndoDeleteShortcut()
+    glideUndoTracker.clearAll()
     // 会话在键盘出现前或收起后没有组字可结束；此时不能问已销毁的句柄，否则宿主的焦点回调会把「尚未准备完成」画出来。
     guard !session.dictionarySessionSuspended else { return }
     session.flushPendingCharacters()
@@ -1470,6 +1479,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     cancelBackspacePress()
     backspaceSwipeSession.cancel()
     clearUndoDeleteShortcut()
+    stopGlideLivePreview()
+    glideUndoTracker.clearAll()
     diagnosticDismissTimer?.invalidate()
     diagnosticDismissTimer = nil
     keyPressFlushTimer?.invalidate()
@@ -1924,6 +1935,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       guard let self, let root else { return }
       glideActive = true
       updateKeyHitSuppression()
+      beginGlideLivePreview()
       if hapticsEnabled {
         if !hapticsEngine.play(strength: hapticStrength, event: .glideStart) {
           if hapticStrength == .system {
@@ -1942,6 +1954,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     glideGesture.onMoved = { [weak self, weak glideGesture] samples in
       guard let self else { return }
       glideTrail.draw(samples, predicted: glideGesture?.predictedPoints ?? [], color: KeyboardTheme.current.accent)
+      if let frames = glideGesture?.currentFrames {
+        scheduleGlideLivePreview(samples: samples, frames: frames)
+      }
     }
     glideGesture.onEnded = { [weak self] samples, frames in
       guard let self else { return }
@@ -1962,8 +1977,101 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// 滑行结束：键区重新接受新的手指，轨迹抬手时淡出，被打断时直接清空。
   private func endGlide(fading: Bool = false) {
     glideActive = false
+    stopGlideLivePreview()
     updateKeyHitSuppression()
     if fading { glideTrail.fadeOut() } else { glideTrail.clear() }
+  }
+
+  private func beginGlideLivePreview() {
+    glideLivePreviewGeneration &+= 1
+    glideLivePreviewInFlight = false
+    glideLivePreviewLastTime = -.infinity
+    glideLivePreviewLastPoint = nil
+    glideLivePreviewCanQuerySession = !hasComposition && !hasPendingAsynchronousInput
+      && !isInLocalMode && isChineseMode && inputScheme == .quanpin
+    let skin = KeyboardTheme.current
+    glideLivePreviewBar.apply(skin: skin, stripBackground: currentStripBackground(skin))
+    glideLivePreviewBar.clear()
+  }
+
+  private func stopGlideLivePreview() {
+    glideLivePreviewGeneration &+= 1
+    glideLivePreviewInFlight = false
+    glideLivePreviewLastTime = -.infinity
+    glideLivePreviewLastPoint = nil
+    glideLivePreviewCanQuerySession = false
+    glideLivePreviewBar.clear()
+  }
+
+  /// 节流后的滑行实时预览：不阻塞 120Hz 轨迹渲染，不写入宿主输入框，且仅在当前无未提交组字时原子查询会话候选。
+  private func scheduleGlideLivePreview(samples: [GlideTyping.Sample], frames: [CGRect]) {
+    guard glideActive, glideTypingArmed, frames.count == GlideTyping.letters.count,
+          let last = samples.last else { return }
+    let now = CACurrentMediaTime()
+    let lastPoint = CGPoint(x: last.x, y: last.y)
+    let deltaFromLast: CGFloat = glideLivePreviewLastPoint.map {
+      hypot(lastPoint.x - $0.x, lastPoint.y - $0.y)
+    } ?? .greatestFiniteMagnitude
+    let length = GlideLivePreviewPolicy.pathLength(of: samples)
+    guard GlideLivePreviewPolicy.shouldDecode(
+      sampleCount: samples.count,
+      pathLength: length,
+      deltaFromLast: deltaFromLast,
+      now: now,
+      lastDecodeTime: glideLivePreviewLastTime,
+      inFlight: glideLivePreviewInFlight
+    ) else { return }
+
+    glideLivePreviewLastTime = now
+    glideLivePreviewLastPoint = lastPoint
+    let generation = glideLivePreviewGeneration
+    let canQuerySession = glideLivePreviewCanQuerySession && !hasComposition && !hasPendingAsynchronousInput
+
+    #if GLIDE_ENGINE_LINKED
+    if GlideEnginePreference.choice == .glidebeam, GlideBeamEngine.shared.isReady {
+      glideLivePreviewInFlight = true
+      let letterCodes = GlideTyping.letters.compactMap { $0.asciiValue }.map(UInt32.init)
+      GlideBeamEngine.shared.decodeReadingsAsync(samples: samples, letters: letterCodes, frames: frames, limit: 3) { [weak self] readings in
+        guard let self, self.glideActive, self.glideLivePreviewGeneration == generation else { return }
+        guard let topReading = readings.first, !topReading.isEmpty else {
+          self.glideLivePreviewInFlight = false
+          return
+        }
+        if canQuerySession && !self.hasComposition && !self.hasPendingAsynchronousInput {
+          self.session.previewCharactersAsync(topReading, maxCandidates: GlideLivePreviewPolicy.maxVisibleCandidates) { [weak self] preview in
+            guard let self, self.glideActive, self.glideLivePreviewGeneration == generation else { return }
+            self.glideLivePreviewInFlight = false
+            if let preview, !preview.isEmpty {
+              self.glideLivePreviewBar.update(preview)
+            } else {
+              self.glideLivePreviewBar.update(MetasequoiaGlidePreview(reading: topReading, candidates: Array(readings.dropFirst().prefix(2))))
+            }
+          }
+        } else {
+          self.glideLivePreviewInFlight = false
+          self.glideLivePreviewBar.update(MetasequoiaGlidePreview(reading: topReading, candidates: Array(readings.prefix(3))))
+        }
+      }
+      return
+    }
+    #endif
+
+    if canQuerySession, let request = GlideTyping.request(frames: frames, samples: samples, bilingual: bilingualGlideEnabled) {
+      glideLivePreviewInFlight = true
+      session.previewGlideAsync(request, maxCandidates: GlideLivePreviewPolicy.maxVisibleCandidates) { [weak self] preview in
+        guard let self, self.glideActive, self.glideLivePreviewGeneration == generation else { return }
+        self.glideLivePreviewInFlight = false
+        if let preview, !preview.isEmpty {
+          self.glideLivePreviewBar.update(preview)
+        }
+      }
+      return
+    }
+
+    let keyPath = GlideLivePreviewPolicy.keyPathPreview(samples: samples, frames: frames)
+    if !keyPath.isEmpty {
+      glideLivePreviewBar.update(MetasequoiaGlidePreview(reading: keyPath, candidates: []))
+    }
   }
 
   /// 两种根手势各自结束，不清掉另一种手势仍持有的按键抑制。
@@ -2045,6 +2153,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard glideTypingArmed, let request = GlideTyping.request(frames: frames, samples: samples, bilingual: bilingualGlideEnabled) else { return }
     let snapshot = session.glide(request)
     guard snapshot.isHandled else { return }
+    if !snapshot.preedit.isEmpty { glideUndoTracker.markGlideDecoded() }
     render(snapshot)
   }
 
@@ -2077,6 +2186,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let accepted = session.enqueueCharacters(reading) { [weak self] snapshot in
       guard let self, self.glideDecodeGeneration == generation else { return }
       if snapshot.isHandled, !snapshot.candidates.isEmpty {
+        if !snapshot.preedit.isEmpty { self.glideUndoTracker.markGlideDecoded() }
         self.render(snapshot)
       } else {
         if self.hasComposition { _ = self.session.cancel() }
@@ -3123,6 +3233,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       shortcutBar.topAnchor.constraint(equalTo: container.topAnchor),
       shortcutBarBottom,
     ])
+    glideLivePreviewBar.translatesAutoresizingMaskIntoConstraints = false
+    container.addSubview(glideLivePreviewBar)
+    let glidePreviewBottom = glideLivePreviewBar.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+    glidePreviewBottom.priority = .init(999)
+    NSLayoutConstraint.activate([
+      glideLivePreviewBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+      glideLivePreviewBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+      glideLivePreviewBar.topAnchor.constraint(equalTo: container.topAnchor),
+      glidePreviewBottom,
+    ])
     scriptShortcut.addAction(UIAction { [weak self] _ in
       guard let self else { return }
       countKeyPress(TypingKeyID.voice)
@@ -3202,6 +3322,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     moreShortcut.accessibilityLabel = "功能"
     quickPasteShortcut.apply(skin: skin)
     undoDeleteShortcut.apply(skin: skin)
+    glideLivePreviewBar.apply(skin: skin, stripBackground: currentStripBackground(skin))
     refreshQuickPasteShortcut()
     // iOS 的语音入口是长按空格，工具栏不放语音按钮：共享文档里的 `touch_voice_shortcut` 是 Android 的「启动方式」，iOS 设置里没有对应的开关，按它显示就成了关不掉的按钮。关掉长按空格时从功能菜单的「语音输入」开始说话。简繁是设一次就很少再动的开关，和其他开关一起放在功能菜单里。
     configure(scriptShortcut, title: nil, symbol: "waveform", label: "语音输入", id: "layoutVoiceShortcut")
@@ -4855,6 +4976,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   /// `touchDown` 是这一键按下时手指在键区里的位置（`KeyboardKeyButton.touchDownLocation`），只有 26 键的字母键和 `;` 的真实触摸才有；它只用于 26 键双拼的纠错计价（`TouchPointPolicy.sendsTouch`），其余情况照常输入这个字符。
   private func handleCharacter(_ character: String, touchDown: CGPoint? = nil) {
+    glideUndoTracker.clearAll()
     playInputClick()
     if isChineseMode {
       synchronizeInputSchemePreference()
@@ -8251,6 +8373,33 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     session.flushPendingCharacters()
     flushDeferredInputSnapshot()
     if !handwriting.isHidden && handwriting.hasInk { handwriting.canvas.undo(); return }
+    // 刚由滑行输入解出的组字尚未被单字母编辑时，轻点一次 ⌫ 直接清空整段滑行组字，免去逐字母连按。
+    if hasComposition && glideUndoTracker.consumeActiveGlideComposition() {
+      emitSpecialKeyFeedback(soundClass: .backspace, hapticEvent: .swipeDelete)
+      render(discardComposition())
+      return
+    }
+    // 刚通过滑行上屏多字词后紧接着点一次 ⌫：整词一键退回，并在工具栏提供「撤销」胶囊防误删。
+    if !hasComposition {
+      let document = KeyboardHostContext.documentIdentifier(for: textDocumentProxy)
+      if let undone = glideUndoTracker.consumeCommittedUndo(
+        beforeCursor: textDocumentProxy.documentContextBeforeInput,
+        document: document
+      ) {
+        pairedPunctuation.clear()
+        showInlineComposition("")
+        for _ in 0..<undone.count {
+          textDocumentProxy.deleteBackward()
+        }
+        noteOwnEdit()
+        emitSpecialKeyFeedback(soundClass: .backspace, hapticEvent: .swipeDelete)
+        if !isCredentialField {
+          showUndoDeleteShortcut(BackspaceUndoRecord(deletedText: undone, document: document))
+        }
+        if !isChineseMode { refreshEnglishSuggestions() }
+        return
+      }
+    }
     playInputClick(.backspace)
     // Deleting document text may take the opening half of a pair with it; a backspace inside a spelling only edits the spelling.
     if !hasComposition { pairedPunctuation.clear() }
@@ -8305,6 +8454,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func repeatBackspace() {
+    glideUndoTracker.clearAll()
     backspaceRepeatSteps += 1
     // 手写板上按住 ⌫ 一笔一笔撤回笔迹，笔迹撤完这次按住就结束，不会接着删文档里已经上屏的文字；要删文字得再按一次。
     if !handwriting.isHidden && handwriting.hasInk {
@@ -8406,6 +8556,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func performBackspaceSwipeDeleteStep() {
+    glideUndoTracker.clearAll()
     session.flushPendingCharacters()
     flushDeferredInputSnapshot()
     if hasComposition {
@@ -8561,6 +8712,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func moveCompositionCaret(by offset: Int, bySegment: Bool = false) {
     guard offset != 0 else { return }
+    glideUndoTracker.clearActiveGlideComposition()
     var snapshot: MetasequoiaInputSnapshot?
     for _ in 0..<min(abs(offset), 64) {
       if bySegment {
@@ -8575,6 +8727,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func moveCursor(by offset: Int) {
     guard offset != 0 else { return }
     clearUndoDeleteShortcut()
+    glideUndoTracker.clearAll()
     guard let document = KeyboardHostContext.documentIdentifier(for: textDocumentProxy) else { return }
     if hasComposition { render(session.finishComposition()) }
     guard KeyboardHostContext.documentIdentifier(for: textDocumentProxy) == document else { return }
@@ -8778,6 +8931,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func insertOwnText(_ text: String, source: TypingSource? = nil, replacingComposition: Bool = false,
                              cursorSuffix: String? = nil, continuesComposition: Bool = false) {
     clearUndoDeleteShortcut()
+    glideUndoTracker.clearAll()
     let cursor = cursorSuffix.flatMap { suffix -> Int? in
       guard !suffix.isEmpty, text.utf16.suffix(suffix.utf16.count).elementsEqual(suffix.utf16) else { return nil }
       return text.utf16.count - suffix.utf16.count
@@ -9010,19 +9164,29 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     currentNineKeySingleCharacter = snapshot.nineKeySingleCharacter
     currentNineKeyStrokes = snapshot.nineKeyStrokes
     updateLetterCaseControls()
+    let committingFromGlide = glideUndoTracker.hasActiveGlideComposition && snapshot.commitText != nil
     if snapshot.commitText != nil || appendingLiteral != nil {
       let commit = snapshot.commitText.map { source == .japanese || !snapshot.scriptConversion ? $0 : chineseOutput($0) } ?? ""
       let suffix = snapshot.commitCursorSuffix.map {
         (source == .japanese || !snapshot.scriptConversion ? $0 : chineseOutput($0)) + (appendingLiteral ?? "")
       }
+      let writtenText = commit + (appendingLiteral ?? "")
       // 原组字和数字作为同一次文档替换提交；先撤标记再插数字会读到尚未更新的选区，数字可能跑到拼音前面。
-      insertOwnText(commit + (appendingLiteral ?? ""), source: source,
+      insertOwnText(writtenText, source: source,
                     replacingComposition: snapshot.commitText != nil, cursorSuffix: suffix,
                     continuesComposition: !snapshot.preedit.isEmpty)
+      if committingFromGlide {
+        glideUndoTracker.markGlideDecoded()
+        glideUndoTracker.recordCommittedIfFromGlide(
+          text: writtenText,
+          stillComposing: !snapshot.preedit.isEmpty,
+          document: KeyboardHostContext.documentIdentifier(for: textDocumentProxy))
+      }
     }
     let wasComposing = renderedComposition
     let wasKoreanHanjaListOpen = koreanHanjaListOpen
     hasComposition = !snapshot.preedit.isEmpty
+    if !hasComposition && !committingFromGlide { glideUndoTracker.clearActiveGlideComposition() }
     requiresCandidateSelection = snapshot.requiresCandidateSelection
     enginePrediction = snapshot.isPrediction
     if hasComposition != wasComposing { updateFourteenKeySeparator() }

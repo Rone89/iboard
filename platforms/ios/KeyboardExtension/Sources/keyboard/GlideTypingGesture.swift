@@ -22,6 +22,8 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
 
   /// 系统预测的下一帧触点（仅用于轨迹笔尖视觉超前补偿，从不写入解码采样 `samples`）。
   private(set) var predictedPoints: [CGPoint] = []
+  /// 当前这一笔起手时快照到的 26 字母键矩形，供实时预览读取。
+  var currentFrames: [CGRect] { frames }
   private var tracked: UITouch?
   private var downKey = 0
   private var downLocation = CGPoint.zero
