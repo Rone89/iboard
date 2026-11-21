@@ -11,8 +11,10 @@ Status: implemented
 
 ## Decision
 
-- **下调停留阈值（[glide.rs](../../../../crates/engine/src/pinyin/glide.rs)）**：将 `DWELL_MS` 从 `120` 调整为 `58`（保持 `DWELL_RADIUS = 0.35` 与其余 beam 参数不变），提高快速滑行中的停留灵敏度。
-- **保留共线/相近次优读音候选（[glide.rs](../../../../crates/engine/src/session/glide.rs)）**：在空组字起手滑行成功后，取与最优读音代价差不超过 `5.5` 的至多 2 条备选读音，各自经 `query_raw_candidates` 筛出完整中文滑行候选（每条最多 3 项，标记 `CandidateSource::Generated`），去重后插入候选列表前排（索引 `min(len, 2)` 起），并置 `glide_candidates` 与 `glide_selection_pending = true`。
+- **调优停留与近直线几何门槛（[glide.rs](../../../../crates/engine/src/pinyin/glide.rs)）**：
+  - 将 `DWELL_MS` 从 `120` 调整为 `58`（保持 `DWELL_RADIUS = 0.35` 与其余 beam 参数不变），提高快速滑行中的停留灵敏度。
+  - 将 `LINE_SCALE` 从 `0.25` 收紧到 `0.16`、`LETTER_COST` 从 `0.8` 下调到 `0.55`：让 `z->u->i` 这类近直线折弯在几何上直接胜过跳过中间键的 `zi`，同时保持纯 0° 直线路过（`off == 0`）仍优先较短串而不误触发。
+- **保留共线/相近次优读音候选（[glide.rs](../../../../crates/engine/src/session/glide.rs)）**：在空组字起手滑行成功后，取与最优读音代价差不超过 `5.5` 的至多 2 条备选读音，各自经 `query_raw_candidates` 筛出完整中文滑行候选（每条最多 3 项，标记 `CandidateSource::Generated`），去重后插入候选列表前排（代价差 `<= 1.5` 的极近竞争者插至第 2 位，其余从第 3 位起），并置 `glide_candidates` 与 `glide_selection_pending = true`。
 
 ## Alternatives considered
 

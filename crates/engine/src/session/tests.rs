@@ -13442,6 +13442,18 @@ fn collinear_glide_rui_keeps_secondary_reading_candidates() {
 }
 
 #[test]
+fn near_collinear_glide_zui_prefers_zui_over_zi() {
+    let fixture = Fixture::new(
+        "CREATE TABLE tbl_1_z(key TEXT, jp TEXT, value TEXT, weight INTEGER);
+         INSERT INTO tbl_1_z VALUES('zi','z','自',5000),('zui','z','最',5000);",
+    );
+    let mut session = fixture.session();
+    assert!(glide(&mut session, "zui").handled);
+    assert_eq!(session.input.preedit(), "zui");
+    assert_eq!(words(&session).first().map(String::as_str), Some("最"));
+}
+
+#[test]
 fn a_glide_into_a_composition_starts_a_new_syllable() {
     let fixture = Fixture::new(GLIDE_FIXTURE);
     let mut session = fixture.session();

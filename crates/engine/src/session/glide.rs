@@ -161,7 +161,7 @@ impl InputSession {
         };
         let result = self.insert_glide_letters(&best.letters);
         if !had_composition && result.handled {
-            // 共线或相近读音（如 `r->u->i` 同时匹配 `ri` 与 `rui`）保留代价相近的次优读音候选，并插到前排，避免被主读音 20+ 个候选挤到屏幕外。
+            // 共线或相近读音（如 `r->u->i` 同时匹配 `ri` 与 `rui`、`z->u->i` 匹配 `zi` 与 `zui`）保留代价相近的次优读音候选，并插到前排，避免被主读音 20+ 个候选挤到屏幕外。
             let secondary_limit = best.cost + 5.5;
             let mut merged = self.candidates().to_vec();
             let mut insert_at = merged.len().min(2);
@@ -170,6 +170,10 @@ impl InputSession {
                 .filter(|alt| alt.letters != best.letters && alt.cost <= secondary_limit)
                 .take(2)
             {
+                let close_tie = alt.cost <= best.cost + 1.5;
+                if close_tie && insert_at > 1 {
+                    insert_at = merged.len().min(1);
+                }
                 let rows = self
                     .engine
                     .query_raw_candidates(&alt.letters, &alt.letters);
