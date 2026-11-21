@@ -126,13 +126,44 @@ final class KeyboardToolbarButton: UIButton {
   }
 
   private func animatePress(scale: CGFloat) {
-    // 高亮图像只缩小内部路径，原生 imageView 的边界始终覆盖整格。
-    KeyPressMotion.animate(pad, scale: scale, duration: Self.pressDuration)
+    // 按下 0ms 即时缩放，松手保留回弹过渡；高亮图像只缩小内部路径，原生 imageView 的边界始终覆盖整格。
+    KeyPressMotion.animate(pad, scale: scale, duration: scale < 1 ? 0 : Self.pressDuration)
   }
 
   private var iconColor: UIColor {
-    if isActive { return skin.accent }
-    return icon == .collapse ? skin.keyForeground : skin.secondary
+    isActive ? skin.accent : skin.secondary
+  }
+
+  /// 绘制与工具栏其他 26pt 描边图标同风格（同线宽、同圆角、模板着色）的圆角方框文字图标，供中英文切换（`中`/`A`）等文字开关使用。
+  static func badgeImage(text: String, side: CGFloat = iconSide) -> UIImage {
+    let size = CGSize(width: side, height: side)
+    return UIGraphicsImageRenderer(size: size).image { _ in
+      let inset = side * (3.0 / 26.0)
+      let box = CGRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2)
+      let lineWidth = side * (1.75 / 26.0)
+      let radius = side * (5.2 / 26.0)
+      let strokePath = UIBezierPath(roundedRect: box, cornerRadius: radius)
+      strokePath.lineWidth = lineWidth
+      strokePath.lineJoinStyle = .round
+      UIColor.black.setStroke()
+      strokePath.stroke()
+
+      let isASCII = text.unicodeScalars.allSatisfy(\.isASCII)
+      let fontSize = side * (isASCII ? 13.0 / 26.0 : 12.0 / 26.0)
+      let font = UIFont.systemFont(ofSize: fontSize, weight: isASCII ? .semibold : .medium)
+      let attributes: [NSAttributedString.Key: Any] = [
+        .font: font,
+        .foregroundColor: UIColor.black,
+      ]
+      let measured = (text as NSString).size(withAttributes: attributes)
+      let drawRect = CGRect(
+        x: (side - measured.width) / 2,
+        y: (side - measured.height) / 2,
+        width: measured.width,
+        height: measured.height
+      )
+      (text as NSString).draw(in: drawRect, withAttributes: attributes)
+    }.withRenderingMode(.alwaysTemplate)
   }
 
   private func updateActiveBorder() {

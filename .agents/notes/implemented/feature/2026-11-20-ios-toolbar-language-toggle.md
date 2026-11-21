@@ -10,7 +10,7 @@ Status: implemented
 
 - **存储位置放在 `TouchToolbarLocalPreference`（[TouchToolbarPreference.swift](../../../../platforms/ios/SharedUI/preferences/TouchToolbarPreference.swift)）**：共享文档 `touch_toolbar` 校验器会丢弃未识别字段，因此本按钮归入 `TouchToolbarLocalPreference.language`（键名 `keyboard.toolbar.language`，并加入 `TouchToolbarLocalPreference.keys`），默认关闭以保证 `320pt` 窄屏默认工具栏不溢出（`NineKeyKeyboardTests.testToolbarIsTheDesignsEqualGridOfTools`），用户可在「键盘工具栏」设置页或长按任意工具栏按钮打开开关。
 - **预览与设置页同步（[KeyboardToolbarSettingsView.swift](../../../../platforms/ios/App/Sources/keyboard/KeyboardToolbarSettingsView.swift)）**：`KeyboardPreviewToolbarItem` 新增 `.language`（字符 `"中"`），`KeyboardToolbarPreviewRow.items` 增加 `language: Bool = false` 参数并在末尾追加；设置页「按钮」分组追加「中英文切换」开关。
-- **键盘扩展工具栏接入（[KeyboardViewController.swift](../../../../platforms/ios/KeyboardExtension/Sources/keyboard/KeyboardViewController.swift)）**：新增 `languageShortcut`（无障碍标识 `languageShortcut`）并加入 `optionalShortcuts`，点击调用 `countKeyPress(TypingKeyID.language)` 与 `toggleInputMode()`，键面随 `isChineseMode` 在当前方案字样（如 `中`/`粤`/`注`/`日`/`한`）与 `英` 之间实时同步。
+- **键盘扩展工具栏接入（[KeyboardViewController.swift](../../../../platforms/ios/KeyboardExtension/Sources/keyboard/KeyboardViewController.swift)、[KeyboardToolbarButton.swift](../../../../platforms/ios/KeyboardExtension/Sources/keyboard/KeyboardToolbarButton.swift)）**：新增 `languageShortcut`（无障碍标识 `languageShortcut`）并加入 `optionalShortcuts`，点击调用 `countKeyPress(TypingKeyID.language)` 与 `toggleInputMode()`；通过 `KeyboardToolbarButton.badgeImage(text:)` 绘制与其他 26pt 工具栏描边图标同线宽、同圆角和 `skin.secondary` 着色的方框文字图标，随 `isChineseMode` 在当前方案字样（如 `中`/`粤`/`注`/`日`/`한`）与 `A` 之间实时同步。
 
 ## Alternatives considered
 

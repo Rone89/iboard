@@ -841,6 +841,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var keySoundGain = KeySoundPackPolicy.gain(volume: KeySoundPackPolicy.defaultVolume)
   /// 按键振动的开关和档位都从这一个 App Group 实例读。`KeyboardFeedbackPreference.hapticsEnabled` 这类属性每读一次都新建一个 `UserDefaults`，原来开着振动时按下、松开一次键要建五六个，都压在触摸处理的主线程上。不把值缓存起来：App 的设置页里也有输入框，键盘开着时在那里改振动，下一下按键就要按新的来。
   private let feedbackDefaults = KeyboardFeedbackPreference.defaults
+  private var soundEnabled: Bool { KeyboardFeedbackPreference.soundEnabled(in: feedbackDefaults) }
   private var hapticsEnabled: Bool { KeyboardFeedbackPreference.hapticsEnabled(in: feedbackDefaults) }
   private var hapticStrength: KeyboardHapticStrength { KeyboardFeedbackPreference.hapticStrength(in: feedbackDefaults) }
   private var feedbackStrength: KeyboardHapticStrength?
@@ -1925,9 +1926,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       #endif
       root.bringSubviewToFront(glideTrail)
     }
-    glideGesture.onMoved = { [weak self] samples in
+    glideGesture.onMoved = { [weak self, weak glideGesture] samples in
       guard let self else { return }
-      glideTrail.draw(samples, color: KeyboardTheme.current.accent)
+      glideTrail.draw(samples, predicted: glideGesture?.predictedPoints ?? [], color: KeyboardTheme.current.accent)
     }
     glideGesture.onEnded = { [weak self] samples, frames in
       guard let self else { return }
@@ -2060,23 +2061,17 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return
     }
     let reading = readings[index]
-    var submitted = true
-    for (offset, letter) in reading.enumerated() {
-      let isFinal = offset == reading.count - 1
-      let accepted = session.enqueueCharacter(String(letter)) { [weak self] snapshot in
-        guard isFinal, let self, self.glideDecodeGeneration == generation else { return }
-        if snapshot.isHandled, !snapshot.candidates.isEmpty {
-          self.render(snapshot)
-        } else {
-          if self.hasComposition { _ = self.session.cancel() }
-          self.submitGlideReadings(readings, index: index + 1, generation: generation,
-                                   fallbackSamples: fallbackSamples, fallbackFrames: fallbackFrames)
-        }
+    let accepted = session.enqueueCharacters(reading) { [weak self] snapshot in
+      guard let self, self.glideDecodeGeneration == generation else { return }
+      if snapshot.isHandled, !snapshot.candidates.isEmpty {
+        self.render(snapshot)
+      } else {
+        if self.hasComposition { _ = self.session.cancel() }
+        self.submitGlideReadings(readings, index: index + 1, generation: generation,
+                                 fallbackSamples: fallbackSamples, fallbackFrames: fallbackFrames)
       }
-      submitted = submitted && accepted
-      if !accepted { break }
     }
-    if !submitted {
+    if !accepted {
       submitGlideReadings(readings, index: index + 1, generation: generation,
                           fallbackSamples: fallbackSamples, fallbackFrames: fallbackFrames)
     }
@@ -3217,9 +3212,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
               label: "中英文标点", id: "punctuationShortcut")
     punctuationShortcut.accessibilityValue = chinesePunctuation ? "中文标点" : "英文标点"
     punctuationShortcut.isEnabled = chinesePunctuationSwitchApplies
-    let languageTitle = isChineseMode ? Self.languageKeyTitle(inputScheme) : "英"
-    configure(languageShortcut, title: languageTitle, symbol: nil,
+    let languageTitle = isChineseMode ? Self.languageKeyTitle(inputScheme) : "A"
+    configure(languageShortcut, title: nil, symbol: nil,
               label: isChineseMode ? "切换到英文输入" : "切换到所选输入方案", id: "languageShortcut")
+    languageShortcut.configuration?.image = KeyboardToolbarButton.badgeImage(text: languageTitle)
     languageShortcut.accessibilityValue = isChineseMode ? Self.languageKeyValue(inputScheme) : "英文输入"
     emojiShortcut.isHidden = !pinned.emoji
     phrasesShortcut.isHidden = !toolbarPhrases
@@ -3949,15 +3945,19 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// 手机第三排字母上的 ⇧ 和 ⌫。
   private static let phoneLetterEdgeWidth: CGFloat = 44
 
-  /// 设计稿的字母键面：手机 22pt，iPad 键盘 20pt，固定字号而不跟随动态字体，免得大字设置把字母挤出按键。
-  static func letterFontSize(_ formFactor: KeyboardFormFactor) -> CGFloat { formFactor == .tablet ? 20 : 22 }
+  /// 对齐 KeyboardKit / iOS 原生字母键字号：小写态略大（手机 25pt / iPad 22pt），大写态略收紧（手机 22pt / iPad 20pt），固定字号不跟随动态字体。
+  static func letterFontSize(_ formFactor: KeyboardFormFactor, uppercase: Bool = false) -> CGFloat {
+    if formFactor == .tablet { return uppercase ? 20 : 22 }
+    return uppercase ? 22 : 25
+  }
 
   private func applyLetterFont(to button: UIButton) {
     button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { [weak self] attributes in
       var attributes = attributes
-      let size = Self.letterFontSize(self?.keyFaceFormFactor ?? .phone)
+      let uppercase = (self?.letterCaseState ?? .lowercase) != .lowercase
+      let size = Self.letterFontSize(self?.keyFaceFormFactor ?? .phone, uppercase: uppercase)
       attributes.font = KeyboardTheme.current.usesMonospacedFont
-        ? .monospacedSystemFont(ofSize: size, weight: .regular) : .systemFont(ofSize: size)
+        ? .monospacedSystemFont(ofSize: size, weight: .regular) : .systemFont(ofSize: size, weight: .regular)
       return attributes
     }
   }
@@ -4372,7 +4372,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       self?.countKeyPress(TypingKeyID.emoji)
       self?.showEmojiPicker()
     }
-    emoji.configuration?.image = KeyboardIcon.emoji.image(pointSize: Self.layerEmojiIconSide)
+    emoji.configuration?.image = Self.layerEmojiIcon
     emoji.accessibilityIdentifier = "layerEmojiKey"
     emoji.isHidden = true
     layerEmojiButton = emoji
@@ -4670,8 +4670,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   static let handwritingReturnWeight: CGFloat = 1.6
   /// 九键字母层空格键及需要底行地球键时数字层 0 键的弹性权重。
   static let nineKeySpaceWeight: CGFloat = 4.2
-  /// 123 层表情键上的表情线框图标。
+  /// 123 层表情键上的系统 SF Symbols 图标（对齐 KeyboardKit）。
   private static let layerEmojiIconSide: CGFloat = 22
+  private static let layerEmojiIcon: UIImage =
+    UIImage(systemName: "face.smiling", withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .regular))
+    ?? KeyboardIcon.emoji.image(pointSize: layerEmojiIconSide)
 
   /// 按键没有自己设定时的键面字体：title3 文字样式，皮肤要求时用等宽字体。
   private static let keyLabelTransformer = UIConfigurationTextAttributesTransformer { attributes in
@@ -4688,7 +4691,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private static let functionLabelTransformer = UIConfigurationTextAttributesTransformer { attributes in
     var attributes = attributes
-    attributes.font = .systemFont(ofSize: 15, weight: .medium)
+    attributes.font = .systemFont(ofSize: 16, weight: .regular)
     return attributes
   }
 
@@ -5164,12 +5167,17 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       // absolute index the chip with that number is actually displaying, and a digit with no chip
       // on this page has to do nothing: falling through would hand it to handleCandidateKey and
       // commit a first-page candidate the user cannot see.
-      // 候选条上的邮箱后缀不归 Engine，`abc@1` 的数字照常上屏。
+      // 候选条上的邮箱后缀不归 Engine，`abc@1` 的数字照常上屏；空闲态输入数字也直接上屏，不走选词路径以免触发「候选已失效」提示。
       let composing = !visiblePreedit.isEmpty || (!visibleCandidates.isEmpty && visibleEmailSuffixes.isEmpty)
+      guard composing else {
+        insertDirectText(symbol)
+        return
+      }
       if Self.digitHasNoChip(symbol, chips: min(candidatePageSize, visibleCandidates.count), composing: composing) { return }
       let snapshot = session.handleCandidateKey(symbol)
       if !snapshot.isHandled && snapshot.preedit.isEmpty {
         insertDirectText(symbol)
+        return
       }
       render(snapshot)
       return
@@ -5534,7 +5542,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let on = letterCaseState != .lowercase
     for button in [shiftButton, rightShiftButton].compactMap({ $0 }) {
       guard var configuration = button.configuration else { continue }
-      configuration.image = letterCaseState == .capsLock ? Self.capsLockIcon : Self.shiftIcon
+      switch letterCaseState {
+      case .lowercase: configuration.image = Self.shiftIcon
+      case .shifted: configuration.image = Self.shiftFilledIcon
+      case .capsLock: configuration.image = Self.capsLockIcon
+      }
       configuration.title = nil
       configuration.titleTextAttributesTransformer = Self.functionLabelTransformer
       // 不留内边距，图标本来就居中。
@@ -5546,11 +5558,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  /// 设计稿的按键图标为 22pt（dc.html 里 shift、caps lock 和 backspace 的路径），与 Android 的 `KeyboardIconKey` 一致。
+  /// 功能键图标对齐 KeyboardKit / iOS 原生 SF Symbols（`shift`/`shift.fill`/`capslock.fill`/`delete.left`）。
   private static let functionIconSide: CGFloat = 22
-  private static let shiftIcon = KeyboardIcon.shift.image(pointSize: functionIconSide)
-  private static let capsLockIcon = KeyboardIcon.capsLock.image(pointSize: functionIconSide)
-  private static let backspaceIcon = KeyboardIcon.backspace.image(pointSize: functionIconSide)
+  private static let functionSymbolConfig = UIImage.SymbolConfiguration(pointSize: 19, weight: .regular)
+  private static let shiftIcon: UIImage =
+    UIImage(systemName: "shift", withConfiguration: functionSymbolConfig)
+    ?? KeyboardIcon.shift.image(pointSize: functionIconSide)
+  private static let shiftFilledIcon: UIImage =
+    UIImage(systemName: "shift.fill", withConfiguration: functionSymbolConfig)
+    ?? KeyboardIcon.shift.image(pointSize: functionIconSide)
+  private static let capsLockIcon: UIImage =
+    UIImage(systemName: "capslock.fill", withConfiguration: functionSymbolConfig)
+    ?? KeyboardIcon.capsLock.image(pointSize: functionIconSide)
+  private static let backspaceIcon: UIImage =
+    UIImage(systemName: "delete.left", withConfiguration: functionSymbolConfig)
+    ?? KeyboardIcon.backspace.image(pointSize: functionIconSide)
+  private static let spaceMicIcon: UIImage =
+    UIImage(systemName: "mic", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .regular))
+    ?? KeyboardIcon.mic.image(pointSize: spaceMicSide)
 
   private func updateLanguageModeButton() {
     var configuration = UIButton.Configuration.filled()
@@ -5635,7 +5660,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       let hasMic = configuration.image != nil
       guard configuration.title != targetTitle || hasMic != mic || configuration.baseForegroundColor != color else { continue }
       configuration.title = targetTitle
-      configuration.image = mic ? KeyboardIcon.mic.image(pointSize: Self.spaceMicSide) : nil
+      configuration.image = mic ? Self.spaceMicIcon : nil
       configuration.imagePlacement = .leading
       configuration.imagePadding = Self.spaceLabelGap
       configuration.contentInsets.leading = Self.spaceLabelGap
@@ -5743,20 +5768,22 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private static let returnIconSide: CGFloat = 22
-  /// 回车图标只画一次，与 `shiftIcon`、`backspaceIcon` 一样；模板图，颜色跟按键前景色走。
-  private static let returnIcon = KeyboardIcon.returnKey.image(pointSize: returnIconSide)
+  /// 回车图标对齐 KeyboardKit / iOS 原生 SF Symbols（`return.left`）；模板图，颜色跟按键前景色走。
+  private static let returnIcon: UIImage =
+    UIImage(systemName: "return.left", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+    ?? KeyboardIcon.returnKey.image(pointSize: returnIconSide)
 
-  /// 组字中显示的确认：15pt semibold。
+  /// 组字中显示的确认：16pt semibold。
   private static let returnConfirmTransformer = UIConfigurationTextAttributesTransformer { attributes in
     var attributes = attributes
-    attributes.font = .systemFont(ofSize: 15, weight: .semibold)
+    attributes.font = .systemFont(ofSize: 16, weight: .semibold)
     return attributes
   }
 
-  /// 输入框的动作词（发送、搜索……），用功能键的字号。
+  /// 输入框的动作词（发送、搜索……），与功能键一致使用 16pt regular。
   private static let returnTitleTransformer = UIConfigurationTextAttributesTransformer { attributes in
     var attributes = attributes
-    attributes.font = .systemFont(ofSize: 15, weight: .medium)
+    attributes.font = .systemFont(ofSize: 16, weight: .regular)
     return attributes
   }
 
@@ -6632,7 +6659,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func configureExpandButton() {
     var configuration = UIButton.Configuration.plain()
     configuration.image = KeyboardIcon.candidateExpand.image(pointSize: Self.expandIconSide)
-    configuration.baseForegroundColor = KeyboardTheme.current.keyForeground
+    configuration.baseForegroundColor = KeyboardTheme.current.secondary
     configuration.contentInsets = .zero
     expandCandidatesButton.configuration = configuration
     expandCandidatesButton.accessibilityLabel = "展开全部候选"
@@ -6683,6 +6710,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       case .began:
         guard candidatePanel == nil, !expandCandidatesButton.isHidden else { return }
         showCandidatePanel(interactive: true)
+        if let panel = candidatePanel {
+          let dragDistance = max(90, panel.bounds.height * 0.45)
+          let progress = min(1, max(0, recognizer.translationY / dragDistance))
+          panel.applyInteractiveExpandProgress(progress)
+          setKeyRowsInteractiveExpandProgress(progress)
+          expandCandidatesButton.transform = CGAffineTransform(rotationAngle: .pi * progress)
+        }
       case .changed:
         guard let panel = candidatePanel else { return }
         let dragDistance = max(90, panel.bounds.height * 0.45)
@@ -11192,8 +11226,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     updateSpaceKeyTitle()
     exitLocalModeButton.configuration?.baseForegroundColor = candidatePalette?.accent ?? skin.accent
     preeditButton.configuration?.baseForegroundColor = candidatePalette?.preeditText ?? candidatePalette?.secondary ?? skin.secondary
-    expandCandidatesButton.configuration?.baseForegroundColor = candidatePalette?.text ?? skin.keyForeground
-    closePredictionButton.configuration?.baseForegroundColor = candidatePalette?.text ?? skin.keyForeground
+    expandCandidatesButton.configuration?.baseForegroundColor = candidatePalette?.secondary ?? skin.secondary
+    closePredictionButton.configuration?.baseForegroundColor = candidatePalette?.secondary ?? skin.secondary
     expandDivider.backgroundColor = skin.hairline
     adjustOverlay?.apply(skin: skin)
     oneHandGutter.apply(skin: skin)
@@ -11337,8 +11371,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     candidatePanel?.canvasVisible = candidateCanvasActive
     exitLocalModeButton.configuration?.baseForegroundColor = candidatePalette?.accent ?? skin.accent
     preeditButton.configuration?.baseForegroundColor = candidatePalette?.preeditText ?? candidatePalette?.secondary ?? skin.secondary
-    expandCandidatesButton.configuration?.baseForegroundColor = candidatePalette?.text ?? skin.keyForeground
-    closePredictionButton.configuration?.baseForegroundColor = candidatePalette?.text ?? skin.keyForeground
+    expandCandidatesButton.configuration?.baseForegroundColor = candidatePalette?.secondary ?? skin.secondary
+    closePredictionButton.configuration?.baseForegroundColor = candidatePalette?.secondary ?? skin.secondary
     renderCandidateStrip()
   }
 
@@ -11424,7 +11458,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     // 普通键在密码框里外都播同一个样本，只有空格、回车和退格才需要问一下输入框。
     let playback = KeySoundPackPolicy.playback(
-      soundEnabled: KeyboardFeedbackPreference.soundEnabled, wanted: wantedKeySoundPack, loaded: keySounds.loaded,
+      soundEnabled: soundEnabled, wanted: wantedKeySoundPack, loaded: keySounds.loaded,
       keyClass: keyClass, secure: keyClass != .standard && isCredentialField)
     switch playback {
     case .silent: break

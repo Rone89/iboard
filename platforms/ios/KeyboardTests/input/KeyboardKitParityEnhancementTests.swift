@@ -116,12 +116,16 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
       button.configuration?.baseForegroundColor?.resolvedColor(with: controller.traitCollection),
       KeyboardTheme.current.secondary.resolvedColor(with: controller.traitCollection)
     )
-    let initialTitle = button.configuration?.title
+    let initialValue = button.accessibilityValue
+    let initialImage = try XCTUnwrap(button.configuration?.image)
+    XCTAssertNil(button.configuration?.title)
     button.sendActions(for: .primaryActionTriggered)
     controller.view.layoutIfNeeded()
-    let toggledTitle = button.configuration?.title
-    XCTAssertNotEqual(initialTitle, toggledTitle)
-    XCTAssertTrue(toggledTitle == "英" || initialTitle == "英")
+    let toggledValue = button.accessibilityValue
+    let toggledImage = try XCTUnwrap(button.configuration?.image)
+    XCTAssertNotEqual(initialValue, toggledValue)
+    XCTAssertTrue(toggledValue == "英文输入" || initialValue == "英文输入")
+    XCTAssertNotEqual(initialImage.pngData(), toggledImage.pngData())
     controller.viewDidDisappear(false)
   }
 

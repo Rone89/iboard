@@ -146,10 +146,11 @@ final class QuickPasteToolbarButton: UIButton {
   override var isHighlighted: Bool {
     didSet {
       guard isHighlighted != oldValue else { return }
+      let pressed = isHighlighted && isEnabled
       KeyPressMotion.animate(
         pad,
-        scale: isHighlighted && isEnabled ? KeyboardToolbarButton.pressScale : 1,
-        duration: KeyboardToolbarButton.pressDuration
+        scale: pressed ? KeyboardToolbarButton.pressScale : 1,
+        duration: pressed ? 0 : KeyboardToolbarButton.pressDuration
       )
     }
   }

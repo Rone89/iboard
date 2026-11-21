@@ -600,6 +600,51 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
     return true
   }
 
+  /// 批量异步喂入一整串 ASCII 字母（如 GlideBeam 滑行解出的完整读音），单次入队并仅对最后一个字母解码 JSON 快照，避免逐字母 N 次 JSON 解析与线程往返。
+  @discardableResult
+  func enqueueCharacters(_ text: String, completion: @escaping (MetasequoiaInputSnapshot) -> Void) -> Bool {
+    precondition(Thread.isMainThread)
+    guard handle != 0, !text.isEmpty else { return false }
+    var bytes: [UInt8] = []
+    bytes.reserveCapacity(text.utf8.count)
+    for scalar in text.unicodeScalars {
+      guard scalar.isASCII else { return false }
+      let byte = UInt8(scalar.value)
+      guard Self.acceptsAsynchronousCharacter(byte, grid: keyGrid, touched: false) else { return false }
+      bytes.append(byte)
+    }
+    let pending = PendingCharacter(completion)
+    let sessionHandle = handle
+    pendingCharactersLock.lock()
+    pendingCharacters.append(pending)
+    pendingCharactersLock.unlock()
+    MSIMEInputThread.shared.async { [weak self] in
+      guard let self else { return }
+      let snapshot: MetasequoiaInputSnapshot
+      do {
+        var finalResponse: UnsafeMutablePointer<CChar>?
+        for (index, byte) in bytes.enumerated() {
+          let response = msimeClientCharacter(sessionHandle, byte, false)
+          if index == bytes.count - 1 {
+            finalResponse = response
+          } else if let response {
+            msimeClientStringFree(response)
+          }
+        }
+        guard let value = try Self.decode(finalResponse) as? [String: Any]
+        else { throw InputBridgeFailure.invalidResponse }
+        snapshot = try Self.snapshot(value)
+      } catch {
+        snapshot = MetasequoiaInputSnapshot(diagnosticText: error.localizedDescription)
+      }
+      pendingCharactersLock.lock()
+      pending.snapshot = snapshot
+      pendingCharactersLock.unlock()
+      DispatchQueue.main.async { [weak self] in self?.deliverCompletedCharacters() }
+    }
+    return true
+  }
+
   /// 空格、删除、设置与焦点边界先完成此前数字；回调不持锁执行，允许渲染过程中再次读会话。
   func flushPendingCharacters() {
     guard hasPendingCharacters else { return }

@@ -206,7 +206,7 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
 
     var closeConfiguration = UIButton.Configuration.plain()
     closeConfiguration.image = UIImage(systemName: "chevron.up")
-    closeConfiguration.baseForegroundColor = skin.keyForeground
+    closeConfiguration.baseForegroundColor = skin.secondary
     let close = UIButton(
       configuration: closeConfiguration,
       primaryAction: UIAction { _ in onClose() })
@@ -278,8 +278,6 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
     setNeedsLayout()
   }
 
-  private var interactiveRevealMask: CALayer?
-
   func prepareExpandTransition() {
     if savedClipsToBoundsBeforeTransition == nil {
       savedClipsToBoundsBeforeTransition = clipsToBounds
@@ -292,48 +290,27 @@ final class KeyboardCandidatePanelView: CandidateCanvasHostView, UICollectionVie
     for column in sideColumns { column.transform = shift }
   }
 
-  /// 交互式下拉过程按 `0...1` 进度自上而下渐显候选面板并跟随位移。
+  /// 交互式下拉过程按 `0...1` 进度直接驱动纯 GPU 位移与透明度（不使用离屏 `layer.mask`，避免 120Hz 下嵌套遮罩掉帧）。
   func applyInteractiveExpandProgress(_ progress: CGFloat) {
     let clamped = min(1, max(0, progress))
     if savedClipsToBoundsBeforeTransition == nil {
       savedClipsToBoundsBeforeTransition = clipsToBounds
     }
     clipsToBounds = true
-    alpha = min(1, clamped * 1.25)
-    let shift = CGAffineTransform(translationX: 0, y: -22 * (1 - clamped))
+    alpha = min(1, clamped * 1.15)
+    let revealOffset = max(24, min(bounds.height * 0.28, 64))
+    let shift = CGAffineTransform(translationX: 0, y: -revealOffset * (1 - clamped))
     scrollView.transform = shift
     for column in sideColumns { column.transform = shift }
-
-    guard bounds.width > 0, bounds.height > 0 else { return }
-    let mask = interactiveRevealMask ?? {
-      let layer = CALayer()
-      layer.backgroundColor = UIColor.black.cgColor
-      interactiveRevealMask = layer
-      return layer
-    }()
-    if self.layer.mask !== mask {
-      self.layer.mask = mask
-    }
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    mask.frame = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height * max(0.02, clamped))
-    CATransaction.commit()
   }
 
   func commitExpandTransition() {
     alpha = 1
     scrollView.transform = .identity
     for column in sideColumns { column.transform = .identity }
-    if let mask = interactiveRevealMask, bounds.width > 0, bounds.height > 0 {
-      mask.frame = bounds
-    }
   }
 
   func finishExpandTransition() {
-    if layer.mask != nil {
-      layer.mask = nil
-    }
-    interactiveRevealMask = nil
     if let savedClipsToBoundsBeforeTransition {
       clipsToBounds = savedClipsToBoundsBeforeTransition
       self.savedClipsToBoundsBeforeTransition = nil

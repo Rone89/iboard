@@ -96,6 +96,8 @@ final class KeyboardKeyButton: UIButton {
 
   /// 按住时叠在按键底色上的黑色。它是按钮的子图层，不属于 configuration 的背景，所以逐键改写背景的皮肤处理（`applyKeyboardSkin`）不会把它丢掉。
   private var pressShade: CAShapeLayer?
+  private var appliedPressShadeBounds = CGRect.zero
+  private var appliedPressShadeRadius: CGFloat = -1
   /// `.opacity` 调暗之前按钮的 alpha，松手时恢复。
   private var restingAlpha: CGFloat?
 
@@ -128,12 +130,18 @@ final class KeyboardKeyButton: UIButton {
       scale = 1
       shade = pressed ? 1 - value : 0
     }
-    let duration = animatesPressFeedback ? KeyPressMotion.duration(for: pressFeedback) : 0
+    // 按下瞬间 0ms 立即反馈（零帧延迟），松手时保留顺滑复原动画。
+    let duration = (pressed || !animatesPressFeedback) ? 0 : KeyPressMotion.duration(for: pressFeedback)
     KeyPressMotion.animate(self, scale: scale, duration: duration)
     setPressShade(shade, duration: duration)
     if let opacity {
-      UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveLinear]) {
-        self.alpha = opacity
+      if duration == 0 {
+        layer.removeAnimation(forKey: "opacity")
+        UIView.performWithoutAnimation { self.alpha = opacity }
+      } else {
+        UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveLinear]) {
+          self.alpha = opacity
+        }
       }
     }
   }
@@ -198,24 +206,33 @@ final class KeyboardKeyButton: UIButton {
     return luminance < 0.45 ? .white : .black
   }
 
-  /// 按键底色的轮廓：皮肤设计自己的键形，或者 configuration 的圆角背景。
+  /// 按键底色的轮廓：皮肤设计自己的键形，或者 configuration 的圆角背景；尺寸与圆角未变时复用既有路径，避免每次按键重建 `UIBezierPath`。
   private func layoutPressShade() {
     guard let shade = pressShade else { return }
+    let background = configuration?.background
+    let surface = background?.customView as? SkinKeySurfaceView
+    let radius = background?.cornerRadius ?? KeyboardTheme.current.cornerRadius
+    if surface == nil, shade.path != nil, appliedPressShadeBounds == bounds, appliedPressShadeRadius == radius {
+      return
+    }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     shade.frame = bounds
-    let background = configuration?.background
     let insets = background?.backgroundInsets ?? .zero
     let rect = bounds.inset(by: UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing))
-    if let surface = background?.customView as? SkinKeySurfaceView {
+    if let surface {
       // 与 `SkinKeySurfaceView.draw` 填充的键面相同：按它的缩放内缩，再按凸起材质的厚度上移。
       let design = surface.design.normalized
       let depth: CGFloat = design.keyMaterial == .raised ? 3 * surface.scale : 0
       let face = rect.insetBy(dx: surface.scale, dy: surface.scale).inset(by: UIEdgeInsets(top: 0, left: 0, bottom: depth, right: 0))
       shade.path = SkinKeySurfaceView.path(in: face, shape: design.keyShape ?? .rounded, radius: design.cornerRadius * surface.scale).cgPath
+      appliedPressShadeBounds = .zero
+      appliedPressShadeRadius = -1
     } else {
-      let radius = min(background?.cornerRadius ?? KeyboardTheme.current.cornerRadius, min(rect.width, rect.height) / 2)
-      shade.path = UIBezierPath(roundedRect: rect, cornerRadius: max(radius, 0)).cgPath
+      let clamped = min(radius, min(rect.width, rect.height) / 2)
+      shade.path = UIBezierPath(roundedRect: rect, cornerRadius: max(clamped, 0)).cgPath
+      appliedPressShadeBounds = bounds
+      appliedPressShadeRadius = radius
     }
     CATransaction.commit()
   }
@@ -550,6 +567,8 @@ final class KeyboardKeyButton: UIButton {
   }
 
   private static let sharedFeedbackDefaults = KeyboardFeedbackPreference.defaults
+  /// 复用按键放大预览视图（最多保留 4 个供多指连打），避免每次按键都重新分配 `UIView`/`CAShapeLayer`/`UILabel`。
+  private static var previewPool: [KeyPressPreviewView] = []
 
   private func updatePressPreview() {
     guard showsPressPreview,
@@ -559,7 +578,7 @@ final class KeyboardKeyButton: UIButton {
       removePressPreview()
       return
     }
-    let preview = pressPreview ?? KeyPressPreviewView()
+    let preview = pressPreview ?? Self.previewPool.popLast() ?? KeyPressPreviewView()
     if preview.superview !== host {
       preview.removeFromSuperview()
       host.addSubview(preview)
@@ -591,8 +610,12 @@ final class KeyboardKeyButton: UIButton {
   }
 
   private func removePressPreview() {
-    pressPreview?.removeFromSuperview()
+    guard let preview = pressPreview else { return }
+    preview.removeFromSuperview()
     pressPreview = nil
+    if Self.previewPool.count < 4 {
+      Self.previewPool.append(preview)
+    }
   }
 
   /// 外部弹出长按选择气泡（`KeyActionCalloutView`）时收起按键放大预览，避免两层气泡重叠。

@@ -20,6 +20,8 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
   /// 系统打断了滑行（来电、键盘收起等），什么都不发送。
   var onCancelled: @MainActor () -> Void = {}
 
+  /// 系统预测的下一帧触点（仅用于轨迹笔尖视觉超前补偿，从不写入解码采样 `samples`）。
+  private(set) var predictedPoints: [CGPoint] = []
   private var tracked: UITouch?
   private var downKey = 0
   private var downLocation = CGPoint.zero
@@ -72,6 +74,7 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
     guard let touch = tracked, touches.contains(touch), let view else { return }
     // 合并的触摸带着两帧之间的全部采样，快速滑过一个键时也不会漏掉它。
     for sample in event.coalescedTouches(for: touch) ?? [touch] { record(sample, in: view) }
+    predictedPoints = (event.predictedTouches(for: touch) ?? []).prefix(2).map { $0.location(in: view) }
     if isGliding {
       state = .changed
       onMoved(samples)
@@ -122,6 +125,7 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
     tracked = nil
     frames = []
     samples = []
+    predictedPoints = []
   }
 
   private func record(_ touch: UITouch, in view: UIView) {
@@ -172,11 +176,32 @@ final class GlideTrailView: UIView {
   /// clearStroke 的次序移走上一笔的淡出动画、恢复不透明度。淡出动画
   /// `isRemovedOnCompletion = false` + `fillMode = .forwards`，不清的话它
   /// 会把新一笔的展示层永久压在透明度 0 上——轨迹看起来就丢了。
-  func draw(_ samples: [GlideTyping.Sample], color: UIColor) {
+  func draw(_ samples: [GlideTyping.Sample], predicted: [CGPoint] = [], color: UIColor) {
     shape.removeAnimation(forKey: "fade")
     geometry.reset()
-    let rawPoints = samples.map { CGPoint(x: $0.x, y: $0.y) }
-    for point in SwipeTrailGeometry.smoothed(rawPoints) { geometry.append(point) }
+    // 轨迹只展示最近 `windowLength`（150pt）的弧长：逆向截取末尾窗口再做平滑，避免长词滑行时每帧 O(N²) 重建整段历史。
+    let tailBudget = SwipeTrailGeometry.windowLength + 24
+    var startIndex = samples.count
+    var accumulated: CGFloat = 0
+    if !samples.isEmpty {
+      startIndex = samples.count - 1
+      var prev = samples[startIndex]
+      while startIndex > 0, accumulated < tailBudget {
+        startIndex -= 1
+        let cur = samples[startIndex]
+        accumulated += hypot(prev.x - cur.x, prev.y - cur.y)
+        prev = cur
+      }
+    }
+    var windowPoints: [CGPoint] = []
+    windowPoints.reserveCapacity((samples.count - startIndex) + predicted.count)
+    for index in startIndex..<samples.count {
+      windowPoints.append(CGPoint(x: samples[index].x, y: samples[index].y))
+    }
+    for point in predicted where point.x.isFinite && point.y.isFinite {
+      windowPoints.append(point)
+    }
+    for point in SwipeTrailGeometry.smoothed(windowPoints) { geometry.append(point) }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     shape.opacity = 1

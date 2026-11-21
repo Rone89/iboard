@@ -2218,12 +2218,14 @@ final class NineKeyKeyboardTests: XCTestCase {
         descendants(controller.view).first { $0.accessibilityLabel == "字母 A" } as? UIButton)
       XCTAssertEqual(a.configuration?.title, "a", "\(scheme) letter faces default to lowercase")
       XCTAssertEqual(a.accessibilityLabel, "字母 A")
-      // 设计稿在手机上用固定的 22pt 键面字号，不用 Dynamic Type 样式。
+      // 对齐 KeyboardKit / iOS 原生字母键字号：小写态 25pt/22pt，大写态 22pt/20pt，不用 Dynamic Type 样式。
       let transformer = try XCTUnwrap(a.configuration?.titleTextAttributesTransformer)
       let font = try XCTUnwrap(transformer.callAsFunction(AttributeContainer()).uiKit.font)
-      XCTAssertEqual(font.pointSize, KeyboardViewController.letterFontSize(.phone))
-      XCTAssertEqual(KeyboardViewController.letterFontSize(.phone), 22)
-      XCTAssertEqual(KeyboardViewController.letterFontSize(.tablet), 20)
+      XCTAssertEqual(font.pointSize, KeyboardViewController.letterFontSize(.phone, uppercase: false))
+      XCTAssertEqual(KeyboardViewController.letterFontSize(.phone, uppercase: false), 25)
+      XCTAssertEqual(KeyboardViewController.letterFontSize(.phone, uppercase: true), 22)
+      XCTAssertEqual(KeyboardViewController.letterFontSize(.tablet, uppercase: false), 22)
+      XCTAssertEqual(KeyboardViewController.letterFontSize(.tablet, uppercase: true), 20)
 
       a.sendActions(for: .primaryActionTriggered)
       XCTAssertNotNil(descendants(controller.view).first { $0.accessibilityIdentifier == "candidate-1" })

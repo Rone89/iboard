@@ -33,7 +33,8 @@ enum KeyboardFeedbackPreference {
     InputSchemePreference.appGroupDefaults
   }
 
-  static var soundEnabled: Bool {
+  static var soundEnabled: Bool { soundEnabled(in: defaults) }
+  static func soundEnabled(in defaults: UserDefaults) -> Bool {
     defaults.object(forKey: soundKey) as? Bool ?? true
   }
 
