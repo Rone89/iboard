@@ -44,6 +44,40 @@ final class GlideBeamEngine {
     queue.sync { loadIfNeeded() }
   }
 
+  /// 收到系统内存警告、关闭滑行输入或扩展即将挂起时，异步释放已加载的 GlideBeam 词典句柄；
+  /// 释放后 `isReady` 立即置为 `false`，下次用户起滑或再次 `prepare()` 时自动按需重建，避免常驻词典把扩展推向 Jetsam 上限。
+  func releaseForMemoryPressure(completion: (@Sendable () -> Void)? = nil) {
+    readyLock.lock()
+    loadedReady = false
+    readyLock.unlock()
+    queue.async { [weak self] in
+      self?.freeHandleLocked()
+      completion?()
+    }
+  }
+
+  /// 同步释放句柄（供扩展挂起前限时清理与单测使用）。
+  func releaseForMemoryPressureSync() {
+    readyLock.lock()
+    loadedReady = false
+    readyLock.unlock()
+    queue.sync {
+      freeHandleLocked()
+    }
+  }
+
+  private func freeHandleLocked() {
+    if let existing = handle {
+      gkEngineFree(existing)
+      handle = nil
+    }
+    layoutSignature = nil
+    lastDecodeDiagnostics = nil
+    readyLock.lock()
+    loadedReady = false
+    readyLock.unlock()
+  }
+
   /// 轨迹 → 拼音读音（首选，纯小写字母；解不出时为 nil）。
   ///
   /// - Parameters:

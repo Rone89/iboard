@@ -274,6 +274,101 @@ final class KeyboardMemoryTests: XCTestCase {
     handwritingController.viewWillDisappear(false)
   }
 
+  /// 内存告警时应清空按键放大预览复用池，避免空闲预览气泡常驻图层内存。
+  func testMemoryWarningClearsKeyPressPreviewPool() throws {
+    guard UIDevice.current.userInterfaceIdiom == .phone else {
+      throw XCTSkip("按键放大预览仅在 iPhone 上启用")
+    }
+    let defaults = KeyboardFeedbackPreference.defaults
+    let previousPreview = defaults.object(forKey: KeyboardFeedbackPreference.keyPreviewKey)
+    defer {
+      if let previousPreview { defaults.set(previousPreview, forKey: KeyboardFeedbackPreference.keyPreviewKey) }
+      else { defaults.removeObject(forKey: KeyboardFeedbackPreference.keyPreviewKey) }
+      KeyboardKeyButton.clearCachesForMemoryPressure()
+    }
+    defaults.set(true, forKey: KeyboardFeedbackPreference.keyPreviewKey)
+    KeyboardKeyButton.clearCachesForMemoryPressure()
+
+    let controller = composingKeyboard()
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 420))
+    window.rootViewController = controller
+    window.isHidden = false
+    defer {
+      controller.viewWillDisappear(false)
+      window.isHidden = true
+      window.rootViewController = nil
+    }
+    window.layoutIfNeeded()
+
+    let letterKey = try XCTUnwrap(
+      descendants(controller.view).first { $0.accessibilityLabel == "字母 A" } as? KeyboardKeyButton,
+      "未找到字母 A 按键")
+    letterKey.isHighlighted = true
+    letterKey.isHighlighted = false
+    XCTAssertGreaterThan(KeyboardKeyButton.previewPoolCount, 0, "松手后按键预览气泡应进入复用池")
+
+    controller.didReceiveMemoryWarning()
+    XCTAssertEqual(KeyboardKeyButton.previewPoolCount, 0, "内存告警后应清空按键预览复用池")
+  }
+
+  /// 内存告警时已隐藏的手写面板应从视图树卸载并释放，再次切回手写时按需重建。
+  func testMemoryWarningReleasesHiddenHandwritingPanelAndRebuildsOnDemand() throws {
+    enableAllInputSchemes()
+    InputSchemePreference.scheme = .handwriting
+    let controller = KeyboardViewController()
+    weak var releasedPanel: UIView?
+    autoreleasepool {
+      controller.loadViewIfNeeded()
+      controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
+      controller.viewWillAppear(false)
+      controller.view.layoutIfNeeded()
+
+      let panel = descendants(controller.view).first { $0 is HandwritingInputView }
+      XCTAssertNotNil(panel, "手写方案激活时应存在手写面板")
+      releasedPanel = panel
+
+      // 切回拼音使手写面板隐藏，再触发内存告警卸载它。
+      InputSchemePreference.scheme = .quanpin
+      controller.viewWillAppear(false)
+      controller.view.layoutIfNeeded()
+      controller.didReceiveMemoryWarning()
+      controller.view.layoutIfNeeded()
+    }
+    RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    XCTAssertFalse(descendants(controller.view).contains { $0 is HandwritingInputView }, "内存告警应卸载已隐藏的手写面板")
+    XCTAssertNil(releasedPanel, "卸载后的手写面板实例应被释放")
+
+    // 再次切回手写方案时应按需重建手写面板且保持可用。
+    InputSchemePreference.scheme = .handwriting
+    controller.viewWillAppear(false)
+    controller.view.layoutIfNeeded()
+    let rebuiltPanel = descendants(controller.view).first { $0 is HandwritingInputView }
+    XCTAssertNotNil(rebuiltPanel, "重新切入手写方案时应按需重建手写面板")
+    XCTAssertFalse(rebuiltPanel?.isHidden ?? true, "重建后的手写面板应处于可见状态")
+    controller.viewWillDisappear(false)
+  }
+
+  #if GLIDE_ENGINE_LINKED
+  /// GlideBeam 句柄按需释放后应立即可见为未就绪、重复释放安全幂等，且后续按需重新加载可恢复可用。
+  func testGlideBeamEngineReleasesAndReloadsCleanly() {
+    defer { GlideBeamEngine.shared.releaseForMemoryPressureSync() }
+    GlideBeamEngine.shared.prepareAndWait()
+    let loadedInitially = GlideBeamEngine.shared.isReady
+
+    GlideBeamEngine.shared.releaseForMemoryPressureSync()
+    XCTAssertFalse(GlideBeamEngine.shared.isReady, "释放后 GlideBeam 应立即可见为未就绪")
+
+    // 幂等性校验：已释放状态下重复释放不应崩溃。
+    GlideBeamEngine.shared.releaseForMemoryPressureSync()
+    XCTAssertFalse(GlideBeamEngine.shared.isReady)
+
+    if loadedInitially {
+      GlideBeamEngine.shared.prepareAndWait()
+      XCTAssertTrue(GlideBeamEngine.shared.isReady, "释放后再次预热应能干净重载 GlideBeam 词典")
+    }
+  }
+  #endif
+
   // MARK: - 重新加载
 
   /// 未进入窗口的键盘也会在布局偏好和方案切换后销毁，不能把整套约束迁移成非法的布局引擎。

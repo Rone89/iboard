@@ -108,7 +108,12 @@ final class HandwritingCanvas: UIView {
     clipsToBounds = true
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-  func clear() { strokes = []; drawing = false; setNeedsDisplay(); onChange?() }
+  func clear(notify: Bool = true) {
+    strokes = []
+    drawing = false
+    setNeedsDisplay()
+    if notify { onChange?() }
+  }
   func undo() { if !strokes.isEmpty { strokes.removeLast() }; drawing = false; setNeedsDisplay(); onChange?() }
   override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
     guard acceptsInk, strokes.count < 64, let touch = touches.first else { return }
@@ -230,7 +235,10 @@ final class HandwritingInputView: UIView {
     downloadGate.setActive(false)
     downloadTask?.cancel()
     downloadTask = nil
-    clear(); recognizerStorage?.release()
+    invalidate()
+    canvas.clear(notify: false)
+    recognizerStorage?.release()
+    recognizerStorage = nil
   }
   private func toggleDownload() {
     if let downloadTask {

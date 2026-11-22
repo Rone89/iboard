@@ -637,6 +637,8 @@ final class KeyboardKeyButton: UIButton {
   private static let sharedFeedbackDefaults = KeyboardFeedbackPreference.defaults
   /// 复用按键放大预览视图（最多保留 4 个供多指连打），避免每次按键都重新分配 `UIView`/`CAShapeLayer`/`UILabel`。
   private static var previewPool: [KeyPressPreviewView] = []
+  /// 当前缓存池中的空闲预览视图数量（供内存告警测试断言）。
+  static var previewPoolCount: Int { previewPool.count }
   /// 按 `(皮肤, 明暗模式)` 缓存解析好的预览气泡颜色，避免每次按下都新建 3 个动态 `UIColor` 闭包。
   private static var cachedPreviewPalette: (
     skin: KeyboardTheme,
@@ -646,6 +648,12 @@ final class KeyboardKeyButton: UIButton {
     text: UIColor,
     monospaced: Bool
   )?
+
+  /// 内存告警或挂起前清空按键放大预览复用池与解析色缓存，归还常驻图层内存。
+  static func clearCachesForMemoryPressure() {
+    previewPool.removeAll(keepingCapacity: false)
+    cachedPreviewPalette = nil
+  }
 
   private func updatePressPreview() {
     guard showsPressPreview,

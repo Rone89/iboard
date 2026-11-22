@@ -181,6 +181,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var glideLivePreviewLastTime: TimeInterval = -.infinity
   private var glideLivePreviewLastPoint: CGPoint?
   private var glideLivePreviewCanQuerySession = false
+  private var glideEngineReleasePending = false
   private var glideUndoTracker = GlideUndoTracker()
   private var englishTypingAssist = EnglishTypingAssistTracker()
   private let systemLexicon = SystemLexiconStore.shared
@@ -1197,6 +1198,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     synchronizeOnlineCandidatePreference()
     glideTypingEnabled = KeyboardLayoutPreference.glideTyping
     bilingualGlideEnabled = KeyboardLayoutPreference.bilingualGlide
+    #if GLIDE_ENGINE_LINKED
+    if (!glideTypingEnabled || GlideEnginePreference.choice != .glidebeam) && GlideBeamEngine.shared.isReady {
+      GlideBeamEngine.shared.releaseForMemoryPressure()
+    }
+    #endif
     // 完全访问和按键音开关都可能在两次出现之间变了；包先按会话手上的文档开始加载，重读之后选择变了再换。
     synchronizeKeySoundPack()
     let rebuildsSession = session.dictionarySessionSuspended
@@ -1296,10 +1302,27 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     closeKeyboardPicker()
     closeKeyboardService()
     handwritingView?.deactivate()
+    if let panel = handwritingView, panel.isHidden {
+      keyColumn.removeArrangedSubview(panel)
+      panel.removeFromSuperview()
+      (keyboardRoot as? KeyAreaStackView)?.gapRoutingExclusions.removeAll { $0 === panel }
+      handwritingView = nil
+      keyColumn.updateConstraintsIfNeeded()
+    }
     snapshotWorker.stop()
-    // 内存紧张时裁剪多余声道，保留自定义按键音不退回系统音；同时停掉 CoreHaptics 释放缓存播放器。
+    // 内存紧张时裁剪多余声道，保留自定义按键音不退回系统音；同时停掉 CoreHaptics、清空按键预览池与音标缓存。
     keySounds.trimVoicesForMemoryPressure()
     hapticsEngine.stop()
+    KeyboardKeyButton.clearCachesForMemoryPressure()
+    invalidateCandidatePronunciations()
+    #if GLIDE_ENGINE_LINKED
+    if glideActive {
+      glideEngineReleasePending = true
+    } else {
+      glideEngineReleasePending = false
+      GlideBeamEngine.shared.releaseForMemoryPressure()
+    }
+    #endif
     Self.cachedQuickPasteChangeCount = nil
     Self.cachedQuickPastePreview = nil
     candidateGlossEpoch &+= 1
@@ -1558,6 +1581,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       idleMaintenance.cancel()
       releaseDictionarySession()
     }
+    // 即将被系统挂起时压低后台常驻占用，减少被 Jetsam 强杀后下次唤醒退回完整冷启动的概率。
+    keySounds.trimVoicesForMemoryPressure()
+    KeyboardKeyButton.clearCachesForMemoryPressure()
+    #if GLIDE_ENGINE_LINKED
+    GlideBeamEngine.shared.releaseForMemoryPressureSync()
+    #endif
     DiagnosticLog.shared.write("suspension_released ms=\(Self.elapsedMilliseconds(since: start)) session_held=\(session.holdsSession ? 1 : 0)")
   }
 
@@ -2129,12 +2158,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       && letterRowViews.allSatisfy { !$0.isHidden }
   }
 
-  /// 滑行结束：键区重新接受新的手指，轨迹抬手时淡出，被打断时直接清空。
+  /// 滑行结束：键区重新接受新的手指，轨迹抬手时淡出，被打断时直接清空；若滑行期间收到内存告警则在此补放 GlideBeam 词典句柄。
   private func endGlide(fading: Bool = false) {
     glideActive = false
     stopGlideLivePreview()
     updateKeyHitSuppression()
     if fading { glideTrail.fadeOut() } else { glideTrail.clear() }
+    #if GLIDE_ENGINE_LINKED
+    if glideEngineReleasePending {
+      glideEngineReleasePending = false
+      GlideBeamEngine.shared.releaseForMemoryPressure()
+    }
+    #endif
   }
 
   private func beginGlideLivePreview() {
