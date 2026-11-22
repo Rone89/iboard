@@ -131,4 +131,90 @@ final class KeyPressFeedbackTests: XCTestCase {
     XCTAssertEqual(try key(labelled: "删除", in: controller).pressSoundClass, .backspace)
     XCTAssertEqual(try key(labelled: "换行", in: controller).pressSoundClass, .enter)
   }
+
+  /// 双指快打防颠倒：26 键字母键开启 `supportsRollover`，Shift/空格/退格/回车不开启；先行键在后续键按下瞬间按序提交且不重复反馈。
+  func testKeyRolloverCommitsPreviousLetterInOrderWithoutDoubleFeedback() throws {
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
+    let first = KeyboardKeyButton(type: .system)
+    let second = KeyboardKeyButton(type: .system)
+    first.supportsRollover = true
+    second.supportsRollover = true
+    window.addSubview(first)
+    window.addSubview(second)
+
+    var sequence: [String] = []
+    var firstSilenced: Bool?
+    first.addAction(UIAction { _ in
+      sequence.append("n")
+      firstSilenced = KeyboardKeyButton.releasingPressThatFedBack
+    }, for: .primaryActionTriggered)
+    second.addAction(UIAction { _ in
+      sequence.append("i")
+    }, for: .primaryActionTriggered)
+
+    XCTAssertTrue(first.beginPressFeedback())
+    first.isHighlighted = true
+    first.registerActiveRolloverForPress()
+    // 第二根手指按下 i 时冲刷先行键 n，确保按按下顺序先提交 n 且沿用按下反馈不二次出声。
+    KeyboardKeyButton.flushActiveRollover(except: second)
+    XCTAssertEqual(sequence, ["n"])
+    XCTAssertEqual(firstSilenced, true)
+    XCTAssertTrue(first.committedByRollover)
+    XCTAssertFalse(first.isHighlighted)
+    // 同一次按压不能被重复抢跑提交。
+    XCTAssertFalse(first.commitByRollover())
+    XCTAssertEqual(sequence, ["n"])
+
+    // 手指滑出按键取消高亮后，不再触发抢跑提交。
+    second.isHighlighted = false
+    second.registerActiveRolloverForPress()
+    KeyboardKeyButton.flushActiveRollover(except: first)
+    XCTAssertEqual(sequence, ["n"])
+
+    // 功能键不作为抢跑先行键（保留按住 Shift 再按字母的组合行为）。
+    let controller = makeController(.quanpin)
+    XCTAssertTrue(try key(labelled: "字母 Q", in: controller).supportsRollover)
+    XCTAssertTrue(try key(labelled: "字母 M", in: controller).supportsRollover)
+    XCTAssertFalse(try key(labelled: "大写", in: controller).supportsRollover)
+    XCTAssertFalse(try key(labelled: "空格", in: controller).supportsRollover)
+    XCTAssertFalse(try key(labelled: "删除", in: controller).supportsRollover)
+    XCTAssertFalse(try key(labelled: "换行", in: controller).supportsRollover)
+  }
+
+  /// 长按多选气泡横向拖选切换高亮项时，只在索引真实变化时触发回调。
+  func testCalloutNotifiesHighlightChangesDuringDragSelection() {
+    let skin = KeyboardTheme.current
+    let callout = KeyActionCalloutView(options: ["，", "。", "？"], skin: skin) { _ in }
+    callout.frame = CGRect(x: 0, y: 0, width: 130, height: 48)
+    callout.layoutIfNeeded()
+    var seen: [Int?] = []
+    callout.onHighlightChanged = { seen.append($0) }
+    let trigger = UIView(frame: CGRect(x: 40, y: 54, width: 40, height: 40))
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 300, height: 200))
+    window.addSubview(callout)
+    window.addSubview(trigger)
+    callout.layoutIfNeeded()
+
+    callout.beginDrag(at: CGPoint(x: 20, y: 24))
+    callout.trackDrag(at: CGPoint(x: 65, y: 24), ended: false, triggerKey: trigger, onCommit: { _ in }, onCancel: {})
+    callout.trackDrag(at: CGPoint(x: 66, y: 24), ended: false, triggerKey: trigger, onCommit: { _ in }, onCancel: {})
+    callout.trackDrag(at: CGPoint(x: 110, y: 24), ended: false, triggerKey: trigger, onCommit: { _ in }, onCancel: {})
+    XCTAssertEqual(seen, [1, 2])
+  }
+
+  /// 系统自定义短语索引支持大小写与拼音分词撇号归一化，并保持首次出现顺序且去重。
+  func testSystemLexiconIndexedMatching() {
+    let store = SystemLexiconStore()
+    store.setEntriesForTests([
+      .init(userInput: "OMW", documentText: "在路上了"),
+      .init(userInput: "omw", documentText: "在路上了"),
+      .init(userInput: "omw", documentText: "On my way!"),
+      .init(userInput: "nihao", documentText: "你好呀"),
+    ])
+    XCTAssertEqual(store.matches(forInput: "omw"), ["在路上了", "On my way!"])
+    XCTAssertEqual(store.matches(forInput: "", preedit: "ni'hao"), ["你好呀"])
+    XCTAssertEqual(store.matches(forInput: "omw", preedit: "ni'hao"), ["在路上了", "On my way!", "你好呀"])
+    store.setEntriesForTests([])
+    XCTAssertEqual(store.matches(forInput: "omw"), [])
+  }
 }

@@ -66,7 +66,7 @@ enum AppThemePalette {
   private static let lock = NSLock()
   private static var state = State()
 
-  private static var defaults: UserDefaults? { UserDefaults(suiteName: MSIMEAppEdition.appGroupIdentifier) }
+  private static let defaults: UserDefaults? = UserDefaults(suiteName: MSIMEAppEdition.appGroupIdentifier)
 
   /// 绘制的主题或季节变化时递增；以它为 key 的视图会重建，让动态颜色重新解析。
   static var version: Int { lock.withLock { state.version } }

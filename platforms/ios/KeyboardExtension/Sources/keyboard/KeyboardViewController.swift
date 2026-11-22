@@ -710,9 +710,22 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var currentNineKeySpellings: [String] = []
   private var currentNineKeySingleCharacter = false
   private var currentNineKeyStrokes = ""
+  private struct AppliedLearningState: Equatable {
+    var mode: MetasequoiaFrequencyAdjustmentMode
+    var triggerCount: Int
+    var linearStep: Int
+    var learningEnabled: Bool
+    var privateSession: Bool
+  }
+  private struct PronunciationTableCheckKey: Equatable {
+    var enabled: Bool
+    var languageCode: String
+  }
   private var appliedLayoutInputs: KeyboardLayoutInputs?
   private var appliedLetterCaseInputs: LetterCaseInputs?
   private var appliedSpellingStripInputs: SpellingStripInputs?
+  private var appliedLearningState: AppliedLearningState?
+  private var checkedPronunciationTableKey: PronunciationTableCheckKey?
   private var candidateGlossTimer: Timer?
   /// Engine's local mode, as of the last snapshot.
   ///
@@ -1174,7 +1187,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     synchronizeInputContext()
     synchronizeInputSchemePreference()
     synchronizeChineseOutputPreference()
-    applyLearningPreferences()
+    applyLearningPreferences(force: true)
     _ = synchronizeTranslationRoute()
     synchronizeOnlineCandidatePreference()
     glideTypingEnabled = KeyboardLayoutPreference.glideTyping
@@ -2974,6 +2987,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let commit = onCommit ?? { [weak self] option in self?.commitNineKeyHoldOption(option) }
     keyHoldCommitAction = commit
     let options = KeyActionCalloutView(options: optionTexts, skin: skin, onSelect: commit)
+    options.onHighlightChanged = { [weak self] index in
+      guard let self, index != nil, self.hapticsEnabled else { return }
+      if !self.hapticsEngine.play(strength: self.hapticStrength, event: .cursorTick) {
+        self.cursorSelectionFeedback.selectionChanged()
+      }
+    }
 
     view.addSubview(backdrop)
     backdrop.addSubview(options)
@@ -4105,6 +4124,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         self?.handleCharacter(text, touchDown: key?.takeTouchDownLocation())
       }
       (button as? KeyboardKeyButton)?.showsPressPreview = true
+      (button as? KeyboardKeyButton)?.supportsRollover = true
       // 下滑或长按会像符号层按键那样输入角标提示的符号，并记作这个字母键的一次按键，与 Android 的 commitNineKeyLiteral 路径一致。
       (button as? KeyboardKeyButton)?.onCornerHint = { [weak self] hint in
         self?.countKeyPress(TypingKeyID.character(text))
@@ -4196,6 +4216,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       }
       key.accessibilityIdentifier = "microsoftFinalKey"
       (key as? KeyboardKeyButton)?.showsPressPreview = true
+      (key as? KeyboardKeyButton)?.supportsRollover = true
       applyLetterFont(to: key)
       microsoftFinalKey = key
       letterButtons.append((button: key, lowercase: ";", hint: attachHintLabel(to: key), corner: attachCornerHintLabel(to: key)))
@@ -6132,7 +6153,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     [enterButton, tabletReturnKey, tallReturnKey].compactMap { $0 }
   }
 
-  private func applyLearningPreferences() {
+  private func applyLearningPreferences(force: Bool = false) {
     let nativeMode: MetasequoiaFrequencyAdjustmentMode
     switch FrequencyAdjustmentPreference.mode {
     case .disabled: nativeMode = .disabled
@@ -6161,16 +6182,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         linearStep = value
       }
     }
-    _ = session.setFrequencyAdjustmentMode(
-      mode, triggerCount: triggerCount, linearStep: linearStep)
-    // 隐私模式开着的整段时间里词库不从输入内容学习，不管学习开关怎么设。会话同时标成隐私会话（Android 的 `markPrivateSession`），运行时不记选词位置和上屏效率。
-    _ = session.setLearningEnabled(DictionaryLearningPreference.enabled && !incognito)
-    session.setPrivateSession(privacyGate.privateSession)
+    let learningEnabled = DictionaryLearningPreference.enabled && !incognito
+    let privateSession = privacyGate.privateSession
+    let nextState = AppliedLearningState(
+      mode: mode, triggerCount: triggerCount, linearStep: linearStep,
+      learningEnabled: learningEnabled, privateSession: privateSession)
+    if force || appliedLearningState != nextState {
+      appliedLearningState = nextState
+      _ = session.setFrequencyAdjustmentMode(
+        mode, triggerCount: triggerCount, linearStep: linearStep)
+      // 隐私模式开着的整段时间里词库不从输入内容学习，不管学习开关怎么设。会话同时标成隐私会话（Android 的 `markPrivateSession`），运行时不记选词位置和上屏效率。
+      _ = session.setLearningEnabled(learningEnabled)
+      session.setPrivateSession(privateSession)
+    }
     let fuzzyRules = FuzzyPinyinPreference.settings(in: session.sharedPreferences)?.bits ?? 0
     if session.fuzzyPinyinRulesApplied != fuzzyRules {
       _ = session.setFuzzyPinyinRules(fuzzyRules)
     }
-    applyCandidateGlossLayout()
+    applyCandidateGlossLayout(forcePronunciationCheck: force)
   }
 
   private func currentGlossLines() -> Int {
@@ -6184,10 +6213,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     CandidatePronunciationPreference.enabled && candidatePronunciationTableInstalled && glossesCandidates
   }
 
-  private func refreshPronunciationTable() {
-    let installed = CandidatePronunciationPreference.enabled && CandidatePronunciationPreference.tableInstalled(
+  private func refreshPronunciationTable(force: Bool = false) {
+    let enabled = CandidatePronunciationPreference.enabled
+    let languageCode = CandidateTranslationPreference.primary.code.lowercased()
+    let key = PronunciationTableCheckKey(enabled: enabled, languageCode: languageCode)
+    if !force && checkedPronunciationTableKey == key { return }
+    checkedPronunciationTableKey = key
+    let installed = enabled && CandidatePronunciationPreference.tableInstalled(
       resources: session.candidateGlossResources(), stateRoot: MetasequoiaInputSessionBridge.sharedStateDirectory,
-      language: CandidateTranslationPreference.primary.code.lowercased())
+      language: languageCode)
     guard installed != candidatePronunciationTableInstalled else { return }
     candidatePronunciationTableInstalled = installed
     invalidateCandidatePronunciations()
@@ -6282,8 +6316,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   /// 释义行数、候选和编码字号以及「候选栏大小」都决定顶栏有多高，所以在这里一起应用。
-  private func applyCandidateGlossLayout() {
-    refreshPronunciationTable()
+  private func applyCandidateGlossLayout(forcePronunciationCheck: Bool = false) {
+    refreshPronunciationTable(force: forcePronunciationCheck)
     let lines = currentGlossLines()
     let tablet = formFactor == .tablet
     // 「候选栏大小」连同字号一起缩放候选栏（#10137），字号倍数在这里乘上它，下游画字的地方不用再管。
@@ -9624,8 +9658,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     exitLocalModeButton.isHidden = !isInLocalMode
     updateHanjaButton()
     let showsCandidates = isInLocalMode || !visiblePreedit.isEmpty || !visibleCandidates.isEmpty || visibleDiagnostic != nil
+    let skin = KeyboardTheme.current
     stripShowsCandidates = showsCandidates
-    compositionContainer?.backgroundColor = currentStripBackground(KeyboardTheme.current)
+    compositionContainer?.backgroundColor = currentStripBackground(skin)
     // 工具栏内容可以隐藏，但 iOS 键盘扩展不能在组字开始和结束时改变顶栏高度；否则 UIKit 会重排键盘，表现为键盘抖动，严重时还会重新选择输入法。
     let hideShortcutBar = showsCandidates || toolbarRowHidden
     if shortcutBar.isHidden != hideShortcutBar { shortcutBar.isHidden = hideShortcutBar }
@@ -9646,6 +9681,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     while candidateButtonInputs.count < candidateStrip.buttons.count { candidateButtonInputs.append(nil) }
     var missingPronunciations: [String] = []
     defer { if !missingPronunciations.isEmpty { requestCandidatePronunciations(missingPronunciations) } }
+    var updatedAnyChip = false
     for (offset, chip) in candidateStrip.buttons.enumerated() {
       let hidden = offset >= page.count || (expandedStripKeptOffsets.map { !$0.contains(offset) } ?? false)
       candidateStrip.setHidden(hidden, at: offset)
@@ -9665,9 +9701,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
           number: offset + 1, converting: false, aiPlaceholder: false, source: -1, confidentCorrection: false,
           styleRevision: candidateButtonStyleRevision)
         if candidateButtonInputs[offset] != inputs {
-          updateCandidateButton(chip, candidate: page[offset], hint: "", glosses: [], number: offset + 1, converting: false, source: -1)
+          updateCandidateButton(chip, candidate: page[offset], hint: "", glosses: [], number: offset + 1, converting: false, source: -1, skin: skin)
           chip.accessibilityLabel = "邮箱后缀 \(offset + 1)：\(page[offset])"
           candidateButtonInputs[offset] = inputs
+          updatedAnyChip = true
         }
         continue
       }
@@ -9696,8 +9733,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         chip, candidate: page[offset], hint: hint, hintSpoken: hintSpoken, reading: reading,
         glosses: glosses, pronunciation: pronunciation, markers: markers, number: offset + 1,
         converting: japaneseConversionIndex == offset,
-        aiPlaceholder: aiPlaceholder, source: candidateSource, confidentCorrection: confidentCorrection)
+        aiPlaceholder: aiPlaceholder, source: candidateSource, confidentCorrection: confidentCorrection,
+        skin: skin)
       candidateButtonInputs[offset] = inputs
+      updatedAnyChip = true
+    }
+    if updatedAnyChip {
+      UIView.performWithoutAnimation {
+        candidateStack.layoutIfNeeded()
+      }
     }
     updateExpandControl()
 
@@ -10298,11 +10342,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     _ button: KeyboardKeyButton, candidate: String, hint: String, hintSpoken: String? = nil, reading: String? = nil, glosses: [String],
     pronunciation: String? = nil,
     markers: [CandidateMarker] = [], number: Int, converting: Bool, aiPlaceholder: Bool = false, source: Int = -1,
-    confidentCorrection: Bool = false
+    confidentCorrection: Bool = false, skin: KeyboardTheme = KeyboardTheme.current
   ) {
     let display = chineseOutput(candidate, source: source)
     guard var configuration = button.configuration else { return }
-    let skin = KeyboardTheme.current
     let annotationColor = (number == 1 || converting ? candidatePalette?.selectedTranslation : nil) ?? candidatePalette?.secondary ?? skin.secondary
     if let palette = candidatePalette, !palette.usesKeyboardStyle {
       // canvas 首选用选中色，其余透明；既有桌面配色保留「首选高亮」取色器的 hover 语义。
@@ -10400,12 +10443,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       configuration.attributedTitle = title
     }
     configuration.contentInsets = candidatePalette?.layout?.chipInsets(fontSize: candidateFont.pointSize, fallback: Self.candidateChipInsets) ?? Self.candidateChipInsets
-    // 被手指按过的词块，UIKit 之后再套用 configuration 会给标题挂 0.25s 的淡入淡出（`CATransition` fade），同一个位置上新旧两个词叠着渐变。候选按 #10330 立即呈现，换字和随之的布局放在不带动画的块里做完。
+    // 被手指按过的词块，UIKit 之后再套用 configuration 会给标题挂 0.25s 的淡入淡出（`CATransition` fade），同一个位置上新旧两个词叠着渐变。候选按 #10330 立即呈现，换字放在不带动画的块里做完，外层 `renderCandidateStrip` 统一触发一次 `candidateStack.layoutIfNeeded()` 消除逐钮同步布局。
     UIView.performWithoutAnimation {
       button.configuration = configuration
       button.titleLineCount = 1 + lines.count
       pinCandidateWidth(of: button, contentWidth: contentWidth)
-      button.layoutIfNeeded()
     }
     // `hintSpoken` 是注释另有读法时的朗读文字，比如拆字的读音不是还要输入的键。
     button.accessibilityLabel = annotation.isEmpty

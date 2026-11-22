@@ -398,7 +398,7 @@ enum WubiProfilePreference {
 
 enum InputSchemePreference {
   static let enabledSchemesKey = "enabledInputSchemes"
-  private static var defaults: UserDefaults { UserDefaults(suiteName: appGroupIdentifier) ?? .standard }
+  private static var defaults: UserDefaults { appGroupDefaults }
 
   static var enabledSchemes: [ChineseInputScheme] {
     get {
@@ -508,13 +508,13 @@ enum InputSchemePreference {
   private static let schemeKey = "chineseInputScheme"
   static var scheme: ChineseInputScheme {
     get {
-      let defaults = UserDefaults(suiteName: appGroupIdentifier) ?? .standard
+      let defaults = appGroupDefaults
       let offered = offeredSchemes
       let stored = defaults.string(forKey: schemeKey).flatMap(ChineseInputScheme.init(rawValue:)) ?? .editionFallback
       return offered.contains(stored) ? stored : offered[0]
     }
     set {
-      let defaults = UserDefaults(suiteName: appGroupIdentifier) ?? .standard
+      let defaults = appGroupDefaults
       let selected = enabledSchemes.contains(newValue) ? newValue : enabledSchemes[0]
       defaults.set(selected.rawValue, forKey: schemeKey)
     }

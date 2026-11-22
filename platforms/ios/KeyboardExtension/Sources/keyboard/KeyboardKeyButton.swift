@@ -181,29 +181,40 @@ final class KeyboardKeyButton: UIButton {
     return background.customView is SkinKeySurfaceView || (background.backgroundColor?.cgColor.alpha ?? 0) > 0
   }
 
+  private var cachedPressShade: (skin: KeyboardTheme, style: UIUserInterfaceStyle, raw: UIColor?, color: UIColor)?
+
   /// 按当前键帽底色（半透明键帽与键盘底色预混后）的感知亮度选择按压叠加色：
   /// 浅色键帽保持黑色压暗，深色或深色半透明液态玻璃键帽改为白色提亮，避免 17% 白键帽按下反而变黑。
   private var pressShadeFillColor: UIColor {
+    let skin = KeyboardTheme.current
+    let style = traitCollection.userInterfaceStyle
     let raw = (configuration?.background.customView as? SkinKeySurfaceView)?.fillColor
       ?? configuration?.background.backgroundColor
-      ?? KeyboardTheme.current.keyBackground
-    let resolved = raw.resolvedColor(with: traitCollection)
+    if let cached = cachedPressShade, cached.skin == skin, cached.style == style, cached.raw == raw {
+      return cached.color
+    }
+    let base = raw ?? skin.keyBackground
+    let resolved = base.resolvedColor(with: traitCollection)
     var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-    guard resolved.getRed(&r, green: &g, blue: &b, alpha: &a) else {
-      return traitCollection.userInterfaceStyle == .dark ? .white : .black
-    }
-    if a < 0.999 {
-      let back = KeyboardTheme.current.background.resolvedColor(with: traitCollection)
-      var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
-      if back.getRed(&br, green: &bg, blue: &bb, alpha: &ba) {
-        let inv = 1 - a
-        r = r * a + br * inv
-        g = g * a + bg * inv
-        b = b * a + bb * inv
+    let color: UIColor
+    if resolved.getRed(&r, green: &g, blue: &b, alpha: &a) {
+      if a < 0.999 {
+        let back = skin.background.resolvedColor(with: traitCollection)
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        if back.getRed(&br, green: &bg, blue: &bb, alpha: &ba) {
+          let inv = 1 - a
+          r = r * a + br * inv
+          g = g * a + bg * inv
+          b = b * a + bb * inv
+        }
       }
+      let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      color = luminance < 0.45 ? .white : .black
+    } else {
+      color = style == .dark ? .white : .black
     }
-    let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    return luminance < 0.45 ? .white : .black
+    cachedPressShade = (skin, style, raw, color)
+    return color
   }
 
   /// 按键底色的轮廓：皮肤设计自己的键形，或者 configuration 的圆角背景；尺寸与圆角未变时复用既有路径，避免每次按键重建 `UIBezierPath`。
@@ -257,6 +268,8 @@ final class KeyboardKeyButton: UIButton {
   override func didMoveToWindow() {
     super.didMoveToWindow()
     if window == nil {
+      if Self.activeRolloverKey === self { Self.activeRolloverKey = nil }
+      committedByRollover = false
       resetPressFeedback()
       removePressPreview()
       resetCornerHint()
@@ -321,6 +334,45 @@ final class KeyboardKeyButton: UIButton {
   func takeTouchDownLocation() -> CGPoint? {
     defer { touchDownLocation = nil }
     return touchDownLocation
+  }
+
+  // MARK: - 双指快打防颠倒（Key Rollover）
+
+  /// 是否作为双指连打抢跑提交的先行键：26 键字母键与双拼 `;` 开启；
+  /// 按下后手指尚未抬起、另一根手指按下后续键时立即按按下顺序提交先行键，避免快打出现 `ni -> in` 或 `nihao + 空格 -> 你哈o` 颠倒。
+  var supportsRollover = false
+  /// 按下本键时是否冲刷前一个仍按住的先行字母键（滚动容器内的按键不会触发）。
+  var flushesPendingRollover = true
+  private(set) var committedByRollover = false
+  private static weak var activeRolloverKey: KeyboardKeyButton?
+
+  /// 将当前按键登记为正在按住的先行字母键。
+  func registerActiveRolloverForPress() {
+    guard supportsRollover else { return }
+    Self.activeRolloverKey = self
+  }
+
+  /// 后续键按下时，将仍处于有效按压态的先行字母键提前按序提交。
+  static func flushActiveRollover(except incoming: KeyboardKeyButton? = nil) {
+    guard let previous = activeRolloverKey, previous !== incoming else { return }
+    activeRolloverKey = nil
+    previous.commitByRollover()
+  }
+
+  /// 抢跑提交当前按住的先行键：沿用 `touchDownLocation` 与 `pressFedBack`（不重复出声/震动），并屏蔽该手指稍后抬手时的二次触发。
+  @discardableResult
+  func commitByRollover() -> Bool {
+    guard supportsRollover, !committedByRollover, window != nil, isEnabled, isHighlighted,
+          !cornerHintTriggered, nineKeySwipe.gesture == .none else { return false }
+    committedByRollover = true
+    if Self.activeRolloverKey === self { Self.activeRolloverKey = nil }
+    resetCornerHint()
+    isHighlighted = false
+    Self.releasing(self) {
+      sendActions(for: .primaryActionTriggered)
+    }
+    touchDownLocation = nil
+    return true
   }
 
   // MARK: - 按下即反馈（#10768）
@@ -397,12 +449,17 @@ final class KeyboardKeyButton: UIButton {
   private var cornerHintHold: Timer?
 
   override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+    if flushesPendingRollover && !sitsInScrollableContent {
+      Self.flushActiveRollover(except: self)
+    }
+    committedByRollover = false
     let began = super.beginTracking(touch, with: event)
     resetCornerHint()
     touchDownLocation = began && recordsTouchDown ? keyArea.map { touch.location(in: $0) } : nil
     restoreNineKeySwipeFace()
     _ = nineKeySwipe.finish()
     if began, nineKeySwipeDigit != nil { nineKeySwipe.begin(y: touch.location(in: nil).y) }
+    if began { registerActiveRolloverForPress() }
     guard began, cornerHint != nil else { return began }
     cornerHintDown = touch.location(in: nil)
     cornerHintDownTime = touch.timestamp
@@ -467,6 +524,14 @@ final class KeyboardKeyButton: UIButton {
   }
 
   private func endTouches(_ touches: Set<UITouch>, with event: UIEvent?) {
+    if Self.activeRolloverKey === self { Self.activeRolloverKey = nil }
+    if committedByRollover {
+      committedByRollover = false
+      resetCornerHint()
+      touchDownLocation = nil
+      super.touchesCancelled(touches, with: event)
+      return
+    }
     let swiped = nineKeySwipe.finish()
     if swiped != .none {
       // 和角标一样取消而不是结束这次触摸，按键自己的点按不会再触发；还原键面之后再上屏，上屏引起的重画看到的是原来的键面。
@@ -498,6 +563,8 @@ final class KeyboardKeyButton: UIButton {
   }
 
   override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+    if Self.activeRolloverKey === self { Self.activeRolloverKey = nil }
+    committedByRollover = false
     // 触摸被滑行输入、横滑移光标或长按接管，或被系统取消时，什么也不输入；已经换成数字的键面还原。
     let wasLetters = nineKeySwipe.finish() == .letters
     restoreNineKeySwipeFace()
@@ -551,6 +618,7 @@ final class KeyboardKeyButton: UIButton {
   }
 
   private func triggerCornerHint(_ hint: String) {
+    if Self.activeRolloverKey === self { Self.activeRolloverKey = nil }
     // 这一下输入的是角标，不是字母，按下点不再有用。
     touchDownLocation = nil
     cornerHintTriggered = true
@@ -569,6 +637,15 @@ final class KeyboardKeyButton: UIButton {
   private static let sharedFeedbackDefaults = KeyboardFeedbackPreference.defaults
   /// 复用按键放大预览视图（最多保留 4 个供多指连打），避免每次按键都重新分配 `UIView`/`CAShapeLayer`/`UILabel`。
   private static var previewPool: [KeyPressPreviewView] = []
+  /// 按 `(皮肤, 明暗模式)` 缓存解析好的预览气泡颜色，避免每次按下都新建 3 个动态 `UIColor` 闭包。
+  private static var cachedPreviewPalette: (
+    skin: KeyboardTheme,
+    style: UIUserInterfaceStyle,
+    fill: UIColor,
+    border: UIColor,
+    text: UIColor,
+    monospaced: Bool
+  )?
 
   private func updatePressPreview() {
     guard showsPressPreview,
@@ -585,13 +662,22 @@ final class KeyboardKeyButton: UIButton {
     }
     preview.frame = host.bounds
     let skin = KeyboardTheme.current
+    let style = traitCollection.userInterfaceStyle
+    let palette: (fill: UIColor, border: UIColor, text: UIColor, monospaced: Bool)
+    if let cached = Self.cachedPreviewPalette, cached.skin == skin, cached.style == style {
+      palette = (cached.fill, cached.border, cached.text, cached.monospaced)
+    } else {
+      let resolvedFill = skin.calloutBackground.resolvedColor(with: traitCollection)
+      let resolvedBorder = skin.calloutBorder.resolvedColor(with: traitCollection)
+      let resolvedText = skin.keyForeground.resolvedColor(with: traitCollection)
+      let monospaced = skin.usesMonospacedFont
+      Self.cachedPreviewPalette = (skin, style, resolvedFill, resolvedBorder, resolvedText, monospaced)
+      palette = (resolvedFill, resolvedBorder, resolvedText, monospaced)
+    }
     // 取未经变换的 frame：按键可能已经缩放到一半。
     let key = superview?.convert(untransformedFrame, to: host) ?? convert(bounds, to: host)
     preview.show(title, key: key, wide: KeyPressPreviewView.isWide(key: bounds.width, letter: rowLetterWidth),
-                 fill: skin.calloutBackground.resolvedColor(with: traitCollection),
-                 border: skin.calloutBorder.resolvedColor(with: traitCollection),
-                 text: skin.keyForeground.resolvedColor(with: traitCollection),
-                 monospaced: skin.usesMonospacedFont)
+                 fill: palette.fill, border: palette.border, text: palette.text, monospaced: palette.monospaced)
     pressPreview = preview
   }
 
@@ -602,11 +688,12 @@ final class KeyboardKeyButton: UIButton {
 
   /// 这个键所在行里普通字母键的宽度，即显示预览的可见按键里最窄的那个。设计稿给伸展超过 1.2 个字母宽的按键加宽气泡，这个伸展是相对本行而言的。
   private var rowLetterWidth: CGFloat {
-    let widths = (superview?.subviews ?? []).compactMap { view -> CGFloat? in
-      guard let key = view as? KeyboardKeyButton, key.showsPressPreview, !key.isHidden, key.bounds.width > 0 else { return nil }
-      return key.bounds.width
+    var minimum = CGFloat.greatestFiniteMagnitude
+    for view in superview?.subviews ?? [] {
+      guard let key = view as? KeyboardKeyButton, key.showsPressPreview, !key.isHidden, key.bounds.width > 0 else { continue }
+      if key.bounds.width < minimum { minimum = key.bounds.width }
     }
-    return widths.min() ?? bounds.width
+    return minimum.isFinite ? minimum : bounds.width
   }
 
   private func removePressPreview() {
@@ -823,10 +910,15 @@ final class KeyActionCalloutView: UIStackView {
   static let itemSize = CGSize(width: 36, height: 38)
 
   let options: [String]
+  /// 拖选期间高亮项发生变化时回调，用于触发轻微的选格触感反馈。
+  var onHighlightChanged: ((Int?) -> Void)?
   private(set) var optionButtons: [UIButton] = []
   private(set) var highlightedIndex: Int? {
     didSet {
-      if oldValue != highlightedIndex { applyHighlightAppearance() }
+      if oldValue != highlightedIndex {
+        applyHighlightAppearance()
+        onHighlightChanged?(highlightedIndex)
+      }
     }
   }
   private(set) var hasEnteredSelection = false
