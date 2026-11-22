@@ -537,6 +537,91 @@ private enum InputBridgeFailure: LocalizedError {
 /// and never keeps Engine pointers or input text outside the returned snapshot.
 final class MetasequoiaInputSessionBridge: @unchecked Sendable {
   private var handle: UInt64 = 0
+  /// 追踪后台输入线程上正在进行的会话恢复，保证主线程挂起/销毁与抢跑按键之间严格串行、无锁泄漏。
+  private final class AsyncResumeState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var epoch: UInt64 = 0
+    private var inFlightEpoch: UInt64?
+    private var handleByEpoch: (epoch: UInt64, handle: UInt64)?
+    private var completed: (epoch: UInt64, result: Result<UInt64, Error>)?
+
+    var activeEpoch: UInt64? {
+      lock.lock()
+      defer { lock.unlock() }
+      return inFlightEpoch
+    }
+
+    func begin() -> UInt64 {
+      lock.lock()
+      defer { lock.unlock() }
+      epoch &+= 1
+      inFlightEpoch = epoch
+      handleByEpoch = nil
+      completed = nil
+      return epoch
+    }
+
+    func isActive(_ candidate: UInt64) -> Bool {
+      lock.lock()
+      defer { lock.unlock() }
+      return inFlightEpoch == candidate
+    }
+
+    func finishCreation(_ candidate: UInt64, handle: UInt64) -> Bool {
+      lock.lock()
+      defer { lock.unlock() }
+      guard inFlightEpoch == candidate else { return false }
+      handleByEpoch = (candidate, handle)
+      completed = (candidate, .success(handle))
+      return true
+    }
+
+    func finishFailure(_ candidate: UInt64, error: Error) -> Bool {
+      lock.lock()
+      defer { lock.unlock() }
+      guard inFlightEpoch == candidate else { return false }
+      completed = (candidate, .failure(error))
+      return true
+    }
+
+    func liveHandle(for candidate: UInt64) -> UInt64 {
+      lock.lock()
+      defer { lock.unlock() }
+      guard let pair = handleByEpoch, pair.epoch == candidate else { return 0 }
+      return pair.handle
+    }
+
+    func takeCompleted(expectedEpoch: UInt64? = nil) -> (epoch: UInt64, result: Result<UInt64, Error>)? {
+      lock.lock()
+      defer { lock.unlock() }
+      guard let current = inFlightEpoch else { return nil }
+      if let expectedEpoch, current != expectedEpoch { return nil }
+      guard let ready = completed, ready.epoch == current else { return nil }
+      inFlightEpoch = nil
+      completed = nil
+      return ready
+    }
+
+    func invalidateHandle() {
+      lock.lock()
+      defer { lock.unlock() }
+      handleByEpoch = nil
+    }
+
+    func cancel() -> UInt64 {
+      lock.lock()
+      defer { lock.unlock() }
+      epoch &+= 1
+      inFlightEpoch = nil
+      completed = nil
+      let orphan = handleByEpoch?.handle ?? 0
+      handleByEpoch = nil
+      return orphan
+    }
+  }
+  private let asyncResume = AsyncResumeState()
+  private var resumeCompletions: [(Result<Void, Error>) -> Void] = []
+  private var pendingKeyGeometry: (epoch: UInt64, id: UInt32)?
   private final class PendingCharacter {
     var snapshot: MetasequoiaInputSnapshot?
     let completion: (MetasequoiaInputSnapshot) -> Void
@@ -568,34 +653,47 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
   }
 
   /// 普通全拼九键数字，或 26 键全拼、双拼的字母（#10031）；方案由键盘判断，这里只按网格和字节把关。字节、句柄与按下点按值移交，所有结果仍按投递顺序交给主线程。
+  /// 若后台会话恢复尚在进行中，仍允许按键排在 `MSIMEInputThread` 的创建任务之后顺序执行，避免首帧抢跑丢字。
   @discardableResult
   func enqueueCharacter(_ character: String, touch: TouchPoint? = nil,
                         completion: @escaping (MetasequoiaInputSnapshot) -> Void) -> Bool {
     precondition(Thread.isMainThread)
-    guard handle != 0, let byte = Self.ascii(character),
+    let resumeEpoch = asyncResume.activeEpoch
+    guard (handle != 0 || resumeEpoch != nil), let byte = Self.ascii(character),
           Self.acceptsAsynchronousCharacter(byte, grid: keyGrid, touched: touch != nil) else { return false }
     let pending = PendingCharacter(completion)
-    let sessionHandle = handle
+    let capturedHandle = handle
+    let resumeState = asyncResume
     pendingCharactersLock.lock()
     pendingCharacters.append(pending)
     pendingCharactersLock.unlock()
     MSIMEInputThread.shared.async { [weak self] in
       guard let self else { return }
+      let sessionHandle = capturedHandle != 0
+        ? capturedHandle
+        : (resumeEpoch.map { resumeState.liveHandle(for: $0) } ?? 0)
       let snapshot: MetasequoiaInputSnapshot
-      do {
-        let response = touch.map {
-          msimeClientTouchCharacter(sessionHandle, byte, false, $0.geometryID, $0.x, $0.y)
-        } ?? msimeClientCharacter(sessionHandle, byte, false)
-        guard let value = try Self.decode(response) as? [String: Any]
-        else { throw InputBridgeFailure.invalidResponse }
-        snapshot = try Self.snapshot(value)
-      } catch {
-        snapshot = MetasequoiaInputSnapshot(diagnosticText: error.localizedDescription)
+      if sessionHandle == 0 {
+        snapshot = MetasequoiaInputSnapshot(diagnosticText: "输入运行时尚未准备完成。")
+      } else {
+        do {
+          let response = touch.map {
+            msimeClientTouchCharacterRaw(sessionHandle, byte, false, $0.geometryID, $0.x, $0.y)
+          } ?? msimeClientCharacterRaw(sessionHandle, byte, false)
+          guard let value = try Self.decode(response) as? [String: Any]
+          else { throw InputBridgeFailure.invalidResponse }
+          snapshot = try Self.snapshot(value)
+        } catch {
+          snapshot = MetasequoiaInputSnapshot(diagnosticText: error.localizedDescription)
+        }
       }
       pendingCharactersLock.lock()
       pending.snapshot = snapshot
       pendingCharactersLock.unlock()
-      DispatchQueue.main.async { [weak self] in self?.deliverCompletedCharacters() }
+      DispatchQueue.main.async { [weak self] in
+        self?.settleAsyncResumeIfNeeded()
+        self?.deliverCompletedCharacters()
+      }
     }
     return true
   }
@@ -604,7 +702,8 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
   @discardableResult
   func enqueueCharacters(_ text: String, completion: @escaping (MetasequoiaInputSnapshot) -> Void) -> Bool {
     precondition(Thread.isMainThread)
-    guard handle != 0, !text.isEmpty else { return false }
+    let resumeEpoch = asyncResume.activeEpoch
+    guard (handle != 0 || resumeEpoch != nil), !text.isEmpty else { return false }
     var bytes: [UInt8] = []
     bytes.reserveCapacity(text.utf8.count)
     for scalar in text.unicodeScalars {
@@ -614,39 +713,51 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
       bytes.append(byte)
     }
     let pending = PendingCharacter(completion)
-    let sessionHandle = handle
+    let capturedHandle = handle
+    let resumeState = asyncResume
     pendingCharactersLock.lock()
     pendingCharacters.append(pending)
     pendingCharactersLock.unlock()
     MSIMEInputThread.shared.async { [weak self] in
       guard let self else { return }
+      let sessionHandle = capturedHandle != 0
+        ? capturedHandle
+        : (resumeEpoch.map { resumeState.liveHandle(for: $0) } ?? 0)
       let snapshot: MetasequoiaInputSnapshot
-      do {
-        var finalResponse: UnsafeMutablePointer<CChar>?
-        for (index, byte) in bytes.enumerated() {
-          let response = msimeClientCharacter(sessionHandle, byte, false)
-          if index == bytes.count - 1 {
-            finalResponse = response
-          } else if let response {
-            msimeClientStringFree(response)
+      if sessionHandle == 0 {
+        snapshot = MetasequoiaInputSnapshot(diagnosticText: "输入运行时尚未准备完成。")
+      } else {
+        do {
+          var finalResponse: UnsafeMutablePointer<CChar>?
+          for (index, byte) in bytes.enumerated() {
+            let response = msimeClientCharacterRaw(sessionHandle, byte, false)
+            if index == bytes.count - 1 {
+              finalResponse = response
+            } else if let response {
+              msimeClientStringFree(response)
+            }
           }
+          guard let value = try Self.decode(finalResponse) as? [String: Any]
+          else { throw InputBridgeFailure.invalidResponse }
+          snapshot = try Self.snapshot(value)
+        } catch {
+          snapshot = MetasequoiaInputSnapshot(diagnosticText: error.localizedDescription)
         }
-        guard let value = try Self.decode(finalResponse) as? [String: Any]
-        else { throw InputBridgeFailure.invalidResponse }
-        snapshot = try Self.snapshot(value)
-      } catch {
-        snapshot = MetasequoiaInputSnapshot(diagnosticText: error.localizedDescription)
       }
       pendingCharactersLock.lock()
       pending.snapshot = snapshot
       pendingCharactersLock.unlock()
-      DispatchQueue.main.async { [weak self] in self?.deliverCompletedCharacters() }
+      DispatchQueue.main.async { [weak self] in
+        self?.settleAsyncResumeIfNeeded()
+        self?.deliverCompletedCharacters()
+      }
     }
     return true
   }
 
-  /// 空格、删除、设置与焦点边界先完成此前数字；回调不持锁执行，允许渲染过程中再次读会话。
+  /// 空格、删除、设置与焦点边界先完成此前异步恢复与数字；回调不持锁执行，允许渲染过程中再次读会话。
   func flushPendingCharacters() {
+    flushPendingResumeIfNeeded()
     guard hasPendingCharacters else { return }
     precondition(Thread.isMainThread)
     repeat {
@@ -746,6 +857,9 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
   }
 
   deinit {
+    let orphan = asyncResume.cancel()
+    MSIMEInputThread.shared.sync {}
+    if orphan != 0 { _ = try? Self.decode(msimeClientDestroy(orphan)) }
     if handle != 0 { _ = try? Self.decode(msimeClientDestroy(handle)) }
   }
 
@@ -1193,6 +1307,9 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
 
   /// 会话里注册着的键位几何代次（#10018）；还没注册、注册被拒，或会话重建后句柄换了时为 nil，键盘要先重新注册再带落点打字。
   var keyGeometryID: UInt32? {
+    if let epoch = asyncResume.activeEpoch, let pending = pendingKeyGeometry, pending.epoch == epoch {
+      return pending.id
+    }
     guard let keyGeometry, keyGeometry.handle == handle, handle != 0 else { return nil }
     return keyGeometry.id
   }
@@ -1201,9 +1318,27 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
   /// 注册 26 键的字母键几何（`TouchPointPolicy.request` 拼出的 JSON，代次是 `id`），只在布局变化后调用。引擎拒绝时返回 false，`keyGeometryID` 随之为 nil：引擎里原来那份几何虽然还在，键盘不再按任何代次带落点，下一键重新注册。
   @discardableResult
   func setKeyGeometry(_ request: Data, id: UInt32) -> Bool {
+    guard id != 0, !request.isEmpty, request.count <= 16_384 else {
+      keyGeometry = nil
+      return false
+    }
+    if let resumeEpoch = asyncResume.activeEpoch {
+      // 异步恢复进行中时将键位几何排在同一输入线程的恢复任务之后，避免首键带触点时阻塞主线程。
+      let resumeState = asyncResume
+      pendingKeyGeometry = (resumeEpoch, id)
+      MSIMEInputThread.shared.async {
+        let sessionHandle = resumeState.liveHandle(for: resumeEpoch)
+        guard sessionHandle != 0 else { return }
+        _ = request.withUnsafeBytes { bytes in
+          try? Self.decode(msimeClientSetKeyGeometryRaw(
+            sessionHandle, bytes.bindMemory(to: MSIMEByte.self).baseAddress, UInt(request.count)))
+        }
+      }
+      return true
+    }
     flushPendingCharacters()
     keyGeometry = nil
-    guard handle != 0, id != 0, !request.isEmpty, request.count <= 16_384 else { return false }
+    guard handle != 0 else { return false }
     let accepted = request.withUnsafeBytes { bytes in
       (try? Self.decode(msimeClientSetKeyGeometry(
         handle, bytes.bindMemory(to: MSIMEByte.self).baseAddress, UInt(request.count)))) != nil
@@ -2094,12 +2229,30 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
   // was for.
   // 会话持着的锁不止词库租约：`user_data` 和 `dictionaries` 下各一个 `.msime-dictionary-access.lock` 的共享租约，资源是下载代次时还有 `generations/<代次>.lock` 的共享锁（client-providers 的 `dictionary_updates::lease`），三把都随会话建立而取、随销毁而放。组字没结束时返回 false，会话和锁都还在，调用方要先结束组字再试。
   func suspendDictionarySession() -> Bool {
+    if asyncResume.activeEpoch != nil {
+      // 有正在后台创建的会话：先标记取消并等输入线程上的创建任务收尾；若输入线程已建出句柄，立即销毁，确保返回时零持锁。
+      let orphan = asyncResume.cancel()
+      resumeCompletions.removeAll()
+      pendingKeyGeometry = nil
+      MSIMEInputThread.shared.sync {}
+      let postSyncOrphan = orphan != 0 ? orphan : asyncResume.cancel()
+      if postSyncOrphan != 0 {
+        _ = try? Self.decode(msimeClientDestroy(postSyncOrphan))
+      }
+      pendingCharactersLock.lock()
+      pendingCharacters.removeAll()
+      pendingCharactersLock.unlock()
+      handle = 0
+      suspended = true
+      return true
+    }
     flushPendingCharacters()
     guard !suspended else { return true }
     guard !hasComposition else { return false }
     if handle != 0 {
       guard (try? Self.decode(msimeClientDestroy(handle))) != nil else { return false }
       handle = 0
+      asyncResume.invalidateHandle()
     }
     suspended = true
     return true
@@ -2108,13 +2261,21 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
   /// 会话在收起时销毁、还没在下一次出现时重建：这时 `resumeDictionarySession` 要同步建一整个会话。
   var dictionarySessionSuspended: Bool { suspended }
 
-  /// 手上是否真有一个会话（也就持着它的词库租约和代次锁）。不能拿 `!dictionarySessionSuspended` 代替：运行时准备失败时桥没进挂起状态，却从没建过会话，诊断里若按「没挂起」记成持锁，真机上就会把它误当成还有一条持锁路径（#10634）。
-  var holdsSession: Bool { handle != 0 }
+  /// 是否正在后台输入线程异步重建引擎会话。
+  var isResumingSession: Bool { asyncResume.activeEpoch != nil }
+
+  /// 手上是否真有一个会话（或正在后台建会话，也就可能已取到词库租约和代次锁）。不能拿 `!dictionarySessionSuspended` 代替：运行时准备失败时桥没进挂起状态，却从没建过会话，诊断里若按「没挂起」记成持锁，真机上就会把它误当成还有一条持锁路径（#10634）。
+  var holdsSession: Bool { handle != 0 || isResumingSession }
 
   // Recreated from the options prepared when this process started. Preparation streams every pinned
   // resource through SHA-256, so repeating it for each presentation would cost far more than the
   // session itself; the options stay valid for the life of the process.
   func resumeDictionarySession() throws {
+    if isResumingSession {
+      flushPendingResumeIfNeeded()
+      if handle != 0 { return }
+      throw InputBridgeFailure.response(initializationDiagnostic ?? InputBridgeFailure.unavailable.localizedDescription)
+    }
     guard suspended else { return }
     guard !options.isEmpty else {
       if initializationDiagnostic == nil {
@@ -2131,6 +2292,131 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
       initializationDiagnostic = "输入运行时创建或激活失败：\(error.localizedDescription)"
       throw error
     }
+  }
+
+  /// 在常驻输入线程上异步重建并聚焦引擎会话，让 `viewWillAppear` 立即返回渲染键盘首帧；
+  /// 在恢复完成前到达的抢跑字母按键会排在同一个 FIFO 输入线程之后自动执行，不会丢字；
+  /// 若恢复未完成前收到收起或系统挂起信号，`suspendDictionarySession()` 会同步取消/销毁，确保绝不持锁挂起。
+  func resumeDictionarySessionAsync(completion: @escaping (Result<Void, Error>) -> Void) {
+    precondition(Thread.isMainThread)
+    if !suspended && !isResumingSession {
+      completion(.success(()))
+      return
+    }
+    guard !options.isEmpty else {
+      if initializationDiagnostic == nil {
+        initializationDiagnostic = InputBridgeFailure.unavailable.localizedDescription
+      }
+      completion(.failure(InputBridgeFailure.unavailable))
+      return
+    }
+    resumeCompletions.append(completion)
+    if isResumingSession { return }
+    var requested = engineOptions
+    requested["phrase_preedit"] = true
+    appliedPreferences = nil
+    privateSessionHandle = 0
+    pendingKeyGeometry = nil
+    let initialKeyGrid = keyGrid
+    let initialFullwidth = fullwidth
+    let initialChinesePunctuation = chinesePunctuation
+    let initialAICredential = aiCredential
+    let initialPrivateSession = privateSession
+    let myEpoch = asyncResume.begin()
+    let resumeState = asyncResume
+    MSIMEInputThread.shared.async { [weak self] in
+      guard resumeState.isActive(myEpoch) else { return }
+      do {
+        let created = try Self.createFocusedSessionOnInputThread(
+          requested: requested,
+          keyGrid: initialKeyGrid,
+          fullwidth: initialFullwidth,
+          chinesePunctuation: initialChinesePunctuation,
+          aiCredential: initialAICredential,
+          privateSession: initialPrivateSession
+        )
+        if !resumeState.finishCreation(myEpoch, handle: created) {
+          _ = try? Self.decode(msimeClientDestroyRaw(created))
+          return
+        }
+      } catch {
+        guard resumeState.finishFailure(myEpoch, error: error) else { return }
+      }
+      DispatchQueue.main.async { [weak self] in
+        self?.settleAsyncResumeIfNeeded(expectedEpoch: myEpoch)
+      }
+    }
+  }
+
+  /// 同步等待尚未完成的后台会话恢复，并在主线程立刻结算句柄与回调。
+  private func flushPendingResumeIfNeeded() {
+    guard asyncResume.activeEpoch != nil else { return }
+    precondition(Thread.isMainThread)
+    MSIMEInputThread.shared.sync {}
+    settleAsyncResumeIfNeeded()
+  }
+
+  private func settleAsyncResumeIfNeeded(expectedEpoch: UInt64? = nil) {
+    precondition(Thread.isMainThread)
+    guard let ready = asyncResume.takeCompleted(expectedEpoch: expectedEpoch) else { return }
+    let callbacks = resumeCompletions
+    resumeCompletions.removeAll()
+    switch ready.result {
+    case .success(let createdHandle):
+      handle = createdHandle
+      suspended = false
+      initializationDiagnostic = nil
+      privateSessionHandle = createdHandle
+      if let pending = pendingKeyGeometry, pending.epoch == ready.epoch {
+        keyGeometry = (createdHandle, pending.id)
+      }
+      pendingKeyGeometry = nil
+      for callback in callbacks { callback(.success(())) }
+    case .failure(let error):
+      pendingKeyGeometry = nil
+      initializationDiagnostic = "输入运行时创建或激活失败：\(error.localizedDescription)"
+      for callback in callbacks { callback(.failure(error)) }
+    }
+  }
+
+  /// 在 `MSIMEInputThread` 内部直接创建并聚焦会话、重放网格/全角/标点/AI 凭据/隐私状态，避免多余的跨线程同步往返。
+  private static func createFocusedSessionOnInputThread(
+    requested: [String: Any],
+    keyGrid: KeyGrid,
+    fullwidth: Bool,
+    chinesePunctuation: Bool?,
+    aiCredential: String?,
+    privateSession: Bool
+  ) throws -> UInt64 {
+    let data = try JSONSerialization.data(withJSONObject: requested)
+    let createdValue: Any = try data.withUnsafeBytes { bytes in
+      try decode(msimeClientCreateRaw(bytes.bindMemory(to: MSIMEByte.self).baseAddress, UInt(data.count)))
+    }
+    guard let dictionary = createdValue as? [String: Any] else {
+      throw InputBridgeFailure.invalidResponse
+    }
+    let created = try number(dictionary["session"])
+    do {
+      _ = try decode(msimeClientFocusRaw(created, true))
+    } catch {
+      _ = try? decode(msimeClientDestroyRaw(created))
+      throw error
+    }
+    if keyGrid != .none { _ = try? decode(msimeClientSetKeyGridRaw(created, keyGrid.rawValue)) }
+    if fullwidth { _ = try? decode(msimeClientSetCharacterWidthRaw(created, true)) }
+    if let chinesePunctuation {
+      _ = try? decode(msimeClientSetChinesePunctuationRaw(created, chinesePunctuation))
+    }
+    if let aiCredential {
+      let bytes = Array(aiCredential.utf8)
+      _ = bytes.withUnsafeBufferPointer { buffer in
+        try? decode(msimeClientSetAICredentialRaw(created, buffer.baseAddress, UInt(buffer.count)))
+      }
+    }
+    if privateSession {
+      _ = try? decode(msimeClientSetPrivateSessionRaw(created, true))
+    }
+    return created
   }
 
   /// Create and focus a session, then restore the state the prepared options do not carry.
@@ -2336,11 +2622,13 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
   }
 
   private func withDictionaryMaintenance<T>(_ operation: () throws -> T) throws -> T {
+    flushPendingCharacters()
     guard handle != 0 else { throw InputBridgeFailure.unavailable }
     guard !hasComposition else { throw InputBridgeFailure.response("请先结束当前输入再同步个人词库") }
     let previousHandle = handle
     _ = try Self.decode(msimeClientDestroy(previousHandle))
     handle = 0
+    asyncResume.invalidateHandle()
     let result = Result { try operation() }
     do {
       try createFocusedSession()

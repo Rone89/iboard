@@ -447,6 +447,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     set { renderedComposition = newValue }
   }
   /// 测试宿主没有真实文档代理；系统扩展默认启用异步，回归可显式覆盖以检查交付顺序。
+  /// 真机扩展里在后台输入线程异步重建会话，不挡住 `viewWillAppear` 首帧；单测环境默认同步以保持既有断言稳定，测试可显式设为 true 验证异步链路。
+  var resumesSessionAsynchronously = Bundle.main.bundleURL.pathExtension == "appex"
   var asynchronousInputEnabled = Bundle.main.bundleURL.pathExtension == "appex"
   private var inputDeliveryEpoch: UInt64 = 0
   private var asynchronousInputDocument: UUID?
@@ -1105,9 +1107,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     startIdleMaintenance()
   }
 
-  /// 异步首键尚未渲染时也在输入；词间的短暂停顿不触发同步权限和词库维护。
+  /// 异步首键或后台会话恢复尚未完成时也在输入/准备窗口内；词间的短暂停顿不触发同步权限和词库维护。
   private var idleForMaintenance: Bool {
-    isPresented && !hasComposition && !isInLocalMode && !session.hasPendingCharacters
+    isPresented && !hasComposition && !isInLocalMode && !session.hasPendingCharacters && !session.isResumingSession
       && ProcessInfo.processInfo.systemUptime - lastKeyTouchTime >= 0.3
   }
 
@@ -1137,7 +1139,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     candidateCanvasActive = true
     isPresented = true
     // 不清候选皮肤的请求键：键里已有皮肤 id、明暗、主题和清单的修改时间与大小，皮肤真的换了照样重新加载。以前这里每次出现都清掉它，跟随桌面候选皮肤的用户每次出现都要丢掉快照、在后台把整包图片重新读一遍解一遍，候选条先退回配色再换回皮肤。
-    InputSchemePreference.refreshResourceAvailability()
+    InputSchemePreference.refreshResourceAvailabilityAsync { [weak self] changed in
+      guard let self, changed, self.isPresented else { return }
+      self.synchronizeInputSchemePreference()
+    }
     // 进程可能跨过换季或应用主题的改动；在下面任何地方解析皮肤之前先刷新。变了就重新解析主题，让末尾的 `applyKeyboardSkin` 给按键换上新的颜色实例：按键进窗口时已按旧季节解析过同一批动态色，同一个实例再设一次 UIButton 不会重新解析。
     let seasonChanged = KeyboardTheme.refreshSeason()
     if seasonChanged { KeyboardTheme.reload(session.sharedPreferences, dark: drawsDark) }
@@ -1158,27 +1163,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     configureDiagnosticLog()
     DiagnosticLog.shared.write("focus_in \(DiagnosticLog.MemorySample.current().fields)")
     KeyboardUsageReporting.presented(fullAccess: hasFullAccess)
-    // 收起时销毁的会话在这里同步重建，挡在这次出现的第一帧前面；记下耗时，在设备上看它有多重。
-    let rebuildsSession = session.dictionarySessionSuspended
-    appGroupLockActivity.begin { [weak self] in self?.releaseLocksBeforeSuspension() }
-    let resumeStart = ProcessInfo.processInfo.systemUptime
-    do {
-      try session.resumeDictionarySession()
-      if rebuildsSession {
-        DiagnosticLog.shared.write("dictionary_resumed ms=\(Self.elapsedMilliseconds(since: resumeStart))")
-        // 第一次出现之前会话还不在（#10634），`viewDidLoad` 里取到的键面提示表是空的；会话建好了再取一次。以后每次出现重建的会话方案不变，表相同，不重画。
-        refreshShuangpinKeyHints()
-        updateLetterCaseControls()
-      }
-    }
-    catch {
-      DiagnosticLog.shared.write("dictionary_resume_failed")
-      showDiagnostic(error.localizedDescription)
-    }
     // 新的编辑会话不欠任何回调，上一次出现时留下的回声窗口不能延续到这里。
     ownEditEcho.reset()
     inlineMarkedText = ""
     if schemePicker != nil { closeKeyboardPicker() }
+    // 先把本机上下文、方案和学习偏好记在桥上（会话挂起时零 FFI 往返），随后建出来的会话一次带上全部最新状态。
     synchronizeInputContext()
     synchronizeInputSchemePreference()
     synchronizeChineseOutputPreference()
@@ -1189,6 +1178,51 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     bilingualGlideEnabled = KeyboardLayoutPreference.bilingualGlide
     // 完全访问和按键音开关都可能在两次出现之间变了；包先按会话手上的文档开始加载，重读之后选择变了再换。
     synchronizeKeySoundPack()
+    let rebuildsSession = session.dictionarySessionSuspended
+    appGroupLockActivity.begin { [weak self] in self?.releaseLocksBeforeSuspension() }
+    let resumeStart = ProcessInfo.processInfo.systemUptime
+    if resumesSessionAsynchronously && rebuildsSession {
+      // 真机扩展上在后台输入线程重建会话，避免阻塞键盘滑出的第一帧；抢跑按键会排在同一输入线程之后顺序执行。
+      session.resumeDictionarySessionAsync { [weak self] result in
+        guard let self, self.isPresented else { return }
+        switch result {
+        case .success:
+          self.finishDictionarySessionResumed(rebuildsSession: true, resumeStart: resumeStart)
+          if self.appearedInWindow { self.startIdleMaintenance() }
+        case .failure(let error):
+          DiagnosticLog.shared.write("dictionary_resume_failed")
+          self.showDiagnostic(error.localizedDescription)
+        }
+      }
+    } else {
+      do {
+        try session.resumeDictionarySession()
+        finishDictionarySessionResumed(rebuildsSession: rebuildsSession, resumeStart: resumeStart)
+      } catch {
+        DiagnosticLog.shared.write("dictionary_resume_failed")
+        showDiagnostic(error.localizedDescription)
+      }
+    }
+    candidateGlossEpoch &+= 1
+    candidateGlossRequestedGeneration = nil
+    translations.cancel()
+    onlineCandidates.cancel()
+    renderCandidateStrip()
+    scheduleCandidateGlosses()
+    // 换了季节必须整棵重新换装（见上面 `refreshSeason` 的注释）；否则只在皮肤变了时才在这里重走按键树，trait 和窗口外建过的按键留给 `viewIsAppearing`。
+    applyKeyboardSkin(onlyIfChanged: !seasonChanged)
+    synchronizeReplyKeyboard()
+    startCountingKeyPresses()
+  }
+
+  /// 会话重建完成后的统一收尾：记录耗时、刷新双拼键面提示并异步重读共享偏好文档。
+  private func finishDictionarySessionResumed(rebuildsSession: Bool, resumeStart: TimeInterval) {
+    if rebuildsSession {
+      DiagnosticLog.shared.write("dictionary_resumed ms=\(Self.elapsedMilliseconds(since: resumeStart))")
+      // 第一次出现之前会话还不在（#10634），`viewDidLoad` 里取到的键面提示表是空的；会话建好了再取一次。以后每次出现重建的会话方案不变，表相同，不重画。
+      refreshShuangpinKeyHints()
+      updateLetterCaseControls()
+    }
     // The Tauri settings app writes the shared PreferencesStore rather than the
     // legacy App Group UserDefaults used by the old SwiftUI settings page.
     // Reload it off-thread so a fuzzy-pinyin change is visible the next time
@@ -1218,16 +1252,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       // The local-mode menu follows the modes the settings app leaves on.
       self.updatePreeditButton()
     }
-    candidateGlossEpoch &+= 1
-    candidateGlossRequestedGeneration = nil
-    translations.cancel()
-    onlineCandidates.cancel()
-    renderCandidateStrip()
-    scheduleCandidateGlosses()
-    // 换了季节必须整棵重新换装（见上面 `refreshSeason` 的注释）；否则只在皮肤变了时才在这里重走按键树，trait 和窗口外建过的按键留给 `viewIsAppearing`。
-    applyKeyboardSkin(onlyIfChanged: !seasonChanged)
-    synchronizeReplyKeyboard()
-    startCountingKeyPresses()
   }
 
   /// 到这里视图已经进了窗口、trait 也定了，而第一帧还没画。`viewWillAppear` 时视图通常还不在窗口里：在那里按 trait 和「有按键在窗口外装饰过」判断，`viewDidLoad` 留下的标记会让第一次出现再整棵走一遍，在窗口外走完又把标记留给下一次，每次出现都是完整换装。所以这两项在这里判断，只有确实要补的时候才换装。
@@ -1357,8 +1381,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     clearUndoDeleteShortcut()
     glideUndoTracker.clearAll()
     englishTypingAssist.clearAll()
-    // 会话在键盘出现前或收起后没有组字可结束；此时不能问已销毁的句柄，否则宿主的焦点回调会把「尚未准备完成」画出来。
-    guard !session.dictionarySessionSuspended else { return }
+    // 会话在键盘出现前或收起后没有组字可结束；异步恢复尚在进行且没有抢跑按键时也不去问尚未就绪的句柄。
+    guard !session.dictionarySessionSuspended || session.hasPendingCharacters else { return }
     session.flushPendingCharacters()
     flushDeferredInputSnapshot()
     inputDeliveryEpoch &+= 1
@@ -1518,7 +1542,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   ///
   /// 调用方已经用 `finishComposition` 把组字上屏；还留着组字（个别本地模式和方案的组字不随它结束）时会话拒绝销毁，这时取消剩下的组字再试一次。用户写下的内容已经上屏，取消的只是没上屏的那一截，比扩展连同整个会话被系统结束要好。仍然失败就记一行诊断，真机上据此判断是哪条路径。
   private func releaseDictionarySession() {
-    guard !session.dictionarySessionSuspended else { return }
+    guard !session.dictionarySessionSuspended || session.isResumingSession else { return }
     let suspendStart = ProcessInfo.processInfo.systemUptime
     // 销毁会话时引擎同步写完选词计数和个人上下文，也在主线程上。
     var released = session.suspendDictionarySession()

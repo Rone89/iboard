@@ -3226,6 +3226,80 @@ final class NineKeyKeyboardTests: XCTestCase {
     XCTAssertTrue(locks.allSatisfy(exclusiveLockAvailable), "a late viewDidAppear took the lease back")
   }
 
+  /// 异步恢复会话期间抢跑输入的字母会排在 `MSIMEInputThread` 恢复任务之后顺序执行、不丢字；收起后锁照常立刻归还。
+  func testAsyncResumeComposesQueuedEarlyKeystrokesAndReleasesLocksOnDismiss() throws {
+    let previous = InputSchemePreference.scheme
+    defer { InputSchemePreference.scheme = previous }
+    InputSchemePreference.scheme = .quanpin
+    let locks = try dictionaryLockFiles(stateRoot: nil)
+    let deadline = Date().addingTimeInterval(15)
+    while !locks.allSatisfy(exclusiveLockAvailable) && Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    XCTAssertTrue(locks.allSatisfy(exclusiveLockAvailable), "precondition: another session still holds the shared lease")
+
+    let controller = KeyboardViewController()
+    controller.resumesSessionAsynchronously = true
+    controller.asynchronousInputEnabled = true
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(x: 0, y: 0, width: 414, height: KeyboardViewController.defaultKeyboardHeight)
+    controller.applyInputContext(keyboardType: .default, documentIdentifier: UUID())
+    controller.view.layoutIfNeeded()
+
+    controller.viewWillAppear(false)
+    // 不等异步恢复回调，立即抢跑敲入 "nihao"
+    for letter in "nihao" {
+      let key = try XCTUnwrap(descendants(controller.view).first {
+        $0.accessibilityLabel == "字母 \(String(letter).uppercased())"
+      } as? UIButton)
+      key.sendActions(for: .primaryActionTriggered)
+    }
+
+    let composeDeadline = Date().addingTimeInterval(5)
+    var candidateTitle = ""
+    while Date() < composeDeadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+      controller.view.layoutIfNeeded()
+      if let title = try? button("candidate-1", in: controller).configuration?.title, title.contains("你好") {
+        candidateTitle = title
+        break
+      }
+    }
+    XCTAssertTrue(candidateTitle.contains("你好"), "抢跑输入的候选未出现，实际：\(candidateTitle)")
+    XCTAssertFalse(locks.allSatisfy(exclusiveLockAvailable), "恢复完成后的可见键盘应持锁")
+
+    controller.viewWillDisappear(false)
+    controller.viewDidDisappear(false)
+    XCTAssertTrue(locks.allSatisfy(exclusiveLockAvailable), "收起后必须立即归还词库租约锁")
+  }
+
+  /// 异步会话恢复尚在进行中就立即收起键盘时，必须同步取消或销毁刚建出的句柄，确保零锁泄漏（防 0xdead10cc）。
+  func testAsyncResumeCancelledByImmediateDismissLeavesNoLockHeld() throws {
+    let previous = InputSchemePreference.scheme
+    defer { InputSchemePreference.scheme = previous }
+    InputSchemePreference.scheme = .quanpin
+    let locks = try dictionaryLockFiles(stateRoot: nil)
+    let deadline = Date().addingTimeInterval(15)
+    while !locks.allSatisfy(exclusiveLockAvailable) && Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    XCTAssertTrue(locks.allSatisfy(exclusiveLockAvailable), "precondition: another session still holds the shared lease")
+
+    let controller = KeyboardViewController()
+    controller.resumesSessionAsynchronously = true
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(x: 0, y: 0, width: 414, height: KeyboardViewController.defaultKeyboardHeight)
+    controller.applyInputContext(keyboardType: .default, documentIdentifier: UUID())
+    controller.view.layoutIfNeeded()
+
+    controller.viewWillAppear(false)
+    controller.viewWillDisappear(false)
+    controller.viewDidDisappear(false)
+    XCTAssertTrue(locks.allSatisfy(exclusiveLockAvailable), "恢复途中立即收起后锁必须已归还")
+    RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+    XCTAssertTrue(locks.allSatisfy(exclusiveLockAvailable), "延迟回调后仍不能遗留孤儿会话锁")
+  }
+
   /// 宿主应用被结束时控制器收不到任何外观回调，键盘视图只是不在窗口里了（#10910，模拟器的系统键盘里量到的）：两秒一轮的定时器发现之后按收起处理，放掉租约、停掉维护，否则扩展带着 App Group 的锁留在后台。进程内把视图移出窗口时 UIKit 会自己发外观回调，这里把键盘放进一个不转发外观回调的容器，移走容器来模拟。之后再出现，第一个键照常组字。
   func testKeyboardReleasesTheLeaseWhenItsWindowGoesAwayWithoutDisappearing() throws {
     let previous = InputSchemePreference.scheme

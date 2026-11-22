@@ -35,9 +35,12 @@ use crate::wubi::provider::WubiProvider;
 pub struct ProviderRegistry {
     /// 会话允许运行的方案；不在其中的方案没有 provider，`activate` 拒绝它们。
     enabled: SchemeSet,
-    /// 全拼或五笔在 `enabled` 里时才有：五笔混拼的拼音行由它查出。
+    /// 懒初始化全拼/双拼引擎所需的运行时路径与双拼方案表。
+    paths: RuntimePaths,
+    profile: &'static ShuangpinProfile,
+    /// 全拼或五笔在 `enabled` 里时按需懒建：激活全拼或五笔首次混拼查询时才打开 `msime-pinyin.db` 并预热。
     quanpin: Option<QuanpinEngine>,
-    /// 双拼在 `enabled` 里时才有。它会再打开一次 `msime-pinyin.db` 并预热 n-gram 表，这正是收窄方案要省下的。
+    /// 双拼在 `enabled` 里时按需懒建：激活双拼或首次双拼查询时才打开第二份 `msime-pinyin.db` 并预热，避免全拼会话每次重建都白跑一遍双拼开库与预热。
     shuangpin: Option<ShuangpinEngine>,
     wubi: Option<WubiProvider>,
     japanese: Option<JapaneseProvider>,
@@ -79,7 +82,7 @@ pub(crate) fn wubi_database(paths: &RuntimePaths) -> PathBuf {
 }
 
 impl ProviderRegistry {
-    /// 五笔读 `wubi_database` 选出的文件，通常是代次里的 `msime-pinyin.db`； the Japanese model is the immutable resource (provider_registry.cpp:4-10). `japanese_path` 非空时改读这个位置（例如按需下载的那份），为空时读资源目录里的 `msime-japanese.dat`。`enabled` 为 [`SchemeSet::ALL`] 时四个 provider 都构造，与收窄之前相同；否则只构造 `enabled` 用得到的那些，查询不在其中的方案一律答空。
+    /// 五笔读 `wubi_database` 选出的文件，通常是代次里的 `msime-pinyin.db`； the Japanese model is the immutable resource (provider_registry.cpp:4-10). `japanese_path` 非空时改读这个位置（例如按需下载的那份），为空时读资源目录里的 `msime-japanese.dat`。全拼与双拼引擎改为按需懒建：只在激活对应方案或首次查询时才打开数据库并预热，避免每次重建会话同时打开两份 `msime-pinyin.db`。
     pub fn new(
         enabled: SchemeSet,
         profile: &'static ShuangpinProfile,
@@ -94,14 +97,12 @@ impl ProviderRegistry {
         } else {
             japanese_path
         };
-        let quanpin_needed =
-            enabled.contains(SchemeType::Quanpin) || enabled.contains(SchemeType::Wubi);
         Self {
             enabled,
-            quanpin: quanpin_needed.then(|| QuanpinEngine::new(paths)),
-            shuangpin: enabled
-                .contains(SchemeType::Shuangpin)
-                .then(|| ShuangpinEngine::new(profile, paths)),
+            paths: paths.clone(),
+            profile,
+            quanpin: None,
+            shuangpin: None,
             wubi: enabled.contains(SchemeType::Wubi).then(|| {
                 WubiProvider::with_pinyin_dictionary(
                     &wubi_database(paths),
@@ -130,10 +131,40 @@ impl ProviderRegistry {
         }
     }
 
-    /// Opens what `scheme` reads before it becomes active, once per session: `msime-cantonese.db` for Cantonese, `msime-zhuyin.db` for Zhuyin and `msime-stroke.db` for Stroke, failing as `language_dictionary::open_read_only` does when the file is missing or of an unknown version. 日文不打开任何东西，只在后台预热 `msime-japanese.dat`，读不到也不报错（与第一个查询读不到时一样只出假名行）。Nothing for the other schemes. The caller does not activate Zhuyin while a Zhuyin scheme holds the connection, which would open the file again. 不在 `enabled` 里的方案报 `INPUT_SCHEME_NOT_ENABLED`，什么也不打开。
+    fn quanpin_enabled(&self) -> bool {
+        self.enabled.contains(SchemeType::Quanpin) || self.enabled.contains(SchemeType::Wubi)
+    }
+
+    fn ensure_quanpin(&mut self) -> Option<&mut QuanpinEngine> {
+        if !self.quanpin_enabled() {
+            return None;
+        }
+        let paths = &self.paths;
+        Some(self.quanpin.get_or_insert_with(|| QuanpinEngine::new(paths)))
+    }
+
+    fn ensure_shuangpin(&mut self) -> Option<&mut ShuangpinEngine> {
+        if !self.enabled.contains(SchemeType::Shuangpin) {
+            return None;
+        }
+        let profile = self.profile;
+        let paths = &self.paths;
+        Some(
+            self.shuangpin
+                .get_or_insert_with(|| ShuangpinEngine::new(profile, paths)),
+        )
+    }
+
+    /// Opens what `scheme` reads before it becomes active, once per session: 全拼按需构造 `QuanpinEngine`，双拼按需构造 `ShuangpinEngine`，`msime-cantonese.db` for Cantonese, `msime-zhuyin.db` for Zhuyin and `msime-stroke.db` for Stroke, failing as `language_dictionary::open_read_only` does when the file is missing or of an unknown version. 日文不打开任何东西，只在后台预热 `msime-japanese.dat`，读不到也不报错（与第一个查询读不到时一样只出假名行）。Nothing for the other schemes. The caller does not activate Zhuyin while a Zhuyin scheme holds the connection, which would open the file again. 不在 `enabled` 里的方案报 `INPUT_SCHEME_NOT_ENABLED`，什么也不打开。
     pub fn activate(&mut self, scheme: SchemeType) -> Result<()> {
         if !self.enabled.contains(scheme) {
             return Err(EngineError::invalid(diagnostics::INPUT_SCHEME_NOT_ENABLED));
+        }
+        if scheme == SchemeType::Quanpin {
+            let _ = self.ensure_quanpin();
+        }
+        if scheme == SchemeType::Shuangpin {
+            let _ = self.ensure_shuangpin();
         }
         if scheme == SchemeType::Cantonese && self.cantonese.is_none() {
             let dictionary = CantoneseDictionary::open(&self.cantonese_path)?;
@@ -233,16 +264,27 @@ impl ProviderRegistry {
         if !request.valid {
             return Vec::new();
         }
-        let keymap = self.keymap.as_deref();
         let mut candidates = match request.scheme {
-            SchemeType::Quanpin => match &mut self.quanpin {
-                Some(quanpin) => quanpin.query(request, keymap),
-                None => return Vec::new(),
-            },
-            SchemeType::Shuangpin => match &mut self.shuangpin {
-                Some(shuangpin) => shuangpin.query(request, keymap),
-                None => return Vec::new(),
-            },
+            SchemeType::Quanpin => {
+                if self.quanpin.is_none() && self.quanpin_enabled() {
+                    let _ = self.ensure_quanpin();
+                }
+                let keymap = self.keymap.as_deref();
+                match &mut self.quanpin {
+                    Some(quanpin) => quanpin.query(request, keymap),
+                    None => return Vec::new(),
+                }
+            }
+            SchemeType::Shuangpin => {
+                if self.shuangpin.is_none() && self.enabled.contains(SchemeType::Shuangpin) {
+                    let _ = self.ensure_shuangpin();
+                }
+                let keymap = self.keymap.as_deref();
+                match &mut self.shuangpin {
+                    Some(shuangpin) => shuangpin.query(request, keymap),
+                    None => return Vec::new(),
+                }
+            }
             SchemeType::Wubi => {
                 return self
                     .wubi
@@ -355,12 +397,10 @@ impl ProviderRegistry {
     ) -> bool {
         match request.scheme {
             SchemeType::Quanpin => self
-                .quanpin
-                .as_mut()
+                .ensure_quanpin()
                 .is_some_and(|quanpin| quanpin.insert_online_words(request, words, source)),
             SchemeType::Shuangpin => self
-                .shuangpin
-                .as_mut()
+                .ensure_shuangpin()
                 .is_some_and(|shuangpin| shuangpin.insert_online_words(request, words, source)),
             SchemeType::Wubi => self.wubi.is_some() && words.len() == 1,
             SchemeType::JapaneseRomaji => match (&mut self.japanese, words) {
@@ -400,12 +440,10 @@ impl ProviderRegistry {
     ) -> bool {
         match request.scheme {
             SchemeType::Quanpin => self
-                .quanpin
-                .as_mut()
+                .ensure_quanpin()
                 .is_some_and(|quanpin| quanpin.expand_initial_candidates(request, candidates)),
             SchemeType::Shuangpin => self
-                .shuangpin
-                .as_mut()
+                .ensure_shuangpin()
                 .is_some_and(|shuangpin| shuangpin.expand_initial_candidates(request, candidates)),
             SchemeType::Wubi
             | SchemeType::JapaneseRomaji
@@ -1048,22 +1086,41 @@ mod tests {
         assert!(JapaneseDictionary::is_shared(&model));
     }
 
-    /// 全部方案时四个 provider 都在；只有五笔时只有五笔和混拼要用的全拼，双拼和日文都不构造；只有全拼时没有五笔。
+    /// 全拼和双拼引擎按需懒建：构造时均不提前打开词库，只在实际激活或首次查询对应方案时才构造；不在 `enabled` 里的方案即使激活或查询也保持为 `None`。
     #[test]
     fn providers_follow_the_enabled_schemes() {
-        let all = registry(SchemeSet::ALL);
-        assert!(all.quanpin.is_some() && all.shuangpin.is_some());
+        let mut all = registry(SchemeSet::ALL);
+        assert!(all.quanpin.is_none() && all.shuangpin.is_none());
         assert!(all.wubi.is_some() && all.japanese.is_some());
+        all.activate(SchemeType::Quanpin).unwrap();
+        assert!(all.quanpin.is_some() && all.shuangpin.is_none());
+        all.activate(SchemeType::Shuangpin).unwrap();
+        assert!(all.quanpin.is_some() && all.shuangpin.is_some());
 
-        let wubi = registry(SchemeSet::of(&[SchemeType::Wubi]));
-        assert!(wubi.quanpin.is_some() && wubi.wubi.is_some());
+        let mut wubi = registry(SchemeSet::of(&[SchemeType::Wubi]));
+        assert!(wubi.quanpin.is_none() && wubi.wubi.is_some());
         assert!(wubi.shuangpin.is_none() && wubi.japanese.is_none());
+        wubi.activate(SchemeType::Wubi).unwrap();
+        assert!(wubi.quanpin.is_none(), "仅激活五笔时不提前构造全拼引擎");
+        let quanpin_request = QueryRequest {
+            scheme: SchemeType::Quanpin,
+            raw_input: "ni".to_owned(),
+            raw_input_with_cases: "ni".to_owned(),
+            valid: true,
+            ..QueryRequest::default()
+        };
+        let _ = wubi.query(&quanpin_request);
+        assert!(wubi.quanpin.is_some(), "五笔混拼查询时按需构造全拼引擎");
+        assert!(wubi.shuangpin.is_none());
 
-        let quanpin = registry(SchemeSet::of(&[SchemeType::Quanpin]));
+        let mut quanpin = registry(SchemeSet::of(&[SchemeType::Quanpin]));
+        assert!(quanpin.quanpin.is_none());
+        quanpin.activate(SchemeType::Quanpin).unwrap();
         assert!(quanpin.quanpin.is_some());
         assert!(quanpin.wubi.is_none() && quanpin.shuangpin.is_none());
 
-        let korean = registry(SchemeSet::of(&[SchemeType::Korean]));
+        let mut korean = registry(SchemeSet::of(&[SchemeType::Korean]));
+        let _ = korean.query(&quanpin_request);
         assert!(korean.quanpin.is_none() && korean.wubi.is_none());
     }
 

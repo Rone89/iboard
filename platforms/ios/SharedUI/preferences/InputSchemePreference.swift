@@ -469,11 +469,34 @@ enum InputSchemePreference {
   private static let hasBundledEngine = languageDictionaryDirectory(in: .main) != nil
   private static let bundledJapanese = IOSResourcePacks.bundled("japanese")
   private static let bundledLanguageSchemes = installedLanguageSchemes(in: languageDictionaryDirectory(in: .main))
-  private static var downloadedPackIDs = Set((try? IOSResourcePacks.list())?.filter(\.installed).map(\.id) ?? [])
+  /// 随包已自带全部可选语言包（日文 + 粤/注音/笔画）时，无需在主线程跨 FFI 扫描按需下载包。
+  private static var allOptionalPacksBundled: Bool {
+    !hasBundledEngine || (bundledJapanese && (bundledLanguageSchemes?.count ?? 0) >= 4)
+  }
+  private static var downloadedPackIDs: Set<String> = allOptionalPacksBundled
+    ? []
+    : Set((try? IOSResourcePacks.list())?.filter(\.installed).map(\.id) ?? [])
 
-  /// 取得键盘焦点或宿主下载完成后刷新，按键处理只读缓存。
+  /// 取得键盘焦点或宿主下载完成后同步刷新，按键处理只读缓存。
   static func refreshResourceAvailability() {
+    guard !allOptionalPacksBundled else { return }
     downloadedPackIDs = Set((try? IOSResourcePacks.list())?.filter(\.installed).map(\.id) ?? [])
+  }
+
+  /// 键盘唤醒时在后台线程检查按需下载资源包，避免在 `viewWillAppear` 主线程跨 FFI 扫描磁盘。
+  static func refreshResourceAvailabilityAsync(completion: ((Bool) -> Void)? = nil) {
+    guard !allOptionalPacksBundled else {
+      completion?(false)
+      return
+    }
+    DispatchQueue.global(qos: .userInitiated).async {
+      let updated = Set((try? IOSResourcePacks.list())?.filter(\.installed).map(\.id) ?? [])
+      DispatchQueue.main.async {
+        let changed = updated != downloadedPackIDs
+        downloadedPackIDs = updated
+        completion?(changed)
+      }
+    }
   }
 
   static var installedLanguageSchemes: Set<ChineseInputScheme>? {
