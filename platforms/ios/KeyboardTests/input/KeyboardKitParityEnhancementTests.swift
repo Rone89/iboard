@@ -150,8 +150,9 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
     XCTAssertTrue(QuickPasteToolbarPolicy.shouldShow(changeCount: 4, hasStrings: true, hasImages: false, defaults: defaults))
     XCTAssertFalse(QuickPasteToolbarPolicy.shouldShow(changeCount: 4, hasStrings: false, hasImages: true, defaults: defaults))
     XCTAssertEqual(QuickPasteToolbarPolicy.truncatedTextPreview("你好世界"), "你好世界")
-    XCTAssertEqual(QuickPasteToolbarPolicy.truncatedTextPreview("你好世界啊再见"), "你好世界啊…")
-    XCTAssertEqual(QuickPasteToolbarPolicy.truncatedTextPreview("  第一行\n第二行内容 "), "第一行 第…")
+    XCTAssertEqual(QuickPasteToolbarPolicy.truncatedTextPreview("你好世界啊再"), "你好世界啊再")
+    XCTAssertEqual(QuickPasteToolbarPolicy.truncatedTextPreview("你好世界啊再见"), "你好世界啊再…")
+    XCTAssertEqual(QuickPasteToolbarPolicy.truncatedTextPreview("  第一行\n第二行内容 "), "第一行 第二…")
   }
 
   @MainActor
@@ -159,11 +160,13 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
     let button = QuickPasteToolbarButton()
     button.apply(skin: .resolvedForTests(id: "native"))
     let baseSize = button.intrinsicContentSize
-    XCTAssertGreaterThan(baseSize.width, 40)
-    XCTAssertLessThan(baseSize.width, 100)
+    XCTAssertGreaterThan(baseSize.width, 24)
+    XCTAssertLessThan(baseSize.width, 50)
     XCTAssertEqual(baseSize.height, KeyboardToolbarButton.padSide)
+    // 仅展示粘贴图标与内容预览，不再显示多余的「粘贴」文字标签。
+    XCTAssertFalse(allSubviews(in: button).compactMap { $0 as? UILabel }.contains { $0.text == "粘贴" })
 
-    button.configure(preview: .text(preview: "你好世界啊…", fullText: "你好世界啊再见"))
+    button.configure(preview: .text(preview: "你好世界啊再…", fullText: "你好世界啊再见"))
     XCTAssertGreaterThan(button.intrinsicContentSize.width, baseSize.width)
 
     let image = UIGraphicsImageRenderer(size: CGSize(width: 10, height: 10)).image { ctx in

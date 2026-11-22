@@ -11,7 +11,7 @@ enum QuickPastePreview: Equatable {
 /// 仅在检测到新复制的纯文本（不含图片）时显示按钮；用户点按后记录该 `changeCount`，同一条内容不再重复显示。
 enum QuickPasteToolbarPolicy {
   static let handledChangeCountKey = "toolbar.quickPaste.handledChangeCount"
-  static let maxPreviewCharacters = 5
+  static let maxPreviewCharacters = 6
 
   /// 先按轻量 `changeCount` 判断是否有尚未处理的剪贴板变更，避免在未复制新内容时发起跨进程 `hasStrings`/`hasImages` XPC 查询。
   static func isUnhandled(changeCount: Int, defaults: UserDefaults = .standard) -> Bool {
@@ -35,7 +35,7 @@ enum QuickPasteToolbarPolicy {
     defaults.set(changeCount, forKey: handledChangeCountKey)
   }
 
-  /// 生成用于工具栏展示的文本摘要：合并换行并取前 5 个字符，超出时末尾加省略号。
+  /// 生成用于工具栏展示的文本摘要：合并换行并取前 6 个字符，超出时末尾加省略号。
   static func truncatedTextPreview(_ text: String, maxCharacters: Int = maxPreviewCharacters) -> String {
     let singleLine = text
       .components(separatedBy: .newlines)
@@ -47,18 +47,16 @@ enum QuickPasteToolbarPolicy {
   }
 }
 
-/// 放在工具栏左侧品牌键旁边的「一键粘贴」胶囊按钮，支持文本摘要（前 5 字+省略号）和图片缩略图。
+/// 放在工具栏左侧品牌键旁边的「一键粘贴」胶囊按钮：仅展示粘贴图标加复制内容前 6 字摘要（超出加省略号）。
 final class QuickPasteToolbarButton: UIButton {
   private static let pillHeight: CGFloat = 30
   private static let horizontalPadding: CGFloat = 10
   private static let iconSide: CGFloat = 14
-  private static let itemSpacing: CGFloat = 4
   private static let previewSpacing: CGFloat = 5
   private static let thumbnailSide: CGFloat = 20
 
   private let pad = UIView()
   private let iconView = UIImageView()
-  private let labelView = UILabel()
   private let previewLabel = UILabel()
   private let previewImageView = UIImageView()
   private var skin = KeyboardTheme.current
@@ -81,12 +79,7 @@ final class QuickPasteToolbarButton: UIButton {
     iconView.isUserInteractionEnabled = false
     pad.addSubview(iconView)
 
-    labelView.text = "粘贴"
-    labelView.font = .systemFont(ofSize: 13, weight: .medium)
-    labelView.isUserInteractionEnabled = false
-    pad.addSubview(labelView)
-
-    previewLabel.font = .systemFont(ofSize: 12, weight: .regular)
+    previewLabel.font = .systemFont(ofSize: 13, weight: .medium)
     previewLabel.lineBreakMode = .byTruncatingTail
     previewLabel.isUserInteractionEnabled = false
     previewLabel.isHidden = true
@@ -138,8 +131,7 @@ final class QuickPasteToolbarButton: UIButton {
   }
 
   override var intrinsicContentSize: CGSize {
-    let titleWidth = ceil(labelView.intrinsicContentSize.width)
-    var width = Self.horizontalPadding * 2 + Self.iconSide + Self.itemSpacing + titleWidth
+    var width = Self.horizontalPadding * 2 + Self.iconSide
     switch preview {
     case let .text(summary, _) where !summary.isEmpty:
       width += Self.previewSpacing + ceil(previewLabel.intrinsicContentSize.width)
@@ -181,19 +173,17 @@ final class QuickPasteToolbarButton: UIButton {
 
     let padH = Self.horizontalPadding * scale
     let iconSide = Self.iconSide * scale
-    let spacing = Self.itemSpacing * scale
-    let titleWidth = ceil(labelView.intrinsicContentSize.width) * scale
 
+    let hasPreview = !previewImageView.isHidden || !previewLabel.isHidden
+    let iconX = hasPreview ? padH : (pillWidth - iconSide) / 2
     iconView.frame = CGRect(
-      x: padH,
+      x: iconX,
       y: (pillHeight - iconSide) / 2,
       width: iconSide,
       height: iconSide
     )
-    let labelX = padH + iconSide + spacing
-    labelView.frame = CGRect(x: labelX, y: 0, width: titleWidth, height: pillHeight)
 
-    let previewX = labelX + titleWidth + Self.previewSpacing * scale
+    let previewX = padH + iconSide + Self.previewSpacing * scale
     let availablePreviewWidth = max(0, pillWidth - previewX - padH)
     if !previewImageView.isHidden {
       let thumbSide = min(Self.thumbnailSide * scale, availablePreviewWidth, pillHeight - 6 * scale)
@@ -216,7 +206,6 @@ final class QuickPasteToolbarButton: UIButton {
     pad.layer.borderColor = skin.calloutBorder.resolvedColor(with: traitCollection).cgColor
     let foreground = skin.keyForeground
     iconView.tintColor = foreground
-    labelView.textColor = foreground
-    previewLabel.textColor = skin.secondary
+    previewLabel.textColor = foreground
   }
 }
