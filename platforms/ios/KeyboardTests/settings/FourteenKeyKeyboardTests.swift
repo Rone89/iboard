@@ -275,7 +275,7 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     XCTAssertEqual(l.configuration?.title, "L;")
     XCTAssertEqual(l.accessibilityLabel, "字母 L 和分号")
     XCTAssertFalse(shown(try button("microsoftFinalKey", in: controller)))
-    XCTAssertFalse(shown(try view("numberRow", in: controller)))
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) })
     XCTAssertFalse(shown(try button("tabletLayerKey", in: controller)))
     try tap(["QW", "L"], in: controller)
     XCTAssertTrue(shown(try button("readingSpelling_qing", in: controller)))
@@ -521,7 +521,7 @@ final class FourteenKeyKeyboardTests: XCTestCase {
       // 中文 14 键没有 Shift，也不画 26 键的字母行和 iPad 的数字行。
       XCTAssertFalse(shown(try button("shiftButton", in: controller)))
       XCTAssertNil(descendants(controller.view).first { $0.accessibilityLabel == "字母 Q" && shown($0) })
-      XCTAssertFalse(shown(try view("numberRow", in: controller)))
+      XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) })
       // 底行沿用手机 26 键底行：123 | ， | 空格 | 。 | 中 | 回车。
       for id in ["layoutToggleButton", "quickPunctuationKey", "spaceKey", "bottomPeriodKey", "bottomLanguageKey", "returnKey"] {
         XCTAssertTrue(shown(try button(id, in: controller)), id)
@@ -848,7 +848,7 @@ final class FourteenKeyKeyboardTests: XCTestCase {
     XCTAssertEqual(qw.bounds.height, KeyboardFormFactor.tablet.keyHeight(
       landscape: false, handwriting: false,
       largeScreen: KeyboardFormFactor.isLargeScreen(idiom: .pad, screenSize: UIScreen.main.bounds.size)), accuracy: 0.5)
-    XCTAssertFalse(shown(try view("numberRow", in: controller)))
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) })
     XCTAssertFalse(shown(try button("tabletLayerKey", in: controller)), "the 14 keys use the phone bottom row")
     XCTAssertTrue(shown(try button("returnKey", in: controller)))
     XCTAssertTrue(shown(try button("bottomPeriodKey", in: controller)))

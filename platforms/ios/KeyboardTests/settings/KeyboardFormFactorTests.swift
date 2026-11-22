@@ -286,7 +286,8 @@ final class KeyboardFormFactorTests: XCTestCase {
         InputSchemePreference.scheme = scheme
         let tablet = tabletController()
         try key("layoutToggleButton", in: tablet).sendActions(for: .primaryActionTriggered)
-        XCTAssertEqual(try view("symbolExtraRow", in: tablet).isHidden, !fullKeys || scheme != .quanpin, scheme.rawValue)
+        let extraHidden = descendants(tablet.view).first { $0.accessibilityIdentifier == "symbolExtraRow" }?.isHidden ?? true
+        XCTAssertEqual(extraHidden, !fullKeys || scheme != .quanpin, scheme.rawValue)
       }
     }
     KeyboardLayoutPreference.tabletFullKeys = true
@@ -297,7 +298,7 @@ final class KeyboardFormFactorTests: XCTestCase {
       phone.traitOverrides.horizontalSizeClass = .compact
       phone.loadViewIfNeeded()
       try key("layoutToggleButton", in: phone).sendActions(for: .primaryActionTriggered)
-      XCTAssertTrue(try view("symbolExtraRow", in: phone).isHidden)
+      XCTAssertTrue(descendants(phone.view).first { $0.accessibilityIdentifier == "symbolExtraRow" }?.isHidden ?? true)
     }
   }
 
@@ -341,7 +342,7 @@ final class KeyboardFormFactorTests: XCTestCase {
     phone.loadViewIfNeeded()
     phone.view.frame = CGRect(x: 0, y: 0, width: 440, height: 292)
     phone.view.layoutIfNeeded()
-    XCTAssertTrue(try view("numberRow", in: phone).isHidden)
+    XCTAssertTrue(descendants(phone.view).first { $0.accessibilityIdentifier == "numberRow" }?.isHidden ?? true)
     XCTAssertTrue(try key("tabKey", in: phone).isHidden)
 
     let tablet = tabletController()
@@ -357,7 +358,7 @@ final class KeyboardFormFactorTests: XCTestCase {
 
     KeyboardLayoutPreference.tabletFullKeys = false
     let plain = tabletController()
-    XCTAssertTrue(try view("numberRow", in: plain).isHidden)
+    XCTAssertTrue(descendants(plain.view).first { $0.accessibilityIdentifier == "numberRow" }?.isHidden ?? true)
     XCTAssertTrue(try key("tabKey", in: plain).isHidden)
     let withoutRow = try XCTUnwrap(plain.view.constraints.first { $0.identifier == "keyboardHeight" }).constant
     XCTAssertGreaterThan(withRow, withoutRow)
@@ -906,7 +907,7 @@ final class KeyboardFormFactorTests: XCTestCase {
       // 关掉数字行与 Tab 键后字母照样分开。
       KeyboardLayoutPreference.tabletFullKeys = false
       let plain = splitTestController()
-      XCTAssertTrue(try view("numberRow", in: plain).isHidden)
+      XCTAssertTrue(descendants(plain.view).first { $0.accessibilityIdentifier == "numberRow" }?.isHidden ?? true)
       XCTAssertEqual(visibleGaps(in: plain).count, 4, "three letter rows and the bottom row")
       let t = try frame(letter("t", in: plain), in: plain)
       XCTAssertEqual(try frame(letter("y", in: plain), in: plain).minX - t.maxX, gap, accuracy: 1)

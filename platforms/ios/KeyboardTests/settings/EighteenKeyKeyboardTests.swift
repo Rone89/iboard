@@ -176,7 +176,7 @@ final class EighteenKeyKeyboardTests: XCTestCase {
         // 14 键的几排第一次要画时才建，没用过 14 键的键盘里根本没有它们。
         XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "fourteenKeyQW" && shown($0) },
                        "the 14 keys stay hidden")
-        XCTAssertFalse(shown(try view("numberRow", in: controller)))
+        XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) })
         XCTAssertEqual(try button("schemeButton", in: controller).accessibilityValue, "全拼 18 键")
         XCTAssertEqual(controller.view.constraints.first { $0.identifier == "keyboardHeight" }?.constant,
                        KeyboardViewController.keyboardHeight(separateReadingRow: true))
@@ -377,7 +377,7 @@ final class EighteenKeyKeyboardTests: XCTestCase {
     defer { controller.viewDidDisappear(false) }
     let q = try frame("eighteenKeyQ", in: controller)
     XCTAssertTrue(shown(try button("eighteenKeyQ", in: controller)))
-    XCTAssertFalse(shown(try view("numberRow", in: controller)))
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) })
     XCTAssertFalse(shown(try button("tabletLayerKey", in: controller)), "the 18 keys use the phone bottom row")
     XCTAssertTrue(shown(try button("returnKey", in: controller)))
     for id in ["eighteenKeyBN", "eighteenKeyDelete"] {

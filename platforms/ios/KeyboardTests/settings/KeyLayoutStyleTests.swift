@@ -314,7 +314,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
     try layoutAtRequestedHeight(controller)
     XCTAssertTrue(shown(try button("symbolLayerKey0_0", in: controller)), "123 opens the horizontal number layer")
-    XCTAssertFalse(shown(try button("nineKey1", in: controller)))
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "nineKey1" && shown($0) })
     XCTAssertTrue(shown(try button("spaceKey", in: controller)), "the horizontal symbol layer keeps the space key")
     XCTAssertEqual(try button("layoutToggleButton", in: controller).configuration?.title, "拼音")
     let globe = controller.needsInputModeSwitchKey ? [TouchBottomRowLayout.Slot.globe] : []
@@ -505,7 +505,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     // 九键不画。
     select(.nineKey)
     var controller = keyboard()
-    XCTAssertFalse(shown(try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "numberRow" })))
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) })
     XCTAssertEqual(height(of: controller), KeyboardViewController.defaultKeyboardHeight, accuracy: 0.5)
     controller.viewDidDisappear(false)
     // 手机横屏不画。
@@ -516,7 +516,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     controller.view.frame = CGRect(x: 0, y: 0, width: 874, height: KeyboardViewController.keyboardHeight(landscape: true))
     controller.viewWillAppear(false)
     controller.view.layoutIfNeeded()
-    XCTAssertFalse(shown(try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "numberRow" })),
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) },
                    "phone landscape has no room for a fifth row")
     XCTAssertEqual(TouchKeyLayoutStyle.mirrored.numberRow, true, "the stored choice stays")
     controller.viewDidDisappear(false)
@@ -555,7 +555,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
     try layoutAtRequestedHeight(controller)
     try assertWhole("symbolExtraKey", "number layer")
-    try button("numberPadMoreSymbols", in: controller).sendActions(for: .primaryActionTriggered)
+    try button("symbolLayerToggle", in: controller).sendActions(for: .primaryActionTriggered)
     try layoutAtRequestedHeight(controller)
     try assertWhole("symbolExtraKey", "more symbols")
     controller.viewDidDisappear(false)
@@ -606,11 +606,11 @@ final class KeyLayoutStyleTests: XCTestCase {
     // 九键没有数字行，换成全拼时数字行和 26 键在同一趟里出现。
     select(.nineKey)
     var controller = keyboard()
-    var numberRow = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "numberRow" })
-    XCTAssertFalse(shown(numberRow))
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) })
     select(.quanpin)
     controller.viewWillAppear(false)
     try layoutAtRequestedHeight(controller)
+    var numberRow = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "numberRow" })
     XCTAssertTrue(shown(numberRow), "nine-key to quanpin")
     XCTAssertEqual(height(of: controller), taller, accuracy: 0.5)
     try assertLetterKeysAre45(controller, "nine-key to quanpin")
@@ -623,13 +623,13 @@ final class KeyLayoutStyleTests: XCTestCase {
     controller.view.frame = CGRect(x: 0, y: 0, width: 874, height: KeyboardViewController.keyboardHeight(landscape: true))
     controller.viewWillAppear(false)
     controller.view.layoutIfNeeded()
-    numberRow = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "numberRow" })
-    XCTAssertFalse(shown(numberRow), "landscape")
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) }, "landscape")
     controller.traitOverrides.verticalSizeClass = .regular
     controller.updateTraitsIfNeeded()
     controller.view.frame = CGRect(x: 0, y: 0, width: 402, height: KeyboardViewController.defaultKeyboardHeight)
     controller.view.layoutIfNeeded()
     try layoutAtRequestedHeight(controller)
+    numberRow = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "numberRow" })
     XCTAssertTrue(shown(numberRow), "landscape to portrait")
     XCTAssertEqual(height(of: controller), taller, accuracy: 0.5)
     try assertLetterKeysAre45(controller, "landscape to portrait")
@@ -1284,7 +1284,7 @@ final class KeyLayoutStyleTests: XCTestCase {
         XCTAssertTrue(write(TouchKeyLayoutStyle()))
         let without = tablet()
         let fullRow = fullKeys && scheme == .quanpin
-        XCTAssertEqual(shown(try view("numberRow", in: without)), fullRow, label)
+        XCTAssertEqual(descendants(without.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) }, fullRow, label)
         let shorter = height(of: without)
         without.viewDidDisappear(false)
         XCTAssertTrue(write(TouchKeyLayoutStyle(fourteenKey: .longSpace, numberRow: true)))
@@ -1313,7 +1313,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     let tall = try button("tallReturnKey", in: controller)
     try await restyle(controller, TouchKeyLayoutStyle(nineKey: .tallReturn, numberRow: true), "iPad") { self.shown(tall) }
     XCTAssertTrue(shown(tall), "the nine-key style applies on iPad")
-    XCTAssertFalse(shown(try view("numberRow", in: controller)), "nine-key has no number row")
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) }, "nine-key has no number row")
     try assertTallReturnFrame(controller, digits: false, standard: standard, "iPad")
     controller.viewDidDisappear(false)
   }
@@ -1513,20 +1513,22 @@ final class KeyLayoutStyleTests: XCTestCase {
       for nineStyle in [TouchNineKeyStyle.standard, .tallReturn] {
         XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: nineStyle)))
         let controller = keyboard()
-        let tall = try button("tallReturnKey", in: controller)
+        let isShown: (String) -> Bool = { id in
+          self.descendants(controller.view).contains { $0.accessibilityIdentifier == id && self.shown($0) }
+        }
         // 字母层（仅九键一族和笔画有外框）：右侧大回车样式在这里生效。
         if scheme != .quanpin && nineStyle == .tallReturn {
-          XCTAssertTrue(shown(tall), "\(label) letters tallReturn")
+          XCTAssertTrue(isShown("tallReturnKey"), "\(label) letters tallReturn")
         } else {
-          XCTAssertFalse(shown(tall), "\(label) letters tallReturn")
+          XCTAssertFalse(isShown("tallReturnKey"), "\(label) letters tallReturn")
         }
         // 数字层：九键一族与笔画照 iOS 原生 4×3（左栏、右列隐藏，底排是 返回 |（🌐）| 0 | ⌫）；全拼打开横向 1…0 符号层。
         try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
         try layoutAtRequestedHeight(controller)
-        XCTAssertFalse(shown(tall), "\(label) digits tallReturn")
-        XCTAssertFalse(shown(try view("nineKeySidebar", in: controller)), "\(label) digits sidebar")
-        XCTAssertFalse(shown(try button("nineKeyDelete", in: controller)), "\(label) digits right column")
-        XCTAssertFalse(shown(try button("numberPadSymbolPanelKey", in: controller)), "\(label) digits sidebar 符")
+        XCTAssertFalse(isShown("tallReturnKey"), "\(label) digits tallReturn")
+        XCTAssertFalse(isShown("nineKeySidebar"), "\(label) digits sidebar")
+        XCTAssertFalse(isShown("nineKeyDelete"), "\(label) digits right column")
+        XCTAssertFalse(isShown("numberPadSymbolPanelKey"), "\(label) digits sidebar 符")
         XCTAssertFalse(shown(try button("bottomLanguageKey", in: controller)), "\(label) digits 中/英")
         if scheme == .quanpin {
           XCTAssertEqual(try button("symbolLayerKey0_0", in: controller).configuration?.title, "1", label)
@@ -1917,13 +1919,15 @@ final class KeyLayoutStyleTests: XCTestCase {
       let controller = keyboard()
       try button("layoutToggleButton", in: controller).sendActions(for: .primaryActionTriggered)
       try layoutAtRequestedHeight(controller)
-      XCTAssertFalse(shown(try view("nineKeySidebar", in: controller)), label)
-      XCTAssertFalse(shown(try view("numberPadOperatorScroll", in: controller)), label)
-      XCTAssertFalse(shown(try button("numberPadMoreSymbols", in: controller)), label)
-      XCTAssertFalse(shown(try button("numberPadSymbolPanelKey", in: controller)), label)
+      let isShown: (String) -> Bool = { id in
+        self.descendants(controller.view).contains { $0.accessibilityIdentifier == id && self.shown($0) }
+      }
+      XCTAssertFalse(isShown("nineKeySidebar"), label)
+      XCTAssertFalse(isShown("numberPadOperatorScroll"), label)
+      XCTAssertFalse(isShown("numberPadMoreSymbols"), label)
+      XCTAssertFalse(isShown("numberPadSymbolPanelKey"), label)
       try await restyle(controller, TouchKeyLayoutStyle(), label) {
-        guard let sidebar = try? self.view("nineKeySidebar", in: controller) else { return false }
-        return !self.shown(sidebar)
+        !isShown("nineKeySidebar")
       }
       controller.viewDidDisappear(false)
     }
@@ -2136,8 +2140,8 @@ final class KeyLayoutStyleTests: XCTestCase {
     let toggle = try button("layoutToggleButton", in: controller)
     toggle.sendActions(for: .primaryActionTriggered)
     try layoutAtRequestedHeight(controller)
-    XCTAssertFalse(shown(try button("nineKey1", in: controller)))
-    XCTAssertFalse(shown(try view("symbolLayerRow0", in: controller)), "not the design #+= layer")
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "nineKey1" && shown($0) })
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "symbolLayerRow0" && shown($0) }, "not the design #+= layer")
     XCTAssertEqual(toggle.configuration?.title, "注")
     for symbol in ["1", "@", "-"] {
       try XCTUnwrap(descendants(controller.view).first { $0.accessibilityLabel == "符号 \(symbol)" && shown($0) } as? UIButton, symbol)

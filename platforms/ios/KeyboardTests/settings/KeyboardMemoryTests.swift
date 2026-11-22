@@ -238,6 +238,42 @@ final class KeyboardMemoryTests: XCTestCase {
       "the keyboard's launch grew past the regression budget; see the per-stage numbers above")
   }
 
+  /// 默认 26 键冷启动时不急切创建手写面板（避免触发 ML Kit 容器初始化）、数字行与符号补充行，切入手写时才按需构建。
+  func testColdStartDefersHandwritingAndHiddenNumberRowsUntilNeeded() throws {
+    enableAllInputSchemes()
+    let previousNumberRow = KeyboardLayoutPreference.defaults.object(forKey: "touch_number_row")
+    let previousTabletFullKeys = KeyboardLayoutPreference.tabletFullKeys
+    defer {
+      if let previousNumberRow { KeyboardLayoutPreference.defaults.set(previousNumberRow, forKey: "touch_number_row") }
+      else { KeyboardLayoutPreference.defaults.removeObject(forKey: "touch_number_row") }
+      KeyboardLayoutPreference.tabletFullKeys = previousTabletFullKeys
+    }
+    KeyboardLayoutPreference.tabletFullKeys = false
+    InputSchemePreference.scheme = .quanpin
+
+    let controller = KeyboardViewController()
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
+    controller.viewWillAppear(false)
+    controller.view.layoutIfNeeded()
+
+    let initialNodes = descendants(controller.view)
+    XCTAssertFalse(initialNodes.contains { $0 is HandwritingInputView }, "26 键冷启动不应提前构造手写面板")
+    XCTAssertFalse(initialNodes.contains { $0.accessibilityIdentifier == "symbolExtraRow" }, "未开启数字行时不应提前构造符号补充行")
+    XCTAssertFalse(initialNodes.contains { $0.accessibilityIdentifier == "symbolLayerRow0" }, "冷启动不应提前构造 123 符号层")
+    controller.viewWillDisappear(false)
+
+    // 切到手写方案后，手写面板应按需构造并进入视图树。
+    InputSchemePreference.scheme = .handwriting
+    let handwritingController = KeyboardViewController()
+    handwritingController.loadViewIfNeeded()
+    handwritingController.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
+    handwritingController.viewWillAppear(false)
+    handwritingController.view.layoutIfNeeded()
+    XCTAssertTrue(descendants(handwritingController.view).contains { $0 is HandwritingInputView }, "切入手写方案时应按需构建手写面板")
+    handwritingController.viewWillDisappear(false)
+  }
+
   // MARK: - 重新加载
 
   /// 未进入窗口的键盘也会在布局偏好和方案切换后销毁，不能把整套约束迁移成非法的布局引擎。
