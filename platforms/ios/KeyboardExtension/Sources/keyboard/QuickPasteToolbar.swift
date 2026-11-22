@@ -47,18 +47,25 @@ enum QuickPasteToolbarPolicy {
   }
 }
 
-/// 放在工具栏左侧品牌键旁边的「一键粘贴」胶囊按钮：仅展示粘贴图标加复制内容前 6 字摘要（超出加省略号）。
+/// 放在工具栏左侧品牌键旁边的「一键粘贴」胶囊按钮：仅展示粘贴图标、复制内容前 6 字摘要（超出加省略号）以及右侧关闭按钮。
 final class QuickPasteToolbarButton: UIButton {
   private static let pillHeight: CGFloat = 30
-  private static let horizontalPadding: CGFloat = 10
+  private static let leadingPadding: CGFloat = 10
+  private static let trailingPadding: CGFloat = 4
   private static let iconSide: CGFloat = 14
   private static let previewSpacing: CGFloat = 5
+  private static let dismissSpacing: CGFloat = 2
+  private static let dismissButtonWidth: CGFloat = 24
+  private static let dismissIconSide: CGFloat = 10
   private static let thumbnailSide: CGFloat = 20
 
   private let pad = UIView()
   private let iconView = UIImageView()
   private let previewLabel = UILabel()
   private let previewImageView = UIImageView()
+  let dismissButton = UIButton(type: .system)
+  /// 点按右侧关闭按钮时回调，由控制器标记当前剪贴板内容已忽略并隐藏胶囊。
+  var onDismiss: (() -> Void)?
   private var skin = KeyboardTheme.current
   private var preview: QuickPastePreview?
 
@@ -92,6 +99,13 @@ final class QuickPasteToolbarButton: UIButton {
     previewImageView.isUserInteractionEnabled = false
     previewImageView.isHidden = true
     pad.addSubview(previewImageView)
+
+    let dismissConfig = UIImage.SymbolConfiguration(pointSize: Self.dismissIconSide, weight: .semibold)
+    dismissButton.setImage(UIImage(systemName: "xmark", withConfiguration: dismissConfig), for: .normal)
+    dismissButton.accessibilityIdentifier = "quickPasteDismissButton"
+    dismissButton.accessibilityLabel = "关闭粘贴提醒"
+    dismissButton.addAction(UIAction { [weak self] _ in self?.onDismiss?() }, for: .primaryActionTriggered)
+    addSubview(dismissButton)
 
     setContentHuggingPriority(.required, for: .horizontal)
     setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
@@ -131,7 +145,7 @@ final class QuickPasteToolbarButton: UIButton {
   }
 
   override var intrinsicContentSize: CGSize {
-    var width = Self.horizontalPadding * 2 + Self.iconSide
+    var width = Self.leadingPadding + Self.iconSide + Self.dismissSpacing + Self.dismissButtonWidth + Self.trailingPadding
     switch preview {
     case let .text(summary, _) where !summary.isEmpty:
       width += Self.previewSpacing + ceil(previewLabel.intrinsicContentSize.width)
@@ -171,20 +185,29 @@ final class QuickPasteToolbarButton: UIButton {
     pad.center = CGPoint(x: bounds.midX, y: bounds.midY)
     pad.layer.cornerRadius = pillHeight / 2
 
-    let padH = Self.horizontalPadding * scale
+    let padLeading = Self.leadingPadding * scale
+    let padTrailing = Self.trailingPadding * scale
     let iconSide = Self.iconSide * scale
+    let dismissWidth = Self.dismissButtonWidth * scale
 
-    let hasPreview = !previewImageView.isHidden || !previewLabel.isHidden
-    let iconX = hasPreview ? padH : (pillWidth - iconSide) / 2
     iconView.frame = CGRect(
-      x: iconX,
+      x: padLeading,
       y: (pillHeight - iconSide) / 2,
       width: iconSide,
       height: iconSide
     )
 
-    let previewX = padH + iconSide + Self.previewSpacing * scale
-    let availablePreviewWidth = max(0, pillWidth - previewX - padH)
+    // 关闭按钮直接盖在胶囊右侧区域，纵向撑满按钮高度以提供充足点击热区，避免误触粘贴。
+    let dismissX = max(padLeading + iconSide, pillWidth - dismissWidth - padTrailing)
+    dismissButton.frame = CGRect(
+      x: dismissX,
+      y: 0,
+      width: pillWidth - dismissX,
+      height: bounds.height
+    )
+
+    let previewX = padLeading + iconSide + Self.previewSpacing * scale
+    let availablePreviewWidth = max(0, dismissX - Self.dismissSpacing * scale - previewX)
     if !previewImageView.isHidden {
       let thumbSide = min(Self.thumbnailSide * scale, availablePreviewWidth, pillHeight - 6 * scale)
       previewImageView.frame = CGRect(
@@ -207,5 +230,6 @@ final class QuickPasteToolbarButton: UIButton {
     let foreground = skin.keyForeground
     iconView.tintColor = foreground
     previewLabel.textColor = foreground
+    dismissButton.tintColor = skin.secondary
   }
 }

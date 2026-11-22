@@ -3381,6 +3381,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     moreShortcut.widthAnchor.constraint(equalToConstant: KeyboardToolbarButton.padSide).isActive = true
     quickPasteShortcut.isHidden = true
     quickPasteShortcut.addAction(UIAction { [weak self] _ in self?.performQuickPaste() }, for: .primaryActionTriggered)
+    quickPasteShortcut.onDismiss = { [weak self] in self?.dismissQuickPaste() }
     shortcutBar.addArrangedSubview(quickPasteShortcut)
     undoDeleteShortcut.isHidden = true
     undoDeleteShortcut.addAction(UIAction { [weak self] _ in self?.performUndoDelete() }, for: .primaryActionTriggered)
@@ -3638,6 +3639,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         insertDirectText(text)
       }
     }
+  }
+
+  /// 点按粘贴提醒右侧关闭按钮：标记本次剪贴板 `changeCount` 已处理并收起提醒，不写入正文；下次复制新内容后重新提醒。
+  private func dismissQuickPaste() {
+    playInputClick()
+    QuickPasteToolbarPolicy.markHandled(changeCount: UIPasteboard.general.changeCount)
+    cachedQuickPasteChangeCount = nil
+    cachedQuickPastePreview = nil
+    quickPasteShortcut.isHidden = true
+    quickPasteShortcut.configure(preview: nil)
   }
 
   /// 工具栏上可以在「键盘工具栏」设置里打开或关掉的按钮，即品牌键和收起键之外的全部按钮。
