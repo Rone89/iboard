@@ -201,7 +201,7 @@ final class KeyboardClipboardView: UIView, UITableViewDataSource, UITableViewDel
     title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     let pasteboard = UIPasteboard.general
     let newCopy = hasFullAccess && capturesHistory() && ClipboardCapturePrompt.hasNewCopy(
-      changeCount: pasteboard.changeCount, hasStrings: pasteboard.hasStrings)
+      changeCount: pasteboard.changeCount, hasStrings: pasteboard.hasStrings && !pasteboard.hasImages)
     capture.configuration = captureConfiguration(newCopy: newCopy)
     capture.accessibilityIdentifier = "captureClipboard"
     capture.isEnabled = hasFullAccess

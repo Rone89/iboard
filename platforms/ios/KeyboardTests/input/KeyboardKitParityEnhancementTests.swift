@@ -137,15 +137,18 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
     XCTAssertFalse(QuickPasteToolbarPolicy.shouldShow(changeCount: 0, hasStrings: true, hasImages: true, defaults: defaults))
     XCTAssertFalse(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: false, hasImages: false, defaults: defaults))
     XCTAssertTrue(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: true, hasImages: false, defaults: defaults))
-    XCTAssertTrue(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: false, hasImages: true, defaults: defaults))
+    // 剪贴板含图片（无论是否附带文件名/链接字符串）一律不在键盘上提示一键粘贴。
+    XCTAssertFalse(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: false, hasImages: true, defaults: defaults))
+    XCTAssertFalse(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: true, hasImages: true, defaults: defaults))
 
     XCTAssertFalse(QuickPasteToolbarPolicy.isUnhandled(changeCount: 0, defaults: defaults))
     XCTAssertTrue(QuickPasteToolbarPolicy.isUnhandled(changeCount: 3, defaults: defaults))
     QuickPasteToolbarPolicy.markHandled(changeCount: 3, defaults: defaults)
     XCTAssertFalse(QuickPasteToolbarPolicy.isUnhandled(changeCount: 3, defaults: defaults))
-    XCTAssertFalse(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: true, hasImages: true, defaults: defaults))
+    XCTAssertFalse(QuickPasteToolbarPolicy.shouldShow(changeCount: 3, hasStrings: true, hasImages: false, defaults: defaults))
 
-    XCTAssertTrue(QuickPasteToolbarPolicy.shouldShow(changeCount: 4, hasStrings: false, hasImages: true, defaults: defaults))
+    XCTAssertTrue(QuickPasteToolbarPolicy.shouldShow(changeCount: 4, hasStrings: true, hasImages: false, defaults: defaults))
+    XCTAssertFalse(QuickPasteToolbarPolicy.shouldShow(changeCount: 4, hasStrings: false, hasImages: true, defaults: defaults))
     XCTAssertEqual(QuickPasteToolbarPolicy.truncatedTextPreview("你好世界"), "你好世界")
     XCTAssertEqual(QuickPasteToolbarPolicy.truncatedTextPreview("你好世界啊再见"), "你好世界啊…")
     XCTAssertEqual(QuickPasteToolbarPolicy.truncatedTextPreview("  第一行\n第二行内容 "), "第一行 第…")

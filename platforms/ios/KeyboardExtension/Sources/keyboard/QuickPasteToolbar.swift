@@ -8,7 +8,7 @@ enum QuickPastePreview: Equatable {
 
 /// 工具栏「一键粘贴」按钮的显示策略：
 /// 只读取 `UIPasteboard.general.hasStrings`、`hasImages` 和 `changeCount`，
-/// 在检测到新复制的文本或图片时显示按钮；用户点按后记录该 `changeCount`，同一条内容不再重复显示。
+/// 仅在检测到新复制的纯文本（不含图片）时显示按钮；用户点按后记录该 `changeCount`，同一条内容不再重复显示。
 enum QuickPasteToolbarPolicy {
   static let handledChangeCountKey = "toolbar.quickPaste.handledChangeCount"
   static let maxPreviewCharacters = 5
@@ -25,7 +25,9 @@ enum QuickPasteToolbarPolicy {
     hasImages: Bool = false,
     defaults: UserDefaults = .standard
   ) -> Bool {
-    guard hasStrings || hasImages else { return false }
+    // iOS 键盘扩展无法通过 `UITextDocumentProxy` 直接插入图片；只要剪贴板包含图片（即使同时附带文件名或链接文本），
+    // 一律不展示一键粘贴胶囊，也不再去读取剪贴板正文，避免无效提示与触发系统粘贴横幅。
+    guard !hasImages, hasStrings else { return false }
     return isUnhandled(changeCount: changeCount, defaults: defaults)
   }
 

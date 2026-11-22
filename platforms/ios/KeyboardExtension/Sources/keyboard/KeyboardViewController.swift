@@ -3543,8 +3543,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return
     }
     if cachedQuickPasteChangeCount != changeCount {
-      let hasStrings = pasteboard.hasStrings
       let hasImages = pasteboard.hasImages
+      let hasStrings = !hasImages && pasteboard.hasStrings
       guard QuickPasteToolbarPolicy.shouldShow(
         changeCount: changeCount,
         hasStrings: hasStrings,
@@ -3562,9 +3562,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         if !summary.isEmpty {
           preview = .text(preview: summary, fullText: text)
         }
-      }
-      if preview == nil, hasImages, let image = pasteboard.image {
-        preview = .image(image)
       }
       cachedQuickPasteChangeCount = changeCount
       cachedQuickPastePreview = preview
