@@ -635,9 +635,9 @@ struct CommunityDesignPreview: View {
     .foregroundStyle(foreground)
   }
 
-  /// 键盘工具栏左上角图标：与真实键盘一致使用 SF Symbol `timelapse`。
+  /// 键盘工具栏左上角图标：与真实键盘一致使用 SF Symbol `command`。
   private var brandMark: some View {
-    Image(systemName: "timelapse")
+    Image(systemName: "command")
       .font(.system(size: 15, weight: .medium))
       .frame(width: 26, height: 26)
   }

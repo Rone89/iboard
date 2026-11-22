@@ -10216,7 +10216,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  /// 展开候选面板头部的品牌图标：与工具栏左上角一致使用 SF Symbol `timelapse`。
+  /// 展开候选面板头部的品牌图标：与工具栏左上角一致使用 SF Symbol `command`。
   static func brandMark(side: CGFloat) -> UIImage {
     let config = UIImage.SymbolConfiguration(pointSize: side * 0.9, weight: .medium)
     if let symbol = UIImage(systemName: KeyboardBrandMarkButton.symbolName, withConfiguration: config)?

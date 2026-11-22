@@ -232,8 +232,8 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
   }
 
   @MainActor
-  func testBrandMarkButtonRendersAdaptiveTimelapseIconForLightDarkAndActive() throws {
-    XCTAssertEqual(KeyboardBrandMarkButton.symbolName, "timelapse")
+  func testBrandMarkButtonRendersAdaptiveCommandIconForLightDarkAndActive() throws {
+    XCTAssertEqual(KeyboardBrandMarkButton.symbolName, "command")
     let button = KeyboardBrandMarkButton(frame: CGRect(x: 0, y: 0, width: 42, height: 42))
     button.traitOverrides.userInterfaceStyle = .light
     button.updateTraitsIfNeeded()
@@ -247,7 +247,7 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
     button.updateTraitsIfNeeded()
     button.apply(skin: .resolvedForTests(id: GlobalThemeCatalog.nativeId))
     let darkImage = try XCTUnwrap(button.image(for: .normal))
-    XCTAssertNotEqual(lightImage.pngData(), darkImage.pngData(), "亮暗色 timelapse 图标应随外观自适应着色")
+    XCTAssertNotEqual(lightImage.pngData(), darkImage.pngData(), "亮暗色 command 图标应随外观自适应着色")
 
     button.isActive = true
     let activeImage = try XCTUnwrap(button.image(for: .normal))

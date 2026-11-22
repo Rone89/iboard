@@ -1,11 +1,11 @@
 import UIKit
 
-/// 工具栏左上角功能入口按钮：使用 SF Symbol `timelapse` 图标，与工具栏其他图标保持一致的配色、缩放与激活态胶囊底托。
+/// 工具栏左上角功能入口按钮：使用 SF Symbol `command` 图标，与工具栏其他图标保持一致的配色、缩放与激活态胶囊底托。
 /// 图像覆盖整个按钮，透明边缘保留整格系统键盘点击范围，按压仅在图像内部缩放（不对 `imageView` 做 transform）。
 final class KeyboardBrandMarkButton: UIButton {
   static let discSide: CGFloat = 36
   static let markSide: CGFloat = 24
-  static let symbolName = "timelapse"
+  static let symbolName = "command"
   static let pressScale: CGFloat = 0.92
   private static let disabledAlpha: CGFloat = 0.4
 
@@ -37,7 +37,7 @@ final class KeyboardBrandMarkButton: UIButton {
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  /// 换皮肤或明暗变化时同步重绘 `timelapse` 图标与激活态底托。
+  /// 换皮肤或明暗变化时同步重绘 `command` 图标与激活态底托。
   func apply(skin: KeyboardTheme) {
     self.skin = skin
     renderIfNeeded(force: true)
@@ -74,7 +74,7 @@ final class KeyboardBrandMarkButton: UIButton {
     renderMark(size: size, isDark: isDark)
   }
 
-  /// 图像覆盖整个按钮，SF Symbol `timelapse` 居中绘制，透明部分保留整格点击范围。
+  /// 图像覆盖整个按钮，SF Symbol `command` 居中绘制，透明部分保留整格点击范围。
   private func renderMark(size: CGSize, isDark: Bool) {
     let foreground = (isActive ? skin.accent : skin.secondary).resolvedColor(with: traitCollection)
     let activePadFill = skin.toolbarActiveBackground.resolvedColor(with: traitCollection)

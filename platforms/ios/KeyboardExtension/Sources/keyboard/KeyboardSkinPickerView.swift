@@ -317,7 +317,7 @@ final class KeyboardSkinMiniature: UIView {
     let column = frame.width / columns
     func center(_ index: Int) -> CGPoint { CGPoint(x: frame.minX + column * (CGFloat(index) + 0.5), y: frame.midY) }
 
-    // 品牌键与键盘工具栏保持一致：绘制 SF Symbol `timelapse`。
+    // 品牌键与键盘工具栏保持一致：绘制 SF Symbol `command`。
     let markSide: CGFloat = 20
     let markConfig = UIImage.SymbolConfiguration(pointSize: markSide * 0.9, weight: .medium)
     if let markSymbol = UIImage(systemName: KeyboardBrandMarkButton.symbolName, withConfiguration: markConfig)?

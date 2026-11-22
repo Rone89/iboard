@@ -147,9 +147,9 @@ struct KeyboardSkinPreview: View {
     .frame(height: Self.toolbarStripHeight * stripScale)
   }
 
-  /// 键盘工具栏左上角图标：与真实键盘一致使用 SF Symbol `timelapse`。
+  /// 键盘工具栏左上角图标：与真实键盘一致使用 SF Symbol `command`。
   private var brandMark: some View {
-    Image(systemName: "timelapse")
+    Image(systemName: "command")
       .font(.system(size: 13 * toolbarContentScale, weight: .medium))
       .foregroundStyle(color(skin.keyForeground))
       .frame(width: 22 * toolbarContentScale, height: 22 * toolbarContentScale)
