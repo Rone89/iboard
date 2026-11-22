@@ -218,7 +218,8 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
   }
 
   @MainActor
-  func testBrandMarkButtonRendersAdaptiveIBLiquidGlassIconForLightDarkAndActive() throws {
+  func testBrandMarkButtonRendersAdaptiveTimelapseIconForLightDarkAndActive() throws {
+    XCTAssertEqual(KeyboardBrandMarkButton.symbolName, "timelapse")
     let button = KeyboardBrandMarkButton(frame: CGRect(x: 0, y: 0, width: 42, height: 42))
     button.traitOverrides.userInterfaceStyle = .light
     button.updateTraitsIfNeeded()
@@ -232,11 +233,11 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
     button.updateTraitsIfNeeded()
     button.apply(skin: .resolvedForTests(id: GlobalThemeCatalog.nativeId))
     let darkImage = try XCTUnwrap(button.image(for: .normal))
-    XCTAssertNotEqual(lightImage.pngData(), darkImage.pngData(), "亮暗色 iB 液态玻璃键帽应自适应不同配色")
+    XCTAssertNotEqual(lightImage.pngData(), darkImage.pngData(), "亮暗色 timelapse 图标应随外观自适应着色")
 
     button.isActive = true
     let activeImage = try XCTUnwrap(button.image(for: .normal))
-    XCTAssertNotEqual(darkImage.pngData(), activeImage.pngData(), "展开功能菜单激活态应绘制强调光环")
+    XCTAssertNotEqual(darkImage.pngData(), activeImage.pngData(), "展开功能菜单激活态应绘制强调色与底托")
   }
 
   @MainActor
