@@ -197,7 +197,7 @@ private struct AuthenticatedTypingStatisticsView: View {
     let uploading = upload?.enabled == true
     return HStack(spacing: 4) {
       Image(systemName: uploading ? "icloud.and.arrow.up" : "lock").font(.system(size: 13))
-      Text(uploading ? "已打开「上传到云端」：每日计数会上传到你的水杉账号，不含输入内容" : "统计只保存在本机，不包含输入内容")
+      Text(uploading ? "已打开「上传到云端」：每日计数会上传到你的云账号，不含输入内容" : "统计只保存在本机，不包含输入内容")
         .font(.system(size: 12))
         .multilineTextAlignment(.center)
     }
@@ -233,7 +233,7 @@ private struct AuthenticatedTypingStatisticsView: View {
     "平均速度按连续打字的时间计算，两次上屏间隔超过 10 秒算休息、不计入；只统计汉字与各种文字的字母，数字、标点和表情不参与。首选命中在选词满 50 次后显示。",
     "按键热力图另计每个键的按下次数，拼音拼写、删除和功能键都算，密码框里的按键不计；只保存每个键每天被按下的次数，不保存按键顺序和输入内容。",
     "成就由统计数据推算，清空统计时一并清除。",
-    "统计默认只在本机保存计数，不保存输入内容；在「概览」底部打开「上传到云端」后，每天的字数、活跃时长、时段、输入方式和候选位次会上传到你的水杉账号，供 QQ 群助手的 /stats 查看，关闭时删除云端的数据。每日明细默认永久保留，可在右上角菜单里缩短为 30 至 365 天，超期的每日记录随即删除，并同时从累计总数和分类中扣除；要全部删除请用“清空统计”。",
+    "统计默认只在本机保存计数，不保存输入内容；在「概览」底部打开「上传到云端」后，每天的字数、活跃时长、时段、输入方式和候选位次会上传到你的云账号，供 QQ 群助手的 /stats 查看，关闭时删除云端的数据。每日明细默认永久保留，可在右上角菜单里缩短为 30 至 365 天，超期的每日记录随即删除，并同时从累计总数和分类中扣除；要全部删除请用“清空统计”。",
   ]
 
   // MARK: - 概览
@@ -393,8 +393,8 @@ private struct AuthenticatedTypingStatisticsView: View {
             VStack(alignment: .leading, spacing: 2) {
               Text("上传到云端").font(.system(size: 16))
               Text(usable
-                   ? "把每天的字数、活跃时长、时段、输入方式和候选位次上传到你的水杉账号，供 QQ 群助手的 /stats 查看。只有计数，不含输入内容；关闭时删除云端的数据。"
-                   : "登录水杉账号后可以打开，供 QQ 群助手的 /stats 查看。只有计数，不含输入内容。")
+                   ? "把每天的字数、活跃时长、时段、输入方式和候选位次上传到你的云账号，供 QQ 群助手的 /stats 查看。只有计数，不含输入内容；关闭时删除云端的数据。"
+                   : "登录云账号后可以打开，供 QQ 群助手的 /stats 查看。只有计数，不含输入内容。")
                 .font(.system(size: 12)).foregroundStyle(MetasequoiaTheme.sub)
                 .fixedSize(horizontal: false, vertical: true)
             }

@@ -41,7 +41,7 @@ struct AccountProfileEditor: View {
   @State private var request = ViewRequestGeneration()
 
   private var displayName: String {
-    profile?.user.preferredDisplayName ?? initialUser?.preferredDisplayName ?? "水杉用户"
+    profile?.user.preferredDisplayName ?? initialUser?.preferredDisplayName ?? "iBoard 用户"
   }
 
   /// 账号的邮箱。Rust 的资料只带 Google 身份的验证邮箱，邮箱登录的地址不在里面；只显示看起来像地址的值。
@@ -168,7 +168,7 @@ struct AccountProfileEditor: View {
         UIPasteboard.general.string = profile.user.id
         ToastCenter.shared.show("已复制")
       } label: {
-        SettingsNavigationLabel(title: "水杉 ID", value: profile.user.id, showsChevron: false,
+        SettingsNavigationLabel(title: "用户 ID", value: profile.user.id, showsChevron: false,
           valueTruncationMode: .middle)
       }
       .buttonStyle(PressFillButtonStyle())

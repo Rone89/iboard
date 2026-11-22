@@ -57,7 +57,7 @@ final class VoiceSessionService: ObservableObject {
       let allowed = await withCheckedContinuation { continuation in
         AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) }
       }
-      guard allowed else { throw ServiceFailure(message: "请在系统设置中允许水杉使用麦克风。") }
+      guard allowed else { throw ServiceFailure(message: "请在系统设置中允许 iBoard 使用麦克风。") }
       let session = AVAudioSession.sharedInstance()
       // 和其他声音混音：会话开着、没在听写时，原应用里的音乐和视频照常播放。
       try session.setCategory(.playAndRecord, mode: .default, options: [.mixWithOthers, .defaultToSpeaker])

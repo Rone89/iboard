@@ -266,7 +266,7 @@ struct AISkinDesignView: View {
       VStack(alignment: .leading, spacing: 0) {
         ZStack(alignment: .topLeading) {
           if model.prompt.isEmpty {
-            Text("想要什么感觉？比如：秋天傍晚的水杉林")
+            Text("想要什么感觉？比如：清晨微光下的海岸")
               .font(.system(size: 16))
               .foregroundStyle(MetasequoiaTheme.sub)
               .padding(.horizontal, 14)

@@ -111,7 +111,7 @@ struct DictionarySyncView: View {
           row("应用密码", configuration.hasPassword ? "已填写" : "未填写", identifier: "dictionarySyncPassword")
         } else {
           Button { editing = true } label: {
-            DesignNavRowLabel(title: "设置 WebDAV 网盘", info: "坚果云、Nextcloud 等支持 WebDAV 的网盘都可以，不需要登录水杉账号。")
+            DesignNavRowLabel(title: "设置 WebDAV 网盘", info: "坚果云、Nextcloud 等支持 WebDAV 的网盘都可以，不需要登录云账号。")
           }
           .buttonStyle(PressFillButtonStyle())
           .accessibilityIdentifier("dictionarySyncSetUp")

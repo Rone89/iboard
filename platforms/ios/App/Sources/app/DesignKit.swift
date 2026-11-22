@@ -28,13 +28,17 @@ extension View {
 
 // MARK: - 页头标志
 
-/// 页头的应用标志（「设置」「关于」和首次引导）：固定配色的水杉标志（`MSIMELogoMark`）本身就是外框，不再垫圆盘。`box` 是它在版面里占的方块，标志取其 5/6 居中，与原来圆盘的占位相同。
+/// 页头的应用标志（「设置」「关于」和首次引导）：使用 iBoard 图标资源并按连续圆角裁切。
 struct AppMark: View {
   var box: CGFloat = 52
 
   var body: some View {
-    MSIMELogoMark()
-      .frame(width: box * 5 / 6, height: box * 5 / 6)
+    let side = box * 5 / 6
+    Image("MSIMELogo")
+      .resizable()
+      .scaledToFit()
+      .clipShape(RoundedRectangle(cornerRadius: side * 0.225, style: .continuous))
+      .frame(width: side, height: side)
       .frame(width: box, height: box)
       .accessibilityHidden(true)
   }

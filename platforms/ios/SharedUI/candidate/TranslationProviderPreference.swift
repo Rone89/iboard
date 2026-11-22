@@ -8,7 +8,7 @@ enum TranslationProvider: String, CaseIterable, Sendable {
   var title: String {
     switch self {
     case .off: "不使用在线翻译"
-    case .account: "水杉账号（发送到 api.msime.app）"
+    case .account: "云账号（发送到 api.msime.app）"
     case .niutrans: "小牛翻译"
     case .tencent: "腾讯云机器翻译"
     case .custom: "自定义接口（DeepLX 或 DeepL API）"

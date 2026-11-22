@@ -16,9 +16,12 @@ enum AppIconStyle: String, CaseIterable, Identifiable {
   }
   var iconName: String? { self == .classic ? nil : "AppIcon\(assetSuffix)" }
   var previewName: String { "AppIconPreview\(assetSuffix)" }
+  /// 设置页展示给用户的图标列表：仅保留 iBoard 原版，不展示旧版备选图标。
+  static let visibleCases: [AppIconStyle] = [.classic]
+
   var title: String {
     switch self {
-    case .classic: "原版"
+    case .classic: "iBoard 原版"
     case .forest: "杉林"
     case .sky: "晴空"
     case .dusk: "暮紫"
@@ -27,8 +30,8 @@ enum AppIconStyle: String, CaseIterable, Identifiable {
   }
   var detail: String {
     switch self {
-    case .classic: "经典黑白，简洁如初"
-    case .forest: "杉叶青绿，沉静自然"
+    case .classic: "默认液态玻璃图标"
+    case .forest: "青绿色调，沉静自然"
     case .sky: "清透蓝调，轻盈明亮"
     case .dusk: "晚霞淡紫，温柔入夜"
     case .vermilion: "朱红印记，纸上东方"
@@ -112,7 +115,7 @@ struct AppIconSettingsView: View {
         }
 
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 144), spacing: 14)], spacing: 14) {
-          ForEach(AppIconStyle.allCases) { icon in
+          ForEach(AppIconStyle.visibleCases) { icon in
             iconCard(icon)
           }
         }

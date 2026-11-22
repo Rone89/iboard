@@ -416,7 +416,7 @@ struct KeyboardLayoutSettingsView: View {
       DesignDivider()
       // GlideBeam 词典未随扩展暂存（stage-glide-engine.sh 没跑）时不显示这一行：只列水杉引擎的选择没有意义。
       if GlideEngineChoice.glidebeamAvailable {
-        DesignSelectRow(title: "滑行引擎", info: "全拼 26 键滑行时把轨迹交给哪个解码器。GlideBeam 来自开源项目 GlideKeyboard（MIT），把轨迹解成拼音读音，之后照常由水杉组字。",
+        DesignSelectRow(title: "滑行引擎", info: "全拼 26 键滑行时把轨迹交给哪个解码器。GlideBeam 来自开源项目 GlideKeyboard（MIT），把轨迹解成拼音读音，之后照常由 iBoard 组字。",
                         enabled: glideTyping,
                         options: GlideEngineChoice.allCases.map {
                           DesignOption(title: $0.title, value: $0, identifier: "glideEngine-\($0.rawValue)")

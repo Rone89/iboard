@@ -234,7 +234,7 @@ struct AboutView: View {
             .buttonStyle(PressFillButtonStyle())
           }
         }
-        Text("© 2026 Metasequoia · 输入内容默认只在本机处理")
+        Text("© 2026 iBoard · 输入内容默认只在本机处理")
           .font(.system(size: 12)).foregroundStyle(MetasequoiaTheme.sub)
           .multilineTextAlignment(.center)
       }

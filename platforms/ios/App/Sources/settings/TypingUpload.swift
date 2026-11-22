@@ -58,14 +58,14 @@ actor TypingUpload {
     guard enabling else { return "已关闭上传，云端的打字统计已删除。" }
     return status.lastUpload == nil
       ? "已打开上传。本机还没有可上传的打字计数，用iBoard 键盘打字以后再打开 App 会自动上传。"
-      : "已打开上传，最近 7 天的每日计数已传到你的水杉账号。"
+      : "已打开上传，最近 7 天的每日计数已传到你的云账号。"
   }
 
   /// 失败时的说法，与共享设置页的 `uploadErrorMessage` 相同；`enabling` 是这次在打开还是关闭。
   static func message(_ error: Error, enabling: Bool) -> String {
     let code = (error as? BackendRustClient.Failure)?.code
     if code == "account_unauthorized" {
-      return enabling ? "先在「我的」页登录水杉账号，再打开上传。" : "已关闭上传。没有登录，云端的数据没有删掉，登录后打开再关闭一次即可删除。"
+      return enabling ? "先在「我的」页登录云账号，再打开上传。" : "已关闭上传。没有登录，云端的数据没有删掉，登录后打开再关闭一次即可删除。"
     }
     if code == "account_rate_limited" && enabling { return "上传过于频繁，过一会儿会自动再传。" }
     return enabling ? "已打开上传，但这次没有传上去，稍后会自动再试。" : "已关闭上传，但云端的数据没有删掉，请联网后打开再关闭一次。"

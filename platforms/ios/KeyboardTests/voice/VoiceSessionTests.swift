@@ -267,13 +267,13 @@ final class VoiceSessionTests: XCTestCase {
     let failed = expectation(description: "failed")
     dictation.onEvent = { event in
       if case .failed(let message, let reopens) = event {
-        XCTAssertEqual(message, "请在系统设置中允许水杉使用语音识别。")
+        XCTAssertEqual(message, "请在系统设置中允许 iBoard 使用语音识别。")
         XCTAssertFalse(reopens)
         failed.fulfill()
       }
     }
     dictation.start()
-    channel.publish(state(.failed, request: dictation.request, message: "请在系统设置中允许水杉使用语音识别。"))
+    channel.publish(state(.failed, request: dictation.request, message: "请在系统设置中允许 iBoard 使用语音识别。"))
     wait(for: [failed], timeout: 2)
   }
 

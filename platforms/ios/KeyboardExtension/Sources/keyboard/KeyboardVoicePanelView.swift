@@ -80,8 +80,8 @@ enum KeyboardVoicePanelPolicy {
 
   // ---- 水杉娘指示区（#10313）----
 
-  /// 点按开始（功能菜单「语音输入」磁贴、读屏操作等 `held: false` 的入口）的会话把圆球换成水杉娘与耳边红线；按住空格说话保留圆球和光晕。Android 工具栏入口与 HarmonyOS 非按住的会话按同一条规则。
-  static func showsMascot(held: Bool) -> Bool { !held }
+  /// iBoard 统一使用简洁声波圆球作为语音指示区，不再切换水杉娘立绘。
+  static func showsMascot(held: Bool) -> Bool { false }
 
   /// 人物、耳部和红线画在 320×250 的视口里，数值与 Android 的 `VoiceMascotDrawing` 相同。
   static let mascotViewport = CGSize(width: 320, height: 250)

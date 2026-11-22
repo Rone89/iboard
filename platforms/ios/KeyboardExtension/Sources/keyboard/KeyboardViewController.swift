@@ -10143,9 +10143,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  /// 完整的水杉标志（固定配色的深色圆角正方形、绿边和白色折线），按 `side` 点见方渲染成原色图像，不再是按皮肤强调色着色的单色折线；展开的候选面板用它打头。
+  /// 展开候选面板头部的品牌图标：与工具栏左上角一致使用 SF Symbol `timelapse`。
   static func brandMark(side: CGFloat) -> UIImage {
-    UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+    let config = UIImage.SymbolConfiguration(pointSize: side * 0.9, weight: .medium)
+    if let symbol = UIImage(systemName: KeyboardBrandMarkButton.symbolName, withConfiguration: config)?
+      .withTintColor(KeyboardTheme.current.secondary, renderingMode: .alwaysOriginal) {
+      return symbol
+    }
+    return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
       MSIMELogo.draw(in: CGRect(x: 0, y: 0, width: side, height: side))
     }.withRenderingMode(.alwaysOriginal)
   }
@@ -11483,7 +11488,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       },
       onClose: { [weak self] in self?.closeKeyboardPicker() },
       onABC: { [weak self] in self?.closeKeyboardPicker() },
-      onSticker: { [weak self] sticker in self?.copySticker(sticker) },
+      // iBoard 不挂载水杉娘贴纸包，打开表情面板直接展示原生 Emoji 与颜文字分类。
+      onSticker: nil,
       pluginKaomoji: pluginsDirectory.map { KeyboardEmojiCatalog.pluginSymbolGroups(resources: resources, plugins: $0) } ?? [])
     applyEmojiPickerAppearance(picker)
     emojiPicker = picker

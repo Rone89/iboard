@@ -147,10 +147,11 @@ struct KeyboardSkinPreview: View {
     .frame(height: Self.toolbarStripHeight * stripScale)
   }
 
-  /// 键盘品牌键：固定配色的水杉标志本身就是外框，不再垫圆片；占位仍是原来 22 点的圆片，标志按原来的 13 点画。
+  /// 键盘工具栏左上角图标：与真实键盘一致使用 SF Symbol `timelapse`。
   private var brandMark: some View {
-    MSIMELogoMark()
-      .frame(width: 13 * toolbarContentScale, height: 13 * toolbarContentScale)
+    Image(systemName: "timelapse")
+      .font(.system(size: 13 * toolbarContentScale, weight: .medium))
+      .foregroundStyle(color(skin.keyForeground))
       .frame(width: 22 * toolbarContentScale, height: 22 * toolbarContentScale)
   }
 

@@ -21,7 +21,7 @@ struct CandidateGlossCardContent: Equatable {
     var title: String {
       switch self {
       case .offline: "离线释义"
-      case .account: "水杉账号"
+      case .account: "云账号"
       case .tencent: "腾讯翻译"
       case .niutrans: "小牛翻译"
       case .custom: "自定义服务"

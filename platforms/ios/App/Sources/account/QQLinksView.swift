@@ -16,7 +16,7 @@ struct QQLinksView: View {
   @State private var busy = false
   @State private var removing: QQLinksService.Link?
 
-  private static let intro = "在水杉输入法的 QQ 群里 @机器人 发 /bind，把收到的 8 位绑定码填在这里。绑定后发 /stats 能看到你的打字数据（先在「统计」页打开「上传到云端」）；机器人在群里的回复所有人都看得到。"
+  private static let intro = "在社区 QQ 群里 @机器人 发 /bind，把收到的 8 位绑定码填在这里。绑定后发 /stats 能看到你的打字数据（先在「统计」页打开「上传到云端」）；机器人在群里的回复所有人都看得到。"
 
   var body: some View {
     Form {
@@ -26,7 +26,7 @@ struct QQLinksView: View {
       }
       if load == .signedOut {
         Section {
-          Text("登录水杉账号后才能绑定。").accessibilityIdentifier("qqLinksSignedOut")
+          Text("登录账号后才能绑定。").accessibilityIdentifier("qqLinksSignedOut")
         }
       } else {
         Section {

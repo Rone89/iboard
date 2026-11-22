@@ -42,7 +42,7 @@ final class CandidateGlossCardTests: XCTestCase {
 
   func testEveryOnlineServiceHasItsOwnSourceName() {
     let routes: [(TranslationRoute, String)] = [
-      (.account, "水杉账号"), (.niutrans(appID: "a", apiKey: "k"), "小牛翻译"),
+      (.account, "云账号"), (.niutrans(appID: "a", apiKey: "k"), "小牛翻译"),
       (.tencent(secretID: "i", secretKey: "k", region: "r"), "腾讯翻译"), (.custom(endpoint: "https://example.invalid", apiKey: ""), "自定义服务"),
       (.ai(provider: "p", endpoint: "https://example.invalid", model: "m", token: "t"), "AI 辅助"),
     ]

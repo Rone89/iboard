@@ -89,7 +89,7 @@ final class VoiceRecorder: ObservableObject {
       AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) }
     }
     try Task.checkCancellation()
-    guard allowed else { throw ServiceFailure(message: "请在系统设置中允许水杉使用麦克风。") }
+    guard allowed else { throw ServiceFailure(message: "请在系统设置中允许 iBoard 使用麦克风。") }
     discard()
     do {
       if quietensOthers {

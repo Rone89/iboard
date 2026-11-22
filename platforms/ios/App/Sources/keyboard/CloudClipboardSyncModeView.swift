@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// 「我的 → 云剪贴板」页顶部的「云剪贴板同步方式」：水杉账号、用户自建的中继（`docs/cloud-clipboard-relay.md`）或者用户自己的 WebDAV 网盘（`docs/cloud-clipboard-webdav.md`），与 Android 同一页的卡片和共享设置页的 `cloud-clipboard-relay-section.tsx` 做法和说法相同。选了中继或网盘就只走它，不需要登录；出错也不退回水杉账号。
+/// 「我的 → 云剪贴板」页顶部的「云剪贴板同步方式」：云账号、用户自建的中继（`docs/cloud-clipboard-relay.md`）或者用户自己的 WebDAV 网盘（`docs/cloud-clipboard-webdav.md`），与 Android 同一页的卡片和共享设置页的 `cloud-clipboard-relay-section.tsx` 做法和说法相同。选了中继或网盘就只走它，不需要登录；出错也不退回云账号。
 ///
-/// 地址和凭据在填写页里填好、校验通过后点「保存」才写进共享偏好，不会把填到一半的地址交给自动保存。令牌和应用密码框是空的，不回显已存的值，已经保存过时留空表示沿用。网盘「测试连接」只测不存，「保存」先测、通过才写，不通过时填写页和草稿都留着。中继和网盘只能二选一：保存其中一个就删掉另一个，改回水杉账号两个都删；偏好的校验、凭据清单、不随设置导出和诊断脱敏都在 Rust 里。
+/// 地址和凭据在填写页里填好、校验通过后点「保存」才写进共享偏好，不会把填到一半的地址交给自动保存。令牌和应用密码框是空的，不回显已存的值，已经保存过时留空表示沿用。网盘「测试连接」只测不存，「保存」先测、通过才写，不通过时填写页和草稿都留着。中继和网盘只能二选一：保存其中一个就删掉另一个，改回云账号两个都删；偏好的校验、凭据清单、不随设置导出和诊断脱敏都在 Rust 里。
 struct CloudClipboardSyncModeSection: View {
-  /// 偏好里现在的同步方式；nil 是水杉账号。
+  /// 偏好里现在的同步方式；nil 是云账号。
   let configuration: IOSCloudClipboardRelay.Configuration?
   var disabled = false
-  /// 保存或改回水杉账号之后调用，页面据此重读同步方式和内容。
+  /// 保存或改回云账号之后调用，页面据此重读同步方式和内容。
   let onChange: () -> Void
   @State private var picksMode = false
   @State private var editor: Editor?
@@ -28,7 +28,7 @@ struct CloudClipboardSyncModeSection: View {
   }
 
   private static let options: [DesignOption<Mode>] = [
-    DesignOption(title: "水杉账号", value: .account, identifier: "cloudClipboardModeAccount"),
+    DesignOption(title: "云账号", value: .account, identifier: "cloudClipboardModeAccount"),
     DesignOption(title: "自建中继", value: .relay, identifier: "cloudClipboardModeRelay"),
     DesignOption(title: "WebDAV", value: .webdav, identifier: "cloudClipboardModeWebDAV"),
   ]
@@ -43,7 +43,7 @@ struct CloudClipboardSyncModeSection: View {
       DesignCard(radius: MetasequoiaTheme.tabCardRadius) {
         Button { picksMode = true } label: {
           DesignNavRowLabel(title: "同步方式",
-                            info: "自建中继和 WebDAV 都不需要登录水杉账号：内容仍在本机加密，中继或网盘只保存密文，新设备照样要在已有设备上核对后点「允许」。",
+                            info: "自建中继和 WebDAV 都不需要登录云账号：内容仍在本机加密，中继或网盘只保存密文，新设备照样要在已有设备上核对后点「允许」。",
                             value: DesignOption.title(of: mode, in: Self.options))
         }
         .buttonStyle(PressFillButtonStyle())
@@ -86,13 +86,13 @@ struct CloudClipboardSyncModeSection: View {
       case .webdav: CloudClipboardWebDAVEditor(saved: configuration, onSaved: onChange)
       }
     }
-    .confirmationDialog("改回水杉账号？", isPresented: $confirmsAccount, titleVisibility: .visible) {
-      Button("改回水杉账号", role: .destructive) { switchToAccount() }
+    .confirmationDialog("改回云账号？", isPresented: $confirmsAccount, titleVisibility: .visible) {
+      Button("改回云账号", role: .destructive) { switchToAccount() }
       Button("取消", role: .cancel) { }
     } message: {
       Text((configuration?.backend == .webdav
             ? "会清除本机保存的网盘地址、账号和应用密码，网盘上的内容不受影响。"
-            : "会清除本机保存的中继地址和令牌，中继上的内容不受影响。") + "之后云剪贴板经水杉账号同步，要登录才能用。")
+            : "会清除本机保存的中继地址和令牌，中继上的内容不受影响。") + "之后云剪贴板经云账号同步，要登录才能用。")
     }
   }
 
@@ -107,19 +107,19 @@ struct CloudClipboardSyncModeSection: View {
     guard let configuration else { return nil }
     switch configuration.backend {
     case .relay:
-      return "云剪贴板现在经 \(configuration.url) 同步，中继出错时也不会改用水杉账号。换了地址或令牌后，本机要在中继上重新登记，并在其他设备上重新允许。"
+      return "云剪贴板现在经 \(configuration.url) 同步，中继出错时也不会改用云账号。换了地址或令牌后，本机要在中继上重新登记，并在其他设备上重新允许。"
     case .webdav:
-      return "云剪贴板现在经 WebDAV 网盘 \(configuration.url) 同步，网盘出错时也不会改用水杉账号。换了地址或账号后，本机要重新登记，并在其他设备上重新允许；换应用密码不用。"
+      return "云剪贴板现在经 WebDAV 网盘 \(configuration.url) 同步，网盘出错时也不会改用云账号。换了地址或账号后，本机要重新登记，并在其他设备上重新允许；换应用密码不用。"
     }
   }
 
-  /// 改回水杉账号：删掉偏好里的中继和网盘，中继或网盘上的内容和本机的中继密钥串都不动。
+  /// 改回云账号：删掉偏好里的中继和网盘，中继或网盘上的内容和本机的中继密钥串都不动。
   private func switchToAccount() {
     let saved = MetasequoiaInputSessionBridge.updateSharedPreferences { preferences in
       preferences.removeValue(forKey: IOSCloudClipboardRelayPolicy.relayPreference)
       preferences.removeValue(forKey: IOSCloudClipboardRelayPolicy.webdavPreference)
     }
-    ToastCenter.shared.show(saved ? "已改回水杉账号" : "保存失败，请重试")
+    ToastCenter.shared.show(saved ? "已改回云账号" : "保存失败，请重试")
     onChange()
   }
 

@@ -635,9 +635,11 @@ struct CommunityDesignPreview: View {
     .foregroundStyle(foreground)
   }
 
-  /// 键盘品牌键：固定配色的水杉标志本身就是外框，不再垫圆片；占位仍是原来 26 点的圆片，标志按原来的 16 点画。
+  /// 键盘工具栏左上角图标：与真实键盘一致使用 SF Symbol `timelapse`。
   private var brandMark: some View {
-    MSIMELogoMark().frame(width: 16, height: 16).frame(width: 26, height: 26)
+    Image(systemName: "timelapse")
+      .font(.system(size: 15, weight: .medium))
+      .frame(width: 26, height: 26)
   }
 
   /// 一行按键，宽度按各自权重分配，与 MiniKb 的弹性行一致。

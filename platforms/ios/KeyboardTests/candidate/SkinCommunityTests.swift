@@ -138,7 +138,7 @@ final class SkinCommunityTests: XCTestCase {
 
   func testRustFailuresBecomeCommunityMessages() async throws {
     let cases: [(String, String)] = [
-      ("community_unauthorized", "请先登录水杉账号，或登录已过期，请重新登录。"),
+      ("community_unauthorized", "请先登录账号，或登录已过期，请重新登录。"),
       ("community_not_found", "作品不存在或已下架。"),
       ("community_invalid", "请检查名称、词条或提示词是否符合要求。"),
       ("community_forbidden", "下载或收藏后才能评分，且不能评价自己的作品。"),

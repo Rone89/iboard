@@ -1,9 +1,9 @@
 import SwiftUI
 import UIKit
 
-/// 云剪贴板页。最上面是「云剪贴板同步方式」（`CloudClipboardSyncModeSection`）：水杉账号、自建中继或 WebDAV 网盘，选了后两者就只走它，不需要登录。
+/// 云剪贴板页。最上面是「云剪贴板同步方式」（`CloudClipboardSyncModeSection`）：云账号、自建中继或 WebDAV 网盘，选了后两者就只走它，不需要登录。
 ///
-/// 水杉账号经 Rust 的 `msime_client_account_cloud_clipboard`（#8201 迁移计划 4c）：端到端加密、令牌和密钥串（与键盘共用的钥匙串项 `cloud-clipboard-keystore`）都在 Rust 里，键盘扩展仍用 Swift 的传输和同一份密钥串，所以两边是同一台设备。中继和网盘经 `IOSCloudClipboardRelay`：驱动在 Swift 里跑，密钥串在 App Group 访问组的钥匙串项 `cloud-clipboard-relay-keystore` 里，键盘读写同一项。页面只按第一次读到的那一方绑定（账号的 user.id，或中继、网盘的绑定）：C 上拿不到会话代次，同一个账号的令牌轮换和重新登录不作废页面，换号、退出、换中继、改同步方式作废。
+/// 云账号经 Rust 的 `msime_client_account_cloud_clipboard`（#8201 迁移计划 4c）：端到端加密、令牌和密钥串（与键盘共用的钥匙串项 `cloud-clipboard-keystore`）都在 Rust 里，键盘扩展仍用 Swift 的传输和同一份密钥串，所以两边是同一台设备。中继和网盘经 `IOSCloudClipboardRelay`：驱动在 Swift 里跑，密钥串在 App Group 访问组的钥匙串项 `cloud-clipboard-relay-keystore` 里，键盘读写同一项。页面只按第一次读到的那一方绑定（账号的 user.id，或中继、网盘的绑定）：C 上拿不到会话代次，同一个账号的令牌轮换和重新登录不作废页面，换号、退出、换中继、改同步方式作废。
 struct CloudClipboardView: View {
   /// 默认是 App 启动时注册的那一份；测试和预览传别的。
   var rust: @Sendable () throws -> BackendRustAccount = { try BackendRustAccount.current() }
@@ -26,13 +26,13 @@ struct CloudClipboardView: View {
   /// 账号下登记的设备，云剪贴板开着时与列表一起刷新。
   @State private var devices: BackendAccountClient.ClipboardDevices?
   @State private var deviceConfirmation: DeviceConfirmation?
-  /// 下面的开关、列表和设备在哪：经中继时是 `.relay` 或 `.webdav`，经水杉账号时为 nil。
+  /// 下面的开关、列表和设备在哪：经中继时是 `.relay` 或 `.webdav`，经云账号时为 nil。
   @State private var relay: IOSCloudClipboardRelay.Backend?
-  /// 偏好里的同步方式；nil 是水杉账号。
+  /// 偏好里的同步方式；nil 是云账号。
   @State private var syncConfiguration: IOSCloudClipboardRelay.Configuration?
   /// 同步方式读到了没有；偏好读不了时不画那张卡。
   @State private var syncModeRead = false
-  /// 走水杉账号而没有登录。
+  /// 走云账号而没有登录。
   @State private var signedOut = false
   @State private var showsLogin = false
 
@@ -155,14 +155,14 @@ struct CloudClipboardView: View {
     } message: { Text(confirmationMessage) }
   }
 
-  /// 走水杉账号而没有登录：说明登录后能做什么，也可以在上面改用中继或网盘。
+  /// 走云账号而没有登录：说明登录后能做什么，也可以在上面改用中继或网盘。
   private var signedOutCard: some View {
     DesignCard(radius: MetasequoiaTheme.tabCardRadius) {
       VStack(alignment: .leading, spacing: 10) {
-        Text("登录水杉账号后，复制的文字可以在你的设备之间同步，内容在本机加密，水杉云只保存密文。不想登录的话，可以在上面把同步方式改成自建中继或 WebDAV 网盘。")
+        Text("登录云账号后，复制的文字可以在你的设备之间同步，内容在本机加密，云端只保存密文。不想登录的话，可以在上面把同步方式改成自建中继或 WebDAV 网盘。")
           .designSubtext()
           .fixedSize(horizontal: false, vertical: true)
-        Button("登录水杉账号") { showsLogin = true }
+        Button("登录云账号") { showsLogin = true }
           .font(.system(size: 15))
           .accessibilityIdentifier("cloudClipboardSignIn")
       }
@@ -298,7 +298,7 @@ struct CloudClipboardView: View {
     switch relay {
     case .relay: return "在你批准的设备之间经自建中继同步，内容在本机加密，中继只保存密文；关闭即删除中继上的内容和设备登记"
     case .webdav: return "在你批准的设备之间经 WebDAV 网盘同步，内容在本机加密，网盘只保存密文；关闭即删除网盘上的内容和设备登记"
-    case nil: return "在你登录并批准的设备之间同步，内容在本机加密，水杉云只保存密文；关闭即删除云端内容和设备登记"
+    case nil: return "在你登录并批准的设备之间同步，内容在本机加密，云端只保存密文；关闭即删除云端内容和设备登记"
     }
   }
 

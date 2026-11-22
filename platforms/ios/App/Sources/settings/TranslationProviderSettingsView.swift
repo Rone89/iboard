@@ -24,10 +24,10 @@ struct TranslationProviderSettingsView: View {
 
   /// 翻译服务分区「?」里的说明：先讲当前选择的去向，再讲自选服务的通用规则。
   private var providerInfo: String {
-    let general = "选择自己的翻译服务后，键盘把这一页的中文候选直接发给该服务，不经过水杉账号；凭据只保存在本设备的共享设置里。所选服务的凭据不完整时，键盘不会联网翻译，也不会改用其他服务。"
+    let general = "选择自己的翻译服务后，键盘把这一页的中文候选直接发给该服务，不经过云账号；凭据只保存在本设备的共享设置里。所选服务的凭据不完整时，键盘不会联网翻译，也不会改用其他服务。"
     switch provider {
     case .off: return "键盘不会把候选词发给任何在线服务；英文释义仍来自离线词库。\n\n" + general
-    case .account: return "候选词会发送到水杉服务器（api.msime.app）翻译，首次使用会自动创建匿名账号。\n\n" + general
+    case .account: return "候选词会发送到云端服务器（api.msime.app）翻译，首次使用会自动创建匿名账号。\n\n" + general
     default: return general
     }
   }

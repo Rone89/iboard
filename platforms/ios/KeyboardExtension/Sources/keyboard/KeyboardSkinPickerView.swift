@@ -317,10 +317,19 @@ final class KeyboardSkinMiniature: UIView {
     let column = frame.width / columns
     func center(_ index: Int) -> CGPoint { CGPoint(x: frame.minX + column * (CGFloat(index) + 0.5), y: frame.midY) }
 
-    // 品牌键按工具栏的画法：固定配色的水杉标志本身就是外框，不垫圆盘；尺寸仍是原来 26 点圆盘里那枚标志的大小。
-    let markSide: CGFloat = 26 * 18 / 30
-    let mark = CGRect(x: center(0).x - markSide / 2, y: center(0).y - markSide / 2, width: markSide, height: markSide)
-    MSIMELogo.draw(in: mark)
+    // 品牌键与键盘工具栏保持一致：绘制 SF Symbol `timelapse`。
+    let markSide: CGFloat = 20
+    let markConfig = UIImage.SymbolConfiguration(pointSize: markSide * 0.9, weight: .medium)
+    if let markSymbol = UIImage(systemName: KeyboardBrandMarkButton.symbolName, withConfiguration: markConfig)?
+      .withTintColor(skin.keyForeground, renderingMode: .alwaysOriginal) {
+      let drawSize = markSymbol.size
+      markSymbol.draw(in: CGRect(
+        x: center(0).x - drawSize.width / 2,
+        y: center(0).y - drawSize.height / 2,
+        width: drawSize.width,
+        height: drawSize.height
+      ))
+    }
 
     for (index, glyph) in glyphs.enumerated() {
       strokeIcon(glyph, side: 22, center: center(index + 1), color: skin.keyForeground)

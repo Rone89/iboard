@@ -11,7 +11,7 @@ enum GlideEngineChoice: String, CaseIterable {
 
   var title: String {
     switch self {
-    case .msime: return "水杉引擎"
+    case .msime: return "内置引擎"
     case .glidebeam: return "GlideBeam"
     }
   }

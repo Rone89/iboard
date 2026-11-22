@@ -44,7 +44,7 @@ struct DictionarySettingsView: View {
           .buttonStyle(PressFillButtonStyle())
           .accessibilityIdentifier("importDictionaryAction")
         }
-        DesignGroup(title: "同步", info: "把「我的词条」经你自己的 WebDAV 网盘（坚果云、Nextcloud 等）在设备之间同步，包括删除；不需要登录水杉账号，网盘只保存密文。") {
+        DesignGroup(title: "同步", info: "把「我的词条」经你自己的 WebDAV 网盘（坚果云、Nextcloud 等）在设备之间同步，包括删除；不需要登录云账号，网盘只保存密文。") {
           NavigationLink(destination: DictionarySyncView()) {
             DesignNavRowLabel(title: "词库同步", value: syncConfigured ? "WebDAV" : "未开启")
           }

@@ -159,7 +159,7 @@ final class RustCloudPagesTests: XCTestCase {
     XCTAssertEqual(nothing?.message, "已打开上传。本机还没有可上传的打字计数，用iBoard 键盘打字以后再打开 App 会自动上传。")
     answer(Script("user-1"), ["account.typing_upload_set": { _ in self.uploadStatus(true) }])
     let uploaded = await upload.setEnabled(true)
-    XCTAssertEqual(uploaded?.message, "已打开上传，最近 7 天的每日计数已传到你的水杉账号。")
+    XCTAssertEqual(uploaded?.message, "已打开上传，最近 7 天的每日计数已传到你的云账号。")
   }
 
   func testTypingUploadFailuresKeepTheSwitchAndExplain() async throws {
@@ -167,7 +167,7 @@ final class RustCloudPagesTests: XCTestCase {
                          "account.typing_upload_status": { _ in self.uploadStatus(false) }])
     let upload = TypingUpload(store: statistics, rust: { FakeRust.account })
     let enabling = await upload.setEnabled(true)
-    XCTAssertEqual(enabling?.message, "先在「我的」页登录水杉账号，再打开上传。")
+    XCTAssertEqual(enabling?.message, "先在「我的」页登录云账号，再打开上传。")
     XCTAssertEqual(enabling?.status.enabled, false)
     let disabling = await upload.setEnabled(false)
     XCTAssertEqual(disabling?.message, "已关闭上传。没有登录，云端的数据没有删掉，登录后打开再关闭一次即可删除。")

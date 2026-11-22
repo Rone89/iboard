@@ -184,10 +184,10 @@ final class SpaceVoicePanelTests: XCTestCase {
     XCTAssertEqual(panel.orb.orbSide, 64)
     XCTAssertEqual(panel.plan?.titleLines, 2)
     XCTAssertEqual(panel.plan?.showsHint, true)
-    // 点按开始画人物：指示区高度仍是圆球的 1.5 倍，宽度按 320×250 的视口放宽。
+    // iBoard 点按语音同样使用声波圆球：指示区为圆球 1.5 倍高的正方形。
     let indicator = panel.orb.frame
     XCTAssertEqual(indicator.height, 96, accuracy: 0.001)
-    XCTAssertEqual(indicator.width, 96 * 320 / 250, accuracy: 0.001)
+    XCTAssertEqual(indicator.width, 96, accuracy: 0.001)
     XCTAssertEqual(indicator.midX, panel.bounds.midX, accuracy: 0.5)
     XCTAssertTrue(panel.bounds.contains(indicator))
     XCTAssertEqual(panel.statusLabel.text, "正在聆听…")
@@ -241,20 +241,19 @@ final class SpaceVoicePanelTests: XCTestCase {
     XCTAssertEqual(heldCancels, 1)
   }
 
-  /// #10313：点按开始的会话画水杉娘，按住空格说话保留圆球；按住的面板即使拿到素材也不换。
+  /// iBoard 统一在按住与点按两种语音入口中保留声波圆球指示区，不再切换水杉娘立绘。
   func testOnlyTappedSessionsShowTheMascot() {
-    XCTAssertTrue(KeyboardVoicePanelPolicy.showsMascot(held: false))
+    XCTAssertFalse(KeyboardVoicePanelPolicy.showsMascot(held: false))
     XCTAssertFalse(KeyboardVoicePanelPolicy.showsMascot(held: true))
     let held = KeyboardVoicePanelView(dictationHeld: true, skin: KeyboardTheme.current)
     XCTAssertFalse(held.orb.showsMascot)
     held.orb.setMascot(Self.syntheticMascot())
     XCTAssertFalse(held.orb.isShowingMascot, "长按空格保留圆球和光晕")
     let tapped = KeyboardVoicePanelView(dictationHeld: false, skin: KeyboardTheme.current)
-    XCTAssertTrue(tapped.orb.showsMascot)
-    XCTAssertFalse(tapped.orb.isShowingMascot, "素材到之前先画圆球")
+    XCTAssertFalse(tapped.orb.showsMascot)
     tapped.orb.setMascot(Self.syntheticMascot())
-    XCTAssertTrue(tapped.orb.isShowingMascot)
-    XCTAssertFalse(tapped.orb.isAccessibilityElement, "人物是装饰，不进读屏")
+    XCTAssertFalse(tapped.orb.isShowingMascot, "点按语音同样保持声波圆球")
+    XCTAssertFalse(tapped.orb.isAccessibilityElement, "指示区为装饰元素，不进读屏")
   }
 
   /// 红线只跟显示电平：安静时一道也没有（不用圆球的 30% 静息光晕），随电平依次出现，数值与 Android 的 `VoiceMascotDrawing` 一致。
@@ -299,7 +298,7 @@ final class SpaceVoicePanelTests: XCTestCase {
     XCTAssertNil(KeyboardVoiceMascot.sticker(in: Array(stickers.prefix(1))))
   }
 
-  /// 点按面板拿到素材后画人物：安静时没有红线，满电平三道，进入识别立即收起、之后的电平也不再画。
+  /// iBoard 点按面板即使传入立绘素材也统一显示声波圆球：不切换立绘、不画耳边红线，识别阶段电平回零。
   func testTheTappedPanelDrawsArcsOnlyWhileListening() throws {
     let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
     let panel = KeyboardVoicePanelView(dictationHeld: false, skin: KeyboardTheme.current)
@@ -307,10 +306,8 @@ final class SpaceVoicePanelTests: XCTestCase {
     panel.frame = CGRect(x: 0, y: 0, width: 384, height: 260)
     panel.orb.setMascot(Self.syntheticMascot())
     panel.layoutIfNeeded()
-    XCTAssertTrue(panel.orb.isShowingMascot)
-    XCTAssertEqual(panel.orb.visibleMascotArcs, 0, "安静时耳边没有线")
-    XCTAssertTrue(panel.orb.bounds.contains(panel.orb.mascotFrame), "\(panel.orb.mascotFrame) 超出了指示区")
-    XCTAssertEqual(panel.orb.mascotFrame.height, 96 * 228 / 250, accuracy: 0.5)
+    XCTAssertFalse(panel.orb.isShowingMascot)
+    XCTAssertEqual(panel.orb.visibleMascotArcs, 0, "圆球模式不画水杉娘耳边红线")
     XCTAssertEqual(panel.statusLabel.text, "正在聆听…")
     XCTAssertFalse(panel.finishButton.isHidden)
     XCTAssertFalse(panel.cancelButton.isHidden)
@@ -319,20 +316,15 @@ final class SpaceVoicePanelTests: XCTestCase {
     panel.setLevel(1)
     let deadline = Date().addingTimeInterval(3)
     while panel.orb.isAnimatingLevel && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
-    XCTAssertEqual(panel.orb.visibleMascotArcs, reduceMotion ? 0 : 3, "减弱动态效果时按静音画")
+    XCTAssertEqual(panel.orb.visibleMascotArcs, 0, "满电平时同样保持圆球光晕而非人物红线")
+    XCTAssertEqual(panel.orb.shownLevel, reduceMotion ? 0 : 1, accuracy: 0.01)
 
     panel.showRecognizing(text: "", message: "正在润色…")
-    XCTAssertEqual(panel.orb.visibleMascotArcs, 0, "识别和润色时立即收起红线")
+    XCTAssertEqual(panel.orb.targetLevel, 0, "识别和润色时立即收回光晕")
+    XCTAssertEqual(panel.orb.visibleMascotArcs, 0)
     panel.setLevel(0.8)
-    XCTAssertEqual(panel.orb.visibleMascotArcs, 0, "迟到的电平不让红线回来")
-    // 面板在识别时本来就不再转发电平；直接推给指示区，确认是指示区自己在识别阶段按 0 画线。
-    panel.orb.setLevel(0.8)
-    let recognizingDeadline = Date().addingTimeInterval(3)
-    while panel.orb.isAnimatingLevel && Date() < recognizingDeadline {
-      RunLoop.main.run(until: Date().addingTimeInterval(0.02))
-    }
-    if !reduceMotion { XCTAssertEqual(panel.orb.shownLevel, 0.8, accuracy: 0.01) }
-    XCTAssertEqual(panel.orb.visibleMascotArcs, 0, "识别阶段指示区按 0 画线")
+    XCTAssertEqual(panel.orb.targetLevel, 0, "迟到的电平不让光晕重新张开")
+    XCTAssertEqual(panel.orb.visibleMascotArcs, 0)
     panel.removeFromSuperview()
   }
 
@@ -585,7 +577,7 @@ final class SpaceVoicePanelTests: XCTestCase {
       let command = try XCTUnwrap(channel.readCommand())
       XCTAssertEqual(command.action, .start, "点语音入口应直接开始听写")
       let panel = try XCTUnwrap(descendants(controller.view).compactMap { $0 as? KeyboardVoicePanelView }.first)
-      XCTAssertTrue(panel.orb.showsMascot, "功能菜单的语音入口是点按开始，指示区画水杉娘")
+      XCTAssertFalse(panel.orb.showsMascot, "iBoard 功能菜单语音入口统一保持声波圆球")
       channel.publish(VoiceSessionState(phase: .listening, request: command.request, text: "合成",
         heartbeat: now, expiresAt: now.addingTimeInterval(300)))
       RunLoop.main.run(until: Date().addingTimeInterval(0.1))

@@ -95,7 +95,7 @@ struct AccountLoginSheet: View {
   private var header: some View {
     HStack(alignment: .top, spacing: 12) {
       VStack(alignment: .leading, spacing: 4) {
-        Text("登录水杉").font(.system(size: 22, weight: .bold)).foregroundStyle(.primary)
+        Text("登录账号").font(.system(size: 22, weight: .bold)).foregroundStyle(.primary)
           .accessibilityAddTraits(.isHeader)
         Text("在手机、平板和电脑之间同步词库、皮肤和云剪贴板")
           .font(.system(size: 14)).foregroundStyle(MetasequoiaTheme.sub)

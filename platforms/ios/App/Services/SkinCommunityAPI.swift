@@ -94,7 +94,7 @@ enum CommunityBlocks {
   static let didChange = Notification.Name("app.msime.ios.communityBlocksDidChange")
   /// 一个账号最多屏蔽的作者数，与服务端的上限相同。
   static let maximum = 500
-  static let signInRequired = "登录水杉账号后才能屏蔽作者。"
+  static let signInRequired = "登录账号后才能屏蔽作者。"
 }
 
 enum CommunityResponseValidation {
@@ -207,7 +207,7 @@ actor SkinCommunityAPI {
     case "community_blocked_content", "account_blocked_content": message = moderation["blocked_content"]!
     case "community_screening_unavailable", "account_screening_unavailable": message = moderation["screening_unavailable"]!
     case "community_account_banned", "account_banned": message = moderation["account_banned"]!
-    case "community_unauthorized", "account_unauthorized": message = "请先登录水杉账号，或登录已过期，请重新登录。"
+    case "community_unauthorized", "account_unauthorized": message = "请先登录账号，或登录已过期，请重新登录。"
     case "community_not_found", "account_not_found": message = "作品不存在或已下架。"
     case "community_invalid", "account_invalid": message = "请检查名称、词条或提示词是否符合要求。"
     case "community_forbidden": message = "下载或收藏后才能评分，且不能评价自己的作品。"

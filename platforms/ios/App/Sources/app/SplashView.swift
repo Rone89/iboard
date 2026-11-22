@@ -53,7 +53,7 @@ struct SplashView: View {
         mark(frame)
         Text("iBoard").font(.system(size: 24, weight: .bold)).tracking(1.44).foregroundStyle(.white)
           .opacity(frame.nameOpacity).offset(y: frame.nameOffset)
-        Text("METASEQUOIA IME").font(.system(size: 13)).tracking(2.34).foregroundStyle(.white.opacity(0.62))
+        Text("SMART KEYBOARD").font(.system(size: 13)).tracking(2.34).foregroundStyle(.white.opacity(0.62))
           .opacity(frame.latinOpacity).offset(y: frame.latinOffset)
       }
       VStack {
@@ -69,9 +69,12 @@ struct SplashView: View {
     .ignoresSafeArea()
   }
 
-  /// 标志占原来 180pt 圆盘的位置，取其 5/6 即 150pt；圆盘、它的阴影和背后的涟漪都去掉了，标志外面不再套别的形状。
+  /// 开屏主标志：使用 iBoard 应用图标并裁成与系统一致的连续圆角。
   private func mark(_ frame: Frame) -> some View {
-    MSIMELogoMark(strokeDrawn: frame.strokeDrawn)
+    Image("MSIMELogo")
+      .resizable()
+      .scaledToFit()
+      .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
       .frame(width: 150, height: 150)
       .scaleEffect(frame.logoScale)
       .rotationEffect(.degrees(frame.logoRotation))

@@ -40,7 +40,7 @@ struct AccountSettingsView: View {
     Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "开发构建"
   }
 
-  private var displayName: String { user?.preferredDisplayName ?? "水杉用户" }
+  private var displayName: String { user?.preferredDisplayName ?? "iBoard 用户" }
 
   /// 账号带着邮箱（Rust 只交出 Google 身份的验证邮箱）时显示邮箱地址，否则显示账号的登录方式。资料到达之前只说明账号已登录。
   private var signedInSubtitle: String {
