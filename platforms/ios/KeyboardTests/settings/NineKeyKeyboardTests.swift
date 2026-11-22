@@ -3260,7 +3260,8 @@ final class NineKeyKeyboardTests: XCTestCase {
     while Date() < composeDeadline {
       RunLoop.current.run(until: Date().addingTimeInterval(0.02))
       controller.view.layoutIfNeeded()
-      if let title = try? button("candidate-1", in: controller).configuration?.title, title.contains("你好") {
+      if let candidate = descendants(controller.view).first(where: { $0.accessibilityIdentifier == "candidate-1" }) as? UIButton,
+         let title = candidate.configuration?.title, title.contains("你好") {
         candidateTitle = title
         break
       }
@@ -3298,6 +3299,43 @@ final class NineKeyKeyboardTests: XCTestCase {
     XCTAssertTrue(locks.allSatisfy(exclusiveLockAvailable), "恢复途中立即收起后锁必须已归还")
     RunLoop.current.run(until: Date().addingTimeInterval(0.15))
     XCTAssertTrue(locks.allSatisfy(exclusiveLockAvailable), "延迟回调后仍不能遗留孤儿会话锁")
+  }
+
+  /// 26 键冷启动时不提前构造九键、日文九键、符号层和 iPad 单手数字侧栏，切换到对应层时再按需创建并正常显示。
+  func testTwentySixKeyColdStartDefersHiddenLayoutsUntilShown() throws {
+    let previous = InputSchemePreference.scheme
+    defer { InputSchemePreference.scheme = previous }
+    InputSchemePreference.scheme = .quanpin
+
+    let controller = KeyboardViewController()
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(x: 0, y: 0, width: 414, height: KeyboardViewController.defaultKeyboardHeight)
+    controller.viewWillAppear(false)
+    controller.view.layoutIfNeeded()
+    defer {
+      controller.viewWillDisappear(false)
+      controller.viewDidDisappear(false)
+    }
+
+    let initialIDs = Set(descendants(controller.view).compactMap(\.accessibilityIdentifier))
+    XCTAssertFalse(initialIDs.contains("nineKeyDelete"), "26 键冷启动不应提前构造九键按键")
+    XCTAssertFalse(initialIDs.contains("japaneseSymbols"), "26 键冷启动不应提前构造日文九键")
+    XCTAssertFalse(initialIDs.contains("sidePadDigit1"), "手机 26 键冷启动不应提前构造 iPad 单手数字侧栏")
+    let initialHasSymbolLayerKeys = descendants(controller.view).contains {
+      ($0 as? UIButton)?.accessibilityLabel == "符号 #"
+    }
+    XCTAssertFalse(initialHasSymbolLayerKeys, "26 键字母层冷启动不应提前构造符号层按键")
+
+    // 点按 123 后应按需构造设计符号层并显示
+    let toggle = try XCTUnwrap(descendants(controller.view).first {
+      ($0 as? UIButton)?.configuration?.title == "123"
+    } as? UIButton)
+    toggle.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let afterToggleIDs = Set(descendants(controller.view).compactMap(\.accessibilityIdentifier))
+    let builtSymbolOrNumberPad = afterToggleIDs.contains("nineKeyDelete")
+      || descendants(controller.view).contains { ($0 as? UIButton)?.accessibilityLabel == "符号 #" }
+    XCTAssertTrue(builtSymbolOrNumberPad, "切到 123 后应按需构造对应符号/数字层")
   }
 
   /// 宿主应用被结束时控制器收不到任何外观回调，键盘视图只是不在窗口里了（#10910，模拟器的系统键盘里量到的）：两秒一轮的定时器发现之后按收起处理，放掉租约、停掉维护，否则扩展带着 App Group 的锁留在后台。进程内把视图移出窗口时 UIKit 会自己发外观回调，这里把键盘放进一个不转发外观回调的容器，移走容器来模拟。之后再出现，第一个键照常组字。

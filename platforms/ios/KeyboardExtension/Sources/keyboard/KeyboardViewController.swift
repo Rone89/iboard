@@ -533,16 +533,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var actionDeleteButton: UIButton!
   private var actionGlobeButton: UIButton!
   private var globeWidthConstraint: NSLayoutConstraint?
-  private var japaneseKeys: JapaneseNineKeyView!
+  private var japaneseKeys: JapaneseNineKeyView?
   /// 笔画方案在九键外框里替换 3×3 网格的 2×3 笔画键。
-  private var strokeKeys: StrokeKeypadView!
+  private var strokeKeys: StrokeKeypadView?
   private weak var japaneseGlobeButton: UIButton?
   private weak var japaneseSpaceButton: UIButton?
   private weak var japaneseReturnButton: UIButton?
-  private var japaneseHeight: NSLayoutConstraint!
+  private var japaneseHeight: NSLayoutConstraint?
   private var nineKeyHeight: NSLayoutConstraint!
+  /// 九键外框内容（网格/笔画/侧栏/右侧大回车）是否已经按需构造。
+  private var nineKeyLayoutInstalled = false
   /// 九键外框的左侧栏（字母层放标点、数字层放运算符）：数字层改排原生网格后整体隐藏。
-  private var nineKeySidebarView: UIView!
+  private var nineKeySidebarView: UIView?
   private var nineKeySymbolsButton: UIButton!
   private let punctuationStack = UIStackView()
   /// 字母层用自定义符号表（`touch_nine_key_sidebar_symbols`）时的左列：一屏最多三项、等高，多的上下滚动。出厂表时隐藏，左列仍是原来的 `punctuationStack`，画面不变。
@@ -1038,7 +1040,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // scheme button gathered there have not reached any key yet.
     updateLetterCaseControls()
     updateCandidateStrip(preedit: "", candidates: [])
-    applyKeyboardSkin()
+    // `installKeyboard` 刚按当前皮肤造完并装饰好所有可见按键；这里只刷背景、顶栏与回车样式，跳过对刚建按键的整棵重涂，真正的进窗补走交给 `viewIsAppearing`。
+    applyKeyboardSkin(recolorBuiltKeys: false)
     synchronizeInputContext()
     synchronizeReplyKeyboard()
     // The host going to the background may end the extension without a viewWillDisappear.
@@ -1601,7 +1604,72 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       keyColumn.addArrangedSubview(rowView)
     }
     // 大千注音、14 键和 18 键的各排不在这里建：只有用这几种方案的人用得到，第一次要画它们时由 `ensureAlternateLetterRows` 插到字母行和九键外框之间。
-    keyColumn.addArrangedSubview(makeNineKeyLayout())
+    // 九键外框先只放空容器占位，内部九宫格/笔画/侧栏/大回车以及日文九键、两套符号层、iPad 单手数字侧栏均延迟到首次实际显示时再按需构造，大幅减轻冷启动首帧建树开销。
+    nineKeyContainer.isHidden = true
+    keyColumn.addArrangedSubview(nineKeyContainer)
+    handwriting.isHidden = true
+    handwriting.onInsert = { [weak self] text in
+      guard let self, inputScheme == .handwriting, isChineseMode else { return }
+      render(session.finishComposition())
+      insertOwnText(ChineseTextConversion.outputString(text, traditional: usesTraditionalOutput), source: .handwriting)
+      playInputClick()
+    }
+    handwriting.onResults = { [weak self] words in
+      guard let self, inputScheme == .handwriting, isChineseMode else { return }
+      handwritingResults = words
+      updateCandidateStrip(preedit: "", candidates: words)
+    }
+    handwriting.canDownload = { [weak self] in self?.hasFullAccess == true }
+    keyColumn.addArrangedSubview(handwriting)
+    actionRow = makeActionRow()
+    keyColumn.addArrangedSubview(actionRow)
+    // 中/英紧挨回车的底行（手机、九键），回车把键帽左边几 pt 让给中/英；别的排法里两者不相邻，不起作用。
+    root.yieldingKey = enterButton
+    root.yieldReceiver = bottomLanguageButton
+    installSplitGaps(in: root)
+    // 分几步拼出来：写成一个长的 + 表达式时，编译器会在类型推断上超时。
+    var standardRows: [UIView] = [numberRow, extraRow]
+    standardRows += letterRowViews
+    standardRowHeights = standardRows.map {
+      ($0, $0.heightAnchor.constraint(equalTo: actionRow.heightAnchor))
+    }
+    // Keep the three keypad rows the same height as the bottom controls.
+    nineKeyHeight = nineKeyContainer.heightAnchor.constraint(
+      equalTo: actionRow.heightAnchor, multiplier: 3, constant: 14)
+    // Extra handwriting space belongs to the canvas, not enlarged Space/Return keys.
+    handwritingActionHeight = actionRow.heightAnchor.constraint(equalToConstant: 44)
+    installGlideTyping(on: root)
+    root.addGestureRecognizer(keyboardCursorPan)
+    updateKeyboardLayout()
+  }
+
+  /// 首次需要显示九宫格、笔画或数字九宫格时才构造九键内部按键与右侧大回车。
+  private func ensureNineKeyLayout() {
+    guard !nineKeyLayoutInstalled, actionRow != nil else { return }
+    nineKeyLayoutInstalled = true
+    _ = makeNineKeyLayout()
+    installTallReturnKey()
+    (keyboardRoot as? KeyAreaStackView)?.overlayKeys = [tallReturnKey].compactMap { $0 }
+    if let layout = appliedLayout {
+      let rowSpacing = layout.rowSpacing
+      nineGrid?.spacing = rowSpacing
+      nineControls?.spacing = rowSpacing
+      strokeKeys?.applySpacing(row: rowSpacing, key: layout.keySpacing)
+      nineKeyRows.forEach { ($0 as? UIStackView)?.spacing = layout.keySpacing }
+      nineKeyContainer.spacing = layout.keySpacing
+      if let sidebar = nineSidebarWidth?.firstItem as? UIView {
+        nineSidebarWidth?.isActive = false
+        nineSidebarWidth = sidebar.widthAnchor.constraint(equalTo: nineKeyContainer.widthAnchor, multiplier: layout.sidebarRatio)
+        nineSidebarWidth?.isActive = true
+      }
+    }
+    styleReturnKey()
+    refreshShadowColors(in: [nineKeyContainer] + [tallReturnKey].compactMap { $0 })
+  }
+
+  /// 首次切换到日文假名九键时才构造日文九键视图及侧边功能键，并插在九键外框与手写区之间。
+  private func ensureJapaneseNineKeyLayout() {
+    guard japaneseKeys == nil else { return }
     let japaneseSymbols = makeKey(title: "123", accessibilityLabel: "切换到数字和符号") { [weak self] in
       self?.countKeyPress(TypingKeyID.layer)
       self?.toggleLayout()
@@ -1635,80 +1703,83 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     (japaneseReturn as? KeyboardKeyButton)?.pressSoundClass = .enter
     japaneseSpaceButton = japaneseSpace
     japaneseReturnButton = japaneseReturn
-    japaneseKeys = JapaneseNineKeyView(makeKey: { [unowned self] title, label, action in
+    let keys = JapaneseNineKeyView(makeKey: { [unowned self] title, label, action in
       makeKey(title: title, accessibilityLabel: label, action: action)
     }, makeDelete: { [unowned self] in makeDeleteKey() },
        sideKeys: [japaneseSpace, japaneseReturn],
        modeKeys: [japaneseSymbols, japaneseEmoji, japaneseLanguage, japaneseGlobe])
     japaneseGlobeButton = japaneseGlobe
-    japaneseKeys.onKeyPress = { [weak self] index in self?.countKeyPress(TypingKeyID.japaneseKana(index)) }
-    japaneseKeys.onInput = { [weak self] input in
+    keys.onKeyPress = { [weak self] index in self?.countKeyPress(TypingKeyID.japaneseKana(index)) }
+    keys.onInput = { [weak self] input in
       guard let self, isChineseMode, inputScheme.isJapanese else { return }
       playInputClick()
       for character in input { render(session.handleCharacter(String(character))) }
     }
-    japaneseKeys.onSymbol = { [weak self] symbol in self?.handleSymbol(symbol) }
-    japaneseKeys.onDelete = { [weak self] in self?.handleBackspace() }
-    japaneseKeys.onVariant = { [weak self] in
+    keys.onSymbol = { [weak self] symbol in self?.handleSymbol(symbol) }
+    keys.onDelete = { [weak self] in self?.handleBackspace() }
+    keys.onVariant = { [weak self] in
       guard let self, isChineseMode, inputScheme.isJapanese else { return }
       playInputClick()
       render(session.cycleKanaVariant())
     }
-    keyColumn.addArrangedSubview(japaneseKeys)
-    handwriting.isHidden = true
-    handwriting.onInsert = { [weak self] text in
-      guard let self, inputScheme == .handwriting, isChineseMode else { return }
-      render(session.finishComposition())
-      insertOwnText(ChineseTextConversion.outputString(text, traditional: usesTraditionalOutput), source: .handwriting)
-      playInputClick()
-    }
-    handwriting.onResults = { [weak self] words in
-      guard let self, inputScheme == .handwriting, isChineseMode else { return }
-      handwritingResults = words
-      updateCandidateStrip(preedit: "", candidates: words)
-    }
-    handwriting.canDownload = { [weak self] in self?.hasFullAccess == true }
-    keyColumn.addArrangedSubview(handwriting)
+    keys.isHidden = true
+    japaneseKeys = keys
+    let insertAt = keyColumn.arrangedSubviews.firstIndex(of: handwriting) ?? keyColumn.arrangedSubviews.count
+    keyColumn.insertArrangedSubview(keys, at: insertAt)
+    japaneseHeight = keys.heightAnchor.constraint(equalToConstant: Self.japaneseKeyBlockHeight)
+    refreshShadowColors(in: [keys])
+  }
+
+  /// 首次需要显示每排十键的共享符号行时再按需构造并插在符号层/底行之前。
+  private func ensureSymbolRows() {
+    guard symbolRowViews.isEmpty, let actionRow else { return }
+    let anchor: UIView = symbolLayerRowViews.first ?? actionRow
+    var index = keyColumn.arrangedSubviews.firstIndex(of: anchor) ?? keyColumn.arrangedSubviews.count
     for row in symbolRows {
       let rowView = makeSymbolRow(row)
       rowView.isHidden = true
+      if let keySpacing = appliedLayout?.keySpacing { (rowView as? UIStackView)?.spacing = keySpacing }
       symbolRowViews.append(rowView)
-      keyColumn.addArrangedSubview(rowView)
+      keyColumn.insertArrangedSubview(rowView, at: index)
+      index += 1
+      if let stack = rowView as? UIStackView, let root = keyboardRoot {
+        installSplitGap(in: stack, root: root)
+      }
+      standardRowHeights.append((rowView, rowView.heightAnchor.constraint(equalTo: actionRow.heightAnchor)))
     }
-    for index in 0..<3 {
-      let rowView = makeSymbolLayerRow(index)
+    refreshShadowColors(in: symbolRowViews)
+  }
+
+  /// 首次需要显示设计稿符号层（123 / #+=）时再按需构造并插在底行之前。
+  private func ensureSymbolLayerRows() {
+    guard symbolLayerRowViews.isEmpty, let actionRow else { return }
+    var index = keyColumn.arrangedSubviews.firstIndex(of: actionRow) ?? keyColumn.arrangedSubviews.count
+    for rowIndex in 0..<3 {
+      let rowView = makeSymbolLayerRow(rowIndex)
       rowView.isHidden = true
+      if let keySpacing = appliedLayout?.keySpacing { rowView.spacing = keySpacing }
       symbolLayerRowViews.append(rowView)
-      keyColumn.addArrangedSubview(rowView)
+      keyColumn.insertArrangedSubview(rowView, at: index)
+      index += 1
+      if let root = keyboardRoot {
+        installSplitGap(in: rowView, root: root)
+      }
+      standardRowHeights.append((rowView, rowView.heightAnchor.constraint(equalTo: actionRow.heightAnchor)))
     }
-    actionRow = makeActionRow()
-    keyColumn.addArrangedSubview(actionRow)
-    installTallReturnKey()
-    installOneHandSidePad()
-    // 右侧大回车的回车不在任何一行里，单独告诉键区让它分到相邻键距里靠它的那一半。
-    root.overlayKeys = [tallReturnKey].compactMap { $0 }
-    // 中/英紧挨回车的底行（手机、九键），回车把键帽左边几 pt 让给中/英；别的排法里两者不相邻，不起作用。
-    root.yieldingKey = enterButton
-    root.yieldReceiver = bottomLanguageButton
-    installSplitGaps(in: root)
-    // 分几步拼出来：写成一个长的 + 表达式时，编译器会在类型推断上超时。
-    var standardRows: [UIView] = [numberRow, extraRow]
-    standardRows += letterRowViews
-    standardRows += symbolRowViews
-    standardRows += symbolLayerRowViews as [UIView]
-    standardRowHeights = standardRows.map {
-      ($0, $0.heightAnchor.constraint(equalTo: actionRow.heightAnchor))
+    refreshShadowColors(in: symbolLayerRowViews)
+  }
+
+  /// 键盘已进窗口后懒建的键区按当前窗口 trait 补解析阴影色（同 `insertAlternateLetterRows`）。
+  private func refreshShadowColors(in roots: [UIView]) {
+    let skin = KeyboardTheme.current
+    guard view.window != nil, skin.design == nil else { return }
+    func visit(_ node: UIView) {
+      if let button = node as? UIButton, let color = button.configuration?.background.backgroundColor, color.cgColor.alpha > 0 {
+        button.layer.shadowColor = skin.shadowColor.resolvedColor(with: button.traitCollection).cgColor
+      }
+      for child in node.subviews { visit(child) }
     }
-    // Keep the three keypad rows the same height as the bottom controls.
-    nineKeyHeight = nineKeyContainer.heightAnchor.constraint(
-      equalTo: actionRow.heightAnchor, multiplier: 3, constant: 14)
-    // The kana surface now has a dedicated punctuation row beneath the three kana rows.
-    japaneseHeight = japaneseKeys.heightAnchor.constraint(equalToConstant: Self.japaneseKeyBlockHeight)
-    // Extra handwriting space belongs to the canvas, not enlarged Space/Return keys.
-    handwritingActionHeight = actionRow.heightAnchor.constraint(equalToConstant: 44)
-    installGlideTyping(on: root)
-    root.addGestureRecognizer(keyboardCursorPan)
-    updateKeyboardLayout()
+    for root in roots { visit(root) }
   }
 
   /// 顶栏下面的那一行：填满它的按键列，以及单手模式的侧栏；侧栏默认隐藏，由 `applyOneHanded` 显示在按键的另一侧。iPad 单手时这一行里还有空出来那一侧的空白和侧边数字键盘（`installOneHandSidePad` 建它的键），默认也隐藏。这一行总是从左到右排列，因为存储的模式记的就是按键靠哪一侧。
@@ -1721,6 +1792,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     oneHandRow.spacing = KeyboardOneHandLayout.gap
     oneHandRow.semanticContentAttribute = .forceLeftToRight
     oneHandSidePad.isHidden = true
+    oneHandSidePad.accessibilityIdentifier = "oneHandSidePad"
     oneHandRow.addArrangedSubview(oneHandSidePad)
     oneHandSideSpacer.isHidden = true
     oneHandSideSpacer.isAccessibilityElement = false
@@ -1891,6 +1963,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       keyColumnTabletWidth?.isActive = true
     }
     if padShown {
+      if oneHandSidePadRows.isEmpty, actionRow != nil {
+        installOneHandSidePad()
+        if let layout = appliedLayout {
+          oneHandSidePadGrid.spacing = layout.rowSpacing
+          oneHandSidePadStack.spacing = layout.rowSpacing
+          oneHandSidePadRows.forEach { $0.spacing = layout.keySpacing }
+        }
+        refreshShadowColors(in: [oneHandSidePad])
+      }
       oneHandSidePadWidth?.constant = arrangement.padWidth
       oneHandSidePadWidth?.isActive = true
       NSLayoutConstraint.activate(oneHandSidePadHeights)
@@ -2325,29 +2406,33 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func installSplitGaps(in root: UIStackView) {
     let rows = ([numberRowView as UIView?, symbolExtraRowView as UIView?].compactMap { $0 } + letterRowViews + symbolRowViews + symbolLayerRowViews).compactMap { $0 as? UIStackView }
     for row in rows {
-      let characterKeys = row.arrangedSubviews.filter { ($0 as? KeyboardKeyButton)?.isFunctionKey != true }
-      guard !characterKeys.isEmpty else { continue }
-      if row.distribution == .fillEqually {
-        row.distribution = .fill
-        for key in characterKeys.dropFirst() {
-          let width = key.widthAnchor.constraint(equalTo: characterKeys[0].widthAnchor)
-          // `;` 只在微软双拼和粤语双拼下显示：等宽约束低于 required，让 stack view 隐藏它时的零宽约束胜出。
-          if key === microsoftFinalKey { width.priority = .init(999) }
-          width.isActive = true
-        }
-      }
-      insertSplitGap(into: row, after: characterKeys[KeyboardSplitLayout.leftKeyCount(characterKeys.count) - 1], root: root)
-      // 第三排字母：手机键面没有 ，。，按看得见的七个字母另插一段中缝（见 `tabletOnlySplitGap`）。
-      if let comma = letterRowPunctuationKeys.first, characterKeys.contains(where: { $0 === comma }) {
-        tabletOnlySplitGap = splitGaps.last
-        let letters = characterKeys.filter { key in !letterRowPunctuationKeys.contains { $0 === key } }
-        insertSplitGap(into: row, after: letters[KeyboardSplitLayout.leftKeyCount(letters.count) - 1], root: root)
-        phoneOnlySplitGap = splitGaps.last
-      }
+      installSplitGap(in: row, root: root)
     }
     if let space = spaceButton {
       insertSplitGap(into: actionRow, after: space, root: root)
       actionSplitGap = splitGaps.last
+    }
+  }
+
+  private func installSplitGap(in row: UIStackView, root: UIStackView) {
+    let characterKeys = row.arrangedSubviews.filter { ($0 as? KeyboardKeyButton)?.isFunctionKey != true }
+    guard !characterKeys.isEmpty else { return }
+    if row.distribution == .fillEqually {
+      row.distribution = .fill
+      for key in characterKeys.dropFirst() {
+        let width = key.widthAnchor.constraint(equalTo: characterKeys[0].widthAnchor)
+        // `;` 只在微软双拼和粤语双拼下显示：等宽约束低于 required，让 stack view 隐藏它时的零宽约束胜出。
+        if key === microsoftFinalKey { width.priority = .init(999) }
+        width.isActive = true
+      }
+    }
+    insertSplitGap(into: row, after: characterKeys[KeyboardSplitLayout.leftKeyCount(characterKeys.count) - 1], root: root)
+    // 第三排字母：手机键面没有 ，。，按看得见的七个字母另插一段中缝（见 `tabletOnlySplitGap`）。
+    if let comma = letterRowPunctuationKeys.first, characterKeys.contains(where: { $0 === comma }) {
+      tabletOnlySplitGap = splitGaps.last
+      let letters = characterKeys.filter { key in !letterRowPunctuationKeys.contains { $0 === key } }
+      insertSplitGap(into: row, after: letters[KeyboardSplitLayout.leftKeyCount(letters.count) - 1], root: root)
+      phoneOnlySplitGap = splitGaps.last
     }
   }
 
@@ -2467,15 +2552,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     nineKeyGrid.distribution = .fillEqually
     nineKeyContainer.addArrangedSubview(nineKeyGrid)
     // 笔画键与九键网格占同一格：笔画方案沿用九键的标点栏、删除列和动作行，只换中间这块。
-    strokeKeys = StrokeKeypadView(makeKey: { [unowned self] title, label, action in
+    let strokePadView = StrokeKeypadView(makeKey: { [unowned self] title, label, action in
       makeKey(title: title, accessibilityLabel: label, action: action)
     })
-    strokeKeys.isHidden = true
-    strokeKeys.onStroke = { [weak self] key in
+    strokePadView.isHidden = true
+    strokePadView.onStroke = { [weak self] key in
       self?.countKeyPress(TypingKeyID.character(key))
       self?.handleStrokeKey(key)
     }
-    nineKeyContainer.addArrangedSubview(strokeKeys)
+    strokeKeys = strokePadView
+    nineKeyContainer.addArrangedSubview(strokePadView)
     // 九格都显示数字提示并提供长按数字；1 键短按把常用标点放进候选条（`showNineKeyQuickSymbols`），不把 1 送进拼音引擎，符号面板从底行的 符 打开。分词仍由右列中间键承担。
     for rowIndex in 0..<3 {
       let row = makeRow()
@@ -7878,6 +7964,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // 假名九键的键面（`kanaFace`）只在字母层画假名网格（`kana`）；123 和别的键面一样打开数字九宫格，#+= 是设计稿的符号层，两者都用底行，假名网格自己的数字层不再出现。
     let kanaFace = isChineseMode && inputScheme == .japaneseNineKey && !isInLocalMode
     let kana = kanaFace && !showsSymbols
+    if kana { ensureJapaneseNineKeyLayout() }
     japaneseKeys?.isHidden = !kana
     japaneseHeight?.constant = Self.japaneseKeyBlockHeight
     japaneseHeight?.isActive = kana
@@ -7945,17 +8032,22 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // 数字页复用三列网格，原方案与 Engine 的组码布局不变；改排 iOS 原生的 4×3：左栏和右列整体隐藏，
     // 底行换成原生的 返回 |（🌐）| 0 | ⌫（`TouchBottomRowLayout.numberPadNative`），三排网格加底行正好四排等高。
     let nineKeyDigits = numberPad
+    if nineKeyFrame { ensureNineKeyLayout() }
     nineKeyContainer.isHidden = !nineKeyFrame
-    nineGrid?.isHidden = strokePad
-    strokeKeys?.isHidden = !strokePad
-    nineKeyRows.forEach { $0.isHidden = !nineKeyFrame || strokePad }
-    applyNineKeyDigitLayer(nineKeyDigits)
-    if let sidebar = nineKeySidebarView { sidebar.isHidden = numberPad }
-    if let controls = nineControls { controls.isHidden = numberPad }
+    if nineKeyLayoutInstalled {
+      nineGrid?.isHidden = strokePad
+      strokeKeys?.isHidden = !strokePad
+      nineKeyRows.forEach { $0.isHidden = !nineKeyFrame || strokePad }
+      applyNineKeyDigitLayer(nineKeyDigits)
+      if let sidebar = nineKeySidebarView { sidebar.isHidden = numberPad }
+      if let controls = nineControls { controls.isHidden = numberPad }
+    }
     // 九键「右侧大回车」：拼音九键、九键双拼和笔画自己的字母层；数字层改排原生网格后不再有回车列。
     let tallReturn = nineKeyFrame && !numberPad && (nineKey || strokes) && activeKeyLayoutStyle.nineKey == .tallReturn
-    applyNineKeyTallReturn(tallReturn)
-    applyNineKeyClosingCovered(tallReturn)
+    if nineKeyLayoutInstalled {
+      applyNineKeyTallReturn(tallReturn)
+      applyNineKeyClosingCovered(tallReturn)
+    }
     // 「符」与「123」互换过的字母层底行：中文 26 键只有逗号句号在空格两侧样式带 符，非中文 26 键方案仍带 符 时亦适用；英文 26 键已去掉 符，不受影响。
     let letterFaceSymbolFirst = keyFaceFormFactor == .phone && activeKeyLayoutStyle.symbolFirst
       && isChineseMode
@@ -7963,9 +8055,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       && (!drawsChineseTwentySixKey || activeKeyLayoutStyle.twentySixKey == .commaPeriod)
     // 同一条规则用在 #+= 层：这一层的返回键排在字母层 123 那一格（😀 或 符号 | 返回）。
     let symbolLayerSymbolFirst = symbolLayer && letterFaceSymbolFirst
-    updateNineKeyMiddleKey()
-    applySidebarSymbols(activeKeyLayoutStyle)
-    updateNineKeySidebar()
+    if nineKeyLayoutInstalled {
+      updateNineKeyMiddleKey()
+      applySidebarSymbols(activeKeyLayoutStyle)
+      updateNineKeySidebar()
+    }
     if actionRow != nil {
       let phoneRow = Self.usesPhoneBottomRow(formFactor: keyFaceFormFactor, nineKeyFrame: nineKeyFrame, handwriting: writes,
                                              kana: kana, fourteenKey: fourteenKeyRows)
@@ -8151,7 +8245,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         }
       }
     }
-    symbolRowViews.forEach { $0.isHidden = !showsSymbols || kana || nineKeyFrame || symbolLayer }
+    let legacySymbolRowsShown = showsSymbols && !kana && !nineKeyFrame && !symbolLayer
+    if legacySymbolRowsShown { ensureSymbolRows() }
+    if symbolLayer { ensureSymbolLayerRows() }
+    symbolRowViews.forEach { $0.isHidden = !legacySymbolRowsShown }
     symbolLayerRowViews.forEach { $0.isHidden = !symbolLayer }
     if symbolLayer || symbolExtraRowView?.isHidden == false { updateSymbolLayerFaces() }
     updateSymbolKeyFaces()
@@ -8778,7 +8875,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard gestureRecognizer.name == "keyboardCursorPan" else { return true }
     guard cursorSwipeEnabled, let root = keyboardRoot as? KeyAreaStackView,
           let touched = touch.view, touched.isDescendant(of: root),
-          !touched.isDescendant(of: japaneseKeys),
+          !(japaneseKeys.map { touched.isDescendant(of: $0) } ?? false),
           // iPad 单手的侧边数字键盘不挂横滑光标，那里的横滑照常是按键。
           !touched.isDescendant(of: oneHandSidePad),
           !root.gapRoutingExclusions.contains(where: { touched.isDescendant(of: $0) }) else { return false }
@@ -11630,8 +11727,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return .clear
   }
 
-  /// 给键盘换上 `KeyboardTheme.current`。`onlyIfChanged` 时（每次出现由 `viewWillAppear` 调用），皮肤和 trait 都与上一次换装相同、也没有按键在窗口外建过，就跳过重画背景、重走整棵按键树重设每个按键的配置这些重活；按键状态相关的更新（回车、方案键、工具栏、候选条）照常做。视图不在窗口里时只看皮肤：trait 还没定，在窗口外走的一遍也只会留下标记让 `viewIsAppearing` 再走一遍，这两项交给它判断。
-  private func applyKeyboardSkin(onlyIfChanged: Bool = false) {
+  /// 给键盘换上 `KeyboardTheme.current`。`onlyIfChanged` 时（每次出现由 `viewWillAppear` 调用），皮肤和 trait 都与上一次换装相同、也没有按键在窗口外建过，就跳过重画背景、重走整棵按键树重设每个按键的配置这些重活；按键状态相关的更新（回车、方案键、工具栏、候选条）照常做。视图不在窗口里时只看皮肤：trait 还没定，在窗口外走的一遍也只会留下标记让 `viewIsAppearing` 再走一遍，这两项交给它判断。`recolorBuiltKeys` 为 false 时（仅 `viewDidLoad` 刚建完按键调用）跳过对刚建按键的重复重涂，避免冷启动首帧前整棵树走两遍。
+  private func applyKeyboardSkin(onlyIfChanged: Bool = false, recolorBuiltKeys: Bool = true) {
     let skin = KeyboardTheme.current
     let reskinsKeys = !onlyIfChanged || appliedKeySkin != skin
       || (view.window != nil && (keySkinNeedsWindowPass || appliedKeySkinTraits != traitCollection))
@@ -11642,7 +11739,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     candidatePalette = currentCandidatePalette()
     refreshCandidatePalette()
     candidateButtonStyleRevision &+= 1
-    if reskinsKeys { recolorKeys(skin) }
+    if reskinsKeys { recolorKeys(skin, recolorTree: recolorBuiltKeys) }
     styleReturnKey()
     updateLanguageModeButton()
     updateSchemeButton()
@@ -11667,7 +11764,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   /// 换装里的重活：键盘背景、整棵按键树和回车键的配置。每个按键重设一遍配置，设计皮肤还要重画每个按键表面，键盘图片或花纹的背景整块重画。
-  private func recolorKeys(_ skin: KeyboardTheme) {
+  private func recolorKeys(_ skin: KeyboardTheme, recolorTree: Bool = true) {
     // 把背景交给系统底板时不是完全透明，而是铺一层几乎看不出的 `nativeBackgroundFill`，按键之间的空白也带内容（#10173）。只铺这一层不够：#7682 里背后不透明的根视图没让透明按钮收到触摸，所以面板、网格、格子和候选栏各自也铺一层，见 `nativeBackgroundFill`。
     view.backgroundColor = skin.drawsNativeBackground ? .clear : skin.background
     skinBackdrop.skin = skin
@@ -11675,29 +11772,34 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     if skin.drawsNativeBackground { skinBackdrop.backgroundColor = skin.nativeBackgroundFill }
     // 候选在这个滚动视图里左右滑；原生皮肤下它自己也带一层内容，从候选之间的空白起手的滑动才有收触摸的视图。
     candidateScrollView.backgroundColor = .clear
-    func recolor(_ node: UIView) {
-      if let button = node as? UIButton, var configuration = button.configuration {
-        if configuration.background.customView is SkinKeySurfaceView || (configuration.background.backgroundColor?.cgColor.alpha ?? 0) > 0 {
-          configuration.background.backgroundColor = (button as? KeyboardKeyButton)?.isFunctionKey == true
-            ? skin.functionKeyBackground.resolvedColor(with: traitCollection) : skin.keyBackground.resolvedColor(with: traitCollection)
-          configuration.baseForegroundColor = skin.keyForeground
+    if recolorTree {
+      func recolor(_ node: UIView) {
+        if let button = node as? UIButton, var configuration = button.configuration {
+          if configuration.background.customView is SkinKeySurfaceView || (configuration.background.backgroundColor?.cgColor.alpha ?? 0) > 0 {
+            configuration.background.backgroundColor = (button as? KeyboardKeyButton)?.isFunctionKey == true
+              ? skin.functionKeyBackground.resolvedColor(with: traitCollection) : skin.keyBackground.resolvedColor(with: traitCollection)
+            configuration.baseForegroundColor = skin.keyForeground
+          }
+          // 只有真正画出来的描边才换成强调色。iOS 27 起每个按钮配置默认带一条透明的 1pt 描边，只看宽度会给拼写和展开箭头加上描边，而设计稿里这两者都不带边框。
+          if configuration.background.strokeWidth > 0, (configuration.background.strokeColor?.cgColor.alpha ?? 0) > 0 {
+            configuration.background.strokeColor = skin.accent.withAlphaComponent(0.3)
+          }
+          button.configuration = configuration
+          if let color = configuration.background.backgroundColor, color.cgColor.alpha > 0 { decorateKey(button) }
         }
-        // 只有真正画出来的描边才换成强调色。iOS 27 起每个按钮配置默认带一条透明的 1pt 描边，只看宽度会给拼写和展开箭头加上描边，而设计稿里这两者都不带边框。
-        if configuration.background.strokeWidth > 0, (configuration.background.strokeColor?.cgColor.alpha ?? 0) > 0 {
-          configuration.background.strokeColor = skin.accent.withAlphaComponent(0.3)
+        if node.accessibilityIdentifier == "nineKeySidebar" || node.accessibilityIdentifier == "candidateStrip" {
+          node.backgroundColor = node.accessibilityIdentifier == "candidateStrip"
+            ? currentStripBackground(skin)
+            : skin.opaqueKeyBackground.withAlphaComponent(0.6)
         }
-        button.configuration = configuration
-        if let color = configuration.background.backgroundColor, color.cgColor.alpha > 0 { decorateKey(button) }
+        if let label = node as? UILabel, label.accessibilityIdentifier == "keyNumberHint" { label.textColor = skin.secondary }
+        node.subviews.forEach { recolor($0) }
       }
-      if node.accessibilityIdentifier == "nineKeySidebar" || node.accessibilityIdentifier == "candidateStrip" {
-        node.backgroundColor = node.accessibilityIdentifier == "candidateStrip"
-          ? currentStripBackground(skin)
-          : skin.opaqueKeyBackground.withAlphaComponent(0.6)
-      }
-      if let label = node as? UILabel, label.accessibilityIdentifier == "keyNumberHint" { label.textColor = skin.secondary }
-      node.subviews.forEach { recolor($0) }
+      recolor(view)
+    } else {
+      compositionContainer?.backgroundColor = currentStripBackground(skin)
+      nineKeySidebarView?.backgroundColor = skin.opaqueKeyBackground.withAlphaComponent(0.6)
     }
-    recolor(view)
     if skin.design != nil {
       for enter in returnKeys {
         guard var configuration = enter.configuration else { continue }
