@@ -2103,7 +2103,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       && !isInLocalMode && isChineseMode && inputScheme == .quanpin
     let skin = KeyboardTheme.current
     glideLivePreviewBar.apply(skin: skin, stripBackground: currentStripBackground(skin))
-    glideLivePreviewBar.clear()
+    setGlideLivePreview(nil)
   }
 
   private func stopGlideLivePreview() {
@@ -2112,7 +2112,31 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     glideLivePreviewLastTime = -.infinity
     glideLivePreviewLastPoint = nil
     glideLivePreviewCanQuerySession = false
-    glideLivePreviewBar.clear()
+    setGlideLivePreview(nil)
+  }
+
+  /// 更新滑行实时预览条并同步顶栏各层显隐：原生液态玻璃皮肤下顶栏背景近全透明，必须显式隐藏底层的工具栏（含「粘贴」胶囊）与候选区，避免文字和胶囊叠画。
+  func setGlideLivePreview(_ preview: MetasequoiaGlidePreview?) {
+    let wasVisible = !glideLivePreviewBar.isHidden
+    glideLivePreviewBar.update(preview)
+    let isVisible = !glideLivePreviewBar.isHidden
+    if isVisible != wasVisible {
+      syncTopStripVisibility()
+    }
+  }
+
+  /// 统一裁决顶栏三层（工具栏、候选/读音区、滑行实时预览条）的互斥可见性。
+  private func syncTopStripVisibility() {
+    let showsGlidePreview = !glideLivePreviewBar.isHidden
+    let showsCandidates = stripShowsCandidates
+    // 工具栏内容可以隐藏，但 iOS 键盘扩展不能在组字开始和结束时改变顶栏高度；否则 UIKit 会重排键盘，表现为键盘抖动，严重时还会重新选择输入法。
+    let hideShortcutBar = showsCandidates || showsGlidePreview || toolbarRowHidden
+    if shortcutBar.isHidden != hideShortcutBar { shortcutBar.isHidden = hideShortcutBar }
+    let hideCandidateContent = !showsCandidates || showsGlidePreview
+    if readingRow.isHidden != hideCandidateContent { readingRow.isHidden = hideCandidateContent }
+    if let candidateContent, candidateContent.isHidden != hideCandidateContent {
+      candidateContent.isHidden = hideCandidateContent
+    }
   }
 
   /// 节流后的滑行实时预览：不阻塞 120Hz 轨迹渲染，不写入宿主输入框，且仅在当前无未提交组字时原子查询会话候选。
@@ -2154,14 +2178,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             guard let self, self.glideActive, self.glideLivePreviewGeneration == generation else { return }
             self.glideLivePreviewInFlight = false
             if let preview, !preview.isEmpty {
-              self.glideLivePreviewBar.update(preview)
+              self.setGlideLivePreview(preview)
             } else {
-              self.glideLivePreviewBar.update(MetasequoiaGlidePreview(reading: topReading, candidates: Array(readings.dropFirst().prefix(2))))
+              self.setGlideLivePreview(MetasequoiaGlidePreview(reading: topReading, candidates: Array(readings.dropFirst().prefix(2))))
             }
           }
         } else {
           self.glideLivePreviewInFlight = false
-          self.glideLivePreviewBar.update(MetasequoiaGlidePreview(reading: topReading, candidates: Array(readings.prefix(3))))
+          self.setGlideLivePreview(MetasequoiaGlidePreview(reading: topReading, candidates: Array(readings.prefix(3))))
         }
       }
       return
@@ -2174,7 +2198,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         guard let self, self.glideActive, self.glideLivePreviewGeneration == generation else { return }
         self.glideLivePreviewInFlight = false
         if let preview, !preview.isEmpty {
-          self.glideLivePreviewBar.update(preview)
+          self.setGlideLivePreview(preview)
         }
       }
       return
@@ -2182,7 +2206,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     let keyPath = GlideLivePreviewPolicy.keyPathPreview(samples: samples, frames: frames)
     if !keyPath.isEmpty {
-      glideLivePreviewBar.update(MetasequoiaGlidePreview(reading: keyPath, candidates: []))
+      setGlideLivePreview(MetasequoiaGlidePreview(reading: keyPath, candidates: []))
     }
   }
 
@@ -9661,14 +9685,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let skin = KeyboardTheme.current
     stripShowsCandidates = showsCandidates
     compositionContainer?.backgroundColor = currentStripBackground(skin)
-    // 工具栏内容可以隐藏，但 iOS 键盘扩展不能在组字开始和结束时改变顶栏高度；否则 UIKit 会重排键盘，表现为键盘抖动，严重时还会重新选择输入法。
-    let hideShortcutBar = showsCandidates || toolbarRowHidden
-    if shortcutBar.isHidden != hideShortcutBar { shortcutBar.isHidden = hideShortcutBar }
     compositionContainer?.canvasVisible = showsCandidates && candidateCanvasActive
-    if readingRow.isHidden != !showsCandidates { readingRow.isHidden = !showsCandidates }
-    if let candidateContent, candidateContent.isHidden != !showsCandidates {
-      candidateContent.isHidden = !showsCandidates
-    }
+    syncTopStripVisibility()
     updatePreeditButton()
     // 邮箱后缀不分页：二十个全排在候选条上横向滚动，与 Android 一样。
     refreshDecorationWords()

@@ -134,6 +134,51 @@ final class GlideLivePreviewAndUndoTests: XCTestCase {
     XCTAssertNil(bar.currentPreview)
   }
 
+  /// 滑行实时预览条展示时必须同步隐藏底层工具栏（含未粘贴胶囊与快捷按钮）和候选区，避免原生液态玻璃透明底板上两层文字叠画；滑行结束后恢复。
+  func testGlideLivePreviewHidesShortcutBarWhileVisible() throws {
+    let document = FakeDocument(text: "")
+    let controller = try makeKeyboard(document)
+    let glide = try XCTUnwrap(descendants(controller.view)
+      .compactMap { ($0 as? KeyAreaStackView)?.gestureRecognizers?.first { $0 is GlideTypingGestureRecognizer } as? GlideTypingGestureRecognizer }
+      .first)
+    let previewBar = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "glideLivePreviewBar" })
+    let moreShortcut = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "moreShortcut" })
+    let shortcutBar = try XCTUnwrap(moreShortcut.superview)
+    let quickPaste = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "quickPasteShortcut" })
+    let preeditButton = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "preeditButton" })
+    let readingRow = try XCTUnwrap(preeditButton.superview)
+
+    // 1. 空闲态（即使存在未粘贴胶囊）：展示滑行实时预览条时工具栏必须整体隐藏，清空后恢复。
+    quickPaste.isHidden = false
+    XCTAssertTrue(previewBar.isHidden)
+    XCTAssertFalse(shortcutBar.isHidden)
+
+    controller.setGlideLivePreview(MetasequoiaGlidePreview(reading: "m'y'j", candidates: ["每一句", "每一集", "没有吗"]))
+    XCTAssertFalse(previewBar.isHidden)
+    XCTAssertTrue(shortcutBar.isHidden, "实时预览条显示期间工具栏必须隐藏，避免与粘贴胶囊叠画")
+    XCTAssertTrue(readingRow.isHidden)
+
+    controller.setGlideLivePreview(nil)
+    XCTAssertTrue(previewBar.isHidden)
+    XCTAssertFalse(shortcutBar.isHidden, "结束滑行预览后应恢复空闲工具栏")
+
+    // 2. 已有组字态：滑行实时预览条同样必须隐藏读音行与候选区，取消后恢复。
+    let frames = glide.keyFrames()
+    glide.onEnded(Self.stroke("ni", in: frames), frames)
+    XCTAssertFalse(readingRow.isHidden)
+    XCTAssertTrue(shortcutBar.isHidden)
+
+    controller.setGlideLivePreview(MetasequoiaGlidePreview(reading: "hao", candidates: ["好"]))
+    XCTAssertFalse(previewBar.isHidden)
+    XCTAssertTrue(shortcutBar.isHidden)
+    XCTAssertTrue(readingRow.isHidden, "实时预览条显示期间读音行必须隐藏，避免与预览文字叠画")
+
+    controller.setGlideLivePreview(nil)
+    XCTAssertTrue(previewBar.isHidden)
+    XCTAssertFalse(readingRow.isHidden, "清空滑行预览后应恢复原有组字读音行")
+    XCTAssertTrue(shortcutBar.isHidden)
+  }
+
   func testSingleBackspaceAfterGlideClearsWholeCompositionAndUndoesCommittedWord() throws {
     let document = FakeDocument(text: "前言")
     let controller = try makeKeyboard(document)
