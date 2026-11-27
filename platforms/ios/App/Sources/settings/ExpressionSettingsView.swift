@@ -6,11 +6,13 @@ import SwiftUI
 struct ExpressionSettingsView: View {
   @AppStorage(EnglishSuggestionsPreference.enabledKey, store: EnglishSuggestionsPreference.defaults)
   private var englishSuggestions = true
+  @ObservedObject private var resourcePacks = IOSResourcePackStore.shared
   @State private var chinesePunctuation = true
   @State private var paired = true
   @State private var smart = true
   @State private var lock = "follow"
   @State private var sentenceLevel = SentenceAssociationPreference.Level.enhanced
+  @State private var grammarModel = SentenceAssociationPreference.GrammarModel.baguwenCompact
   @State private var nextWordPrediction = false
   @State private var predictionButtons = NextWordPredictionButtons.expandOnly
   @State private var failedGroup: PageGroup?
@@ -18,6 +20,7 @@ struct ExpressionSettingsView: View {
   private enum PageGroup { case punctuation, intelligence }
 
   private static let sentenceSubtitle = "更准确，但更耗电"
+  private static let grammarSubtitle = "借助词语搭配概率提升长句和九宫格选词准确度；内置八股文紧凑版离线可用，也可按需下载万象 LTS 大模型"
   private static let predictionInfo = "选词上屏后推荐后续文字，点选、按数字键或空格上屏，继续输入其他内容时消失；使用现有词库，开启学习时也参考个人词序，隐私输入不显示"
   private static let predictionButtonsInfo = "联想出现时候选栏右端的按键：× 关闭联想，不输入任何字符；∨ 展开更多联想。只有关闭时左右滑动候选栏选词"
 
@@ -50,6 +53,16 @@ struct ExpressionSettingsView: View {
                           selection: Binding(get: { sentenceLevel }, set: saveSentenceLevel),
                           sheetTitle: "整句联想", sheetMessage: Self.sentenceSubtitle,
                           identifier: "sentenceAssociationPicker")
+          DesignDivider()
+          DesignSelectRow(title: "语法模型", info: Self.grammarSubtitle, enabled: sentenceLevel != .off,
+                          options: SentenceAssociationPreference.GrammarModel.allCases.map { DesignOption(title: $0.title, value: $0) },
+                          selection: Binding(get: { grammarModel }, set: saveGrammarModel),
+                          sheetTitle: "语法模型", sheetMessage: Self.grammarSubtitle,
+                          identifier: "grammarModelPicker")
+          if shouldShowWanxiangManageRow {
+            DesignDivider()
+            wanxiangGrammarManageRow
+          }
           DesignDivider()
           DesignToggleRow(title: "上屏后联想", info: Self.predictionInfo,
                           isOn: stored(NextWordPredictionButtons.enabledKey, $nextWordPrediction, group: .intelligence))
@@ -84,6 +97,70 @@ struct ExpressionSettingsView: View {
     .navigationTitle("表达")
     .navigationBarTitleDisplayMode(.inline)
     .reloadOnAppearAndActive(reload)
+    .alert("下载语法模型", isPresented: Binding(
+      get: { resourcePacks.meteredRequest == SentenceAssociationPreference.wanxiangGrammarPackID },
+      set: { if !$0 { resourcePacks.meteredRequest = nil } }), presenting: resourcePacks.meteredRequest) { id in
+        Button("下载") { resourcePacks.start(id) }
+        Button("取消", role: .cancel) { resourcePacks.meteredRequest = nil }
+      } message: { id in
+        Text("当前网络按流量计费或开启了低数据模式，模型大小约 \(resourcePacks.size(id))。是否继续？")
+      }
+  }
+
+  private var wanxiangPackID: String { SentenceAssociationPreference.wanxiangGrammarPackID }
+
+  private var shouldShowWanxiangManageRow: Bool {
+    sentenceLevel != .off
+      || grammarModel == .wanxiang
+      || resourcePacks.available(wanxiangPackID)
+      || resourcePacks.statuses[wanxiangPackID] != nil
+  }
+
+  private var wanxiangGrammarManageRow: some View {
+    let status = resourcePacks.statuses[wanxiangPackID]
+    let installed = resourcePacks.available(wanxiangPackID)
+    let running = status?.running == true
+    let subtitle: String = {
+      if let status { return status.message }
+      if installed {
+        return grammarModel == .wanxiang ? "已下载 · 当前已启用，重开键盘生效" : "已下载 · 可在上方切换启用"
+      }
+      if grammarModel == .wanxiang {
+        return "未下载（\(resourcePacks.size(wanxiangPackID))），下载完成前暂用内置八股文紧凑版"
+      }
+      return "约 \(resourcePacks.size(wanxiangPackID)) · 更大词库搭配覆盖，下载后自动切换"
+    }()
+    return Button {
+      if running {
+        resourcePacks.cancel(wanxiangPackID)
+      } else if installed {
+        resourcePacks.remove(wanxiangPackID)
+        if grammarModel == .wanxiang {
+          saveGrammarModel(.baguwenCompact)
+        }
+      } else {
+        if grammarModel != .wanxiang {
+          saveGrammarModel(.wanxiang)
+        } else {
+          resourcePacks.request(wanxiangPackID)
+        }
+      }
+    } label: {
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("万象 LTS 语法模型").foregroundStyle(.primary)
+          Text(subtitle).font(.system(size: 13)).foregroundStyle(MetasequoiaTheme.sub)
+        }
+        Spacer()
+        Text(running ? "取消" : (installed ? "删除" : "下载"))
+          .foregroundStyle(installed && !running ? Color.red : MetasequoiaTheme.accent)
+      }
+      .padding(.horizontal, 16)
+      .frame(maxWidth: .infinity, minHeight: 52)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(PressFillButtonStyle())
+    .accessibilityIdentifier("wanxiangGrammarManageRow")
   }
 
   /// 使用英文标点是 `chinese_punctuation` 取反。`punctuation_lock` 不是跟随时，键盘里以它为准，此时开关显示锁定后的形式，不能在这里改。
@@ -118,18 +195,30 @@ struct ExpressionSettingsView: View {
     record(SentenceAssociationPreference.save(level), group: .intelligence)
   }
 
+  private func saveGrammarModel(_ model: SentenceAssociationPreference.GrammarModel) {
+    guard model != grammarModel else { return }
+    grammarModel = model
+    let saved = SentenceAssociationPreference.saveGrammarModel(model)
+    record(saved, group: .intelligence)
+    if saved && model == .wanxiang && !resourcePacks.available(wanxiangPackID) {
+      resourcePacks.request(wanxiangPackID)
+    }
+  }
+
   private func record(_ saved: Bool, group: PageGroup) {
     failedGroup = saved ? nil : group
     if !saved { reload() }
   }
 
   private func reload() {
+    resourcePacks.reload()
     guard let preferences = MetasequoiaInputSessionBridge.loadSharedPreferences() else { return }
     chinesePunctuation = preferences["chinese_punctuation"] as? Bool ?? true
     paired = preferences["paired_punctuation"] as? Bool ?? true
     smart = preferences["smart_punctuation"] as? Bool ?? true
     lock = preferences["punctuation_lock"] as? String ?? "follow"
     sentenceLevel = SentenceAssociationPreference.level(in: preferences)
+    grammarModel = SentenceAssociationPreference.grammarModel(in: preferences)
     nextWordPrediction = preferences[NextWordPredictionButtons.enabledKey] as? Bool ?? false
     predictionButtons = NextWordPredictionButtons.style(in: preferences)
   }

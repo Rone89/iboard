@@ -88,9 +88,10 @@ final class DiagnosticLog: @unchecked Sendable {
     file = enabled ? directory.flatMap(Self.url(in:)) : nil
   }
 
-  func write(_ event: String) {
+  func write(_ event: @autoclosure () -> String) {
     lock.lock(); defer { lock.unlock() }
     guard let file else { return }
+    let message = event()
     guard !Self.rejectsSymlinkAncestors(file) else { return }
     let manager = FileManager.default
     var existing = stat()
@@ -102,7 +103,7 @@ final class DiagnosticLog: @unchecked Sendable {
       try? manager.moveItem(at: file, to: rotated)
     }
     let stamp = Self.formatter.string(from: Date())
-    let record = Data("\(stamp) [p\(ProcessInfo.processInfo.processIdentifier)] \(Self.sanitize(event))\n".utf8)
+    let record = Data("\(stamp) [p\(ProcessInfo.processInfo.processIdentifier)] \(Self.sanitize(message))\n".utf8)
     if !manager.fileExists(atPath: file.path) {
       manager.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600])
     }

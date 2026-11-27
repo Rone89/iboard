@@ -6,11 +6,13 @@ struct DictionarySettingsView: View {
   private static let discoverLimit = 8
 
   @EnvironmentObject private var navigation: AppNavigation
+  @ObservedObject private var resourcePacks = IOSResourcePackStore.shared
 
   @State private var updateStatus: [String: Any]?
   @State private var updateError = false
   @State private var updateGeneration = 0
   @State private var habits = InputHabitPreference.mirrored
+  @State private var grammarModel = SentenceAssociationPreference.GrammarModel.baguwenCompact
   @State private var saveFailed = false
   @State private var dictionary: PersonalDictionaryState?
   /// 偏好里有没有配置词库同步的网盘。
@@ -44,6 +46,7 @@ struct DictionarySettingsView: View {
           .buttonStyle(PressFillButtonStyle())
           .accessibilityIdentifier("importDictionaryAction")
         }
+        grammarModelSection
         DesignGroup(title: "同步", info: "把「我的词条」经你自己的 WebDAV 网盘（坚果云、Nextcloud 等）在设备之间同步，包括删除；不需要登录云账号，网盘只保存密文。") {
           NavigationLink(destination: DictionarySyncView()) {
             DesignNavRowLabel(title: "词库同步", value: syncConfigured ? "WebDAV" : "未开启")
@@ -113,6 +116,14 @@ struct DictionarySettingsView: View {
     .alert("词库", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
       Button("好", role: .cancel) {}
     } message: { Text(message ?? "") }
+    .alert("下载语法模型", isPresented: Binding(
+      get: { resourcePacks.meteredRequest == SentenceAssociationPreference.wanxiangGrammarPackID },
+      set: { if !$0 { resourcePacks.meteredRequest = nil } }), presenting: resourcePacks.meteredRequest) { id in
+        Button("下载") { resourcePacks.start(id) }
+        Button("取消", role: .cancel) { resourcePacks.meteredRequest = nil }
+      } message: { id in
+        Text("当前网络按流量计费或开启了低数据模式，模型大小约 \(resourcePacks.size(id))。是否继续？")
+      }
   }
 
   private var updating: Bool {
@@ -328,9 +339,88 @@ struct DictionarySettingsView: View {
     }
   }
 
+  private var wanxiangPackID: String { SentenceAssociationPreference.wanxiangGrammarPackID }
+
+  private var grammarModelSection: some View {
+    let status = resourcePacks.statuses[wanxiangPackID]
+    let installed = resourcePacks.available(wanxiangPackID)
+    let running = status?.running == true
+    let subtitle: String = {
+      if let status { return status.message }
+      if installed {
+        return grammarModel == .wanxiang ? "已下载 · 当前已启用，重开键盘生效" : "已下载 · 可在上方切换启用"
+      }
+      if grammarModel == .wanxiang {
+        return "未下载（\(resourcePacks.size(wanxiangPackID))），下载完成前暂用内置八股文紧凑版"
+      }
+      return "约 \(resourcePacks.size(wanxiangPackID)) · 更大词库搭配覆盖，下载后自动切换"
+    }()
+    return DesignGroup(
+      title: "语法模型",
+      info: "借助词语搭配概率提升长句和九宫格选词准确度；内置八股文紧凑版离线可用，也可按需下载万象 LTS 大模型"
+    ) {
+      DesignSelectRow(
+        title: "当前模型",
+        options: SentenceAssociationPreference.GrammarModel.allCases.map { DesignOption(title: $0.title, value: $0) },
+        selection: Binding(get: { grammarModel }, set: saveGrammarModel),
+        sheetTitle: "语法模型",
+        sheetMessage: "内置八股文紧凑版开箱即用；下载万象 LTS 后可获得更大词库搭配覆盖",
+        identifier: "dictionaryGrammarModelPicker"
+      )
+      DesignDivider()
+      Button {
+        if running {
+          resourcePacks.cancel(wanxiangPackID)
+        } else if installed {
+          resourcePacks.remove(wanxiangPackID)
+          if grammarModel == .wanxiang {
+            saveGrammarModel(.baguwenCompact)
+          }
+        } else {
+          if grammarModel != .wanxiang {
+            saveGrammarModel(.wanxiang)
+          } else {
+            resourcePacks.request(wanxiangPackID)
+          }
+        }
+      } label: {
+        HStack {
+          VStack(alignment: .leading, spacing: 4) {
+            Text("万象 LTS 语法模型").foregroundStyle(.primary)
+            Text(subtitle).font(.system(size: 13)).foregroundStyle(MetasequoiaTheme.sub)
+          }
+          Spacer()
+          Text(running ? "取消" : (installed ? "删除" : "下载"))
+            .foregroundStyle(installed && !running ? Color.red : MetasequoiaTheme.accent)
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(PressFillButtonStyle())
+      .accessibilityIdentifier("dictionaryWanxiangGrammarRow")
+    }
+  }
+
+  private func saveGrammarModel(_ model: SentenceAssociationPreference.GrammarModel) {
+    guard model != grammarModel else { return }
+    grammarModel = model
+    let saved = SentenceAssociationPreference.saveGrammarModel(model)
+    saveFailed = !saved
+    if !saved {
+      reload()
+      return
+    }
+    if model == .wanxiang && !resourcePacks.available(wanxiangPackID) {
+      resourcePacks.request(wanxiangPackID)
+    }
+  }
+
   private func reload() {
+    resourcePacks.reload()
     let preferences = MetasequoiaInputSessionBridge.loadSharedPreferences()
     habits = InputHabitPreference.settings(in: preferences)
+    grammarModel = SentenceAssociationPreference.grammarModel(in: preferences)
     syncConfigured = IOSDictionarySyncPolicy.Configuration(preferences: preferences) != nil
     // 队列文件读不出来只是在这里不显示数量；错误由「拼音词库」页报告。
     dictionary = try? store.read()

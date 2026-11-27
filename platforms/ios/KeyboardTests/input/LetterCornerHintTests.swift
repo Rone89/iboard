@@ -27,7 +27,19 @@ final class LetterCornerHintTests: XCTestCase {
 
   private func makeController(_ scheme: ChineseInputScheme) -> KeyboardViewController {
     let previous = InputSchemePreference.scheme
-    addTeardownBlock { InputSchemePreference.scheme = previous }
+    let previousStyle = TouchKeyLayoutStyle.mirrored
+    let previousDoc = MetasequoiaInputSessionBridge.loadSharedPreferences()?[TouchKeyLayoutStyle.twentySixKeyDocumentKey]
+    addTeardownBlock {
+      InputSchemePreference.scheme = previous
+      _ = MetasequoiaInputSessionBridge.updateSharedPreferences { doc in
+        doc[TouchKeyLayoutStyle.twentySixKeyDocumentKey] = previousDoc
+      }
+      TouchKeyLayoutStyle.mirrored = previousStyle
+    }
+    _ = MetasequoiaInputSessionBridge.updateSharedPreferences { doc in
+      doc[TouchKeyLayoutStyle.twentySixKeyDocumentKey] = TouchTwentySixKeyStyle.standard.rawValue
+    }
+    TouchKeyLayoutStyle.mirrored = TouchKeyLayoutStyle(twentySixKey: .standard)
     InputSchemePreference.scheme = scheme
     let controller = KeyboardViewController()
     controller.loadViewIfNeeded()

@@ -18,7 +18,7 @@ Status: implemented
    - 保留 26 键字母键角标斜滑规则不变，不引入重音字母气泡；日文假名 `nineKeySymbolsButton` 的 `showsMenuAsPrimaryAction` 主动作菜单保持原样。
 2. **回车语义着蓝与 URL/Email 语境底行（`ReturnKeyStylePolicy`、`KeyboardContextBottomPolicy`）**：
    - `ReturnKeyStylePolicy.usesActionAccent` 在原生皮肤下仅对组字确认或非 `.default` 的主动作（`.search`/`.send`/`.go` 等）使用 `actionBackground`，普通 `.default` 换行回归 `functionKeyBackground` + `keyForeground`；非原生皮肤保留设计稿全态强调色。
-   - `KeyboardContextBottomPolicy` 在 `.URL`/`.emailAddress` 且未自定义常用标点时将底行常用标点切为 `/` 或 `@` 并展开独立 `.` 键，且把 `urlOrEmailContext` 纳入 `KeyboardLayoutInputs` 缓存键确保切换输入框即时刷新。
+   - `KeyboardContextBottomPolicy` 在 `.URL`/`.emailAddress` 且未自定义常用标点时将底行常用标点切为 `/` 或 `@` 并展开独立 `.` 键，且把 `urlOrEmailContext` 纳入 `KeyboardLayoutInputs` 缓存键确保切换输入框即时刷新；手机 26 键通过 `TouchBottomRowLayout.withUrlOrEmailContext` 将 `.comma` 与 `.period` 正式纳入 `styledRow` 并从空格让出份额，保证 `arrangeActionRow` 排布与 `styledActionWidths` 宽度约束严格一致（不在表外强行显示按键，也不影响 `123` 数字页或九键底行）。
 3. **长按退格分级加速/按词删除与空格轨道板反馈（[BackspaceRepeatPolicy.swift](../../../../platforms/ios/KeyboardExtension/Sources/keyboard/BackspaceRepeatPolicy.swift)）**：
    - 退格重复第 `16` 步起将间隔从 `0.075s` 提速到 `0.045s`；在无手写笔迹、无组字、非就地组字且非中文模式下，第 `18` 步起升级为按词删除（`wordDeleteCount(beforeCursor:)`）。
    - `handleSpaceCursorMovement` 进入拖拽后以 `0.12s` 动画将周边按键淡出至 `alpha = 0.28`（保留正在拖动的空格完全不透明），每次发生 `steps != 0` 位移时触发一次 `UISelectionFeedbackGenerator.selectionChanged()`。

@@ -244,13 +244,62 @@ private struct KeyLayoutKeyboardPreview: View {
   @ViewBuilder
   private var keyboard: some View {
     switch kind {
-    case .twentySixKey: letterKeyboard(twentySixKeyRows)
+    case .twentySixKey:
+      if style.twentySixKey == .lokey {
+        lokeyTwentySixKeyKeyboard
+      } else {
+        letterKeyboard(twentySixKeyRows)
+      }
     case .letterGrid: letterKeyboard(letterGrid == .eighteenKey ? eighteenKeyRows : fourteenKeyRows)
     case .nineKey: nineKeyKeyboard
     }
   }
 
   // MARK: - 26 键与 14/18 键
+
+  /// iOS 原生（Lokey 几何）26 键预览：复刻 6.5pt 外边距、6.25pt 键距、9pt 连续曲率圆角、第三排 14.9pt 宽缓冲及左右对称 4 键底行（123 | 中/英 | 空格 | 换行）。
+  private var lokeyTwentySixKeyKeyboard: some View {
+    let gap: CGFloat = 6.25
+    let rows = TypingKeyHeatmap.twentySixKeyLetterRows
+    let middleInset = LokeyLayoutMetrics.middleRowHorizontalInset(keysWidth: Self.width, keySpacing: gap)
+    let edge = LokeyLayoutMetrics.thirdRowEdgeLayout(keysWidth: Self.width, keySpacing: gap)
+    let widths = LokeyLayoutMetrics.bottomRowWidths(
+      keysWidth: Self.width, keySpacing: gap, globe: false, profile: .compactPortrait)
+    let highlighted = kind.highlightedSlots(style)
+    let bottom = kind.bottomRow(style, language: language)
+    return VStack(spacing: Self.rowGap) {
+      if kind.drawsNumberRow(style) { row(TypingKeyHeatmap.numberRow.map { Self.cap($0) }) }
+      row(rows[0].map { Self.cap($0) })
+      row(rows[1].map { Self.cap($0) }, inset: middleInset)
+      HStack(spacing: 0) {
+        key(Self.cap(rows[2].first!, separator: .symbol("shift"))).frame(width: edge.width)
+        Spacer(minLength: 0).frame(width: edge.gap)
+        HStack(spacing: gap) {
+          ForEach(Array(rows[2].dropFirst().dropLast().enumerated()), id: \.offset) { _, cell in
+            key(Self.cap(cell))
+          }
+        }
+        Spacer(minLength: 0).frame(width: edge.gap)
+        key(Self.cap(rows[2].last!)).frame(width: edge.width)
+      }
+      .frame(width: Self.width)
+      .frame(maxHeight: .infinity)
+      HStack(spacing: gap) {
+        ForEach(Array(bottom.enumerated()), id: \.offset) { _, item in
+          let cap = Cap(face: Self.face(item.slot), role: Self.role(item.slot), weight: item.weight,
+                        highlighted: highlighted.contains(item.slot))
+          switch item.slot {
+          case .layer: key(cap).frame(width: widths.layerWidth)
+          case .emoji, .language: key(cap).frame(width: widths.languageWidth)
+          case .returnKey: key(cap).frame(width: widths.returnWidth)
+          default: key(cap)
+          }
+        }
+      }
+      .frame(width: Self.width)
+      .frame(maxHeight: .infinity)
+    }
+  }
 
   /// 字母行加上（数字行和）底行，各行等高。`rows` 每一行带着它两侧的缩进。
   private func letterKeyboard(_ rows: [(caps: [Cap], inset: CGFloat)]) -> some View {
@@ -310,7 +359,9 @@ private struct KeyLayoutKeyboardPreview: View {
     let gridRows = TypingKeyHeatmap.nineKeyGrid.map { $0.map { Self.cap($0) } }
     let bottom = bottomCaps
     return Group {
-      if style.nineKey == .tallReturn, let symbols = bottom.first, let enter = bottom.last {
+      if style.nineKey == .iosNative {
+        iosNativeNineKeyKeyboard(rowHeight: rowHeight)
+      } else if style.nineKey == .tallReturn, let symbols = bottom.first, let enter = bottom.last {
         HStack(alignment: .top, spacing: Self.nineKeyColumnGap) {
           VStack(spacing: Self.rowGap) {
             sidebar(marks, highlighted: sidebarHighlighted).frame(height: gridHeight)
@@ -347,6 +398,54 @@ private struct KeyLayoutKeyboardPreview: View {
       }
     }
     .frame(width: Self.width, height: Self.height, alignment: .top)
+  }
+
+  /// iOS 原生十键预览：5 等宽列 × 4 等高行，左列 123 / #@¥ / 双高 ABC，中间 3×3 网格与底行 选拼音 + 双宽空格，右列 ⌫ / ^_^ / 双高回车。
+  private func iosNativeNineKeyKeyboard(rowHeight: CGFloat) -> some View {
+    let colGap = Self.nineKeyColumnGap
+    let col = (Self.width - colGap * 4) / 5
+    let tallHeight = rowHeight * 2 + Self.rowGap
+    let spaceWidth = col * 2 + colGap
+    let highlighted = kind.highlightedSlots(style)
+    func nativeCap(_ face: String, highlight: Bool = false) -> Cap {
+      Cap(face: .text(face), role: .letter, highlighted: highlight)
+    }
+    return HStack(alignment: .top, spacing: colGap) {
+      VStack(spacing: Self.rowGap) {
+        key(nativeCap("123")).frame(height: rowHeight)
+        key(nativeCap("#@¥")).frame(height: rowHeight)
+        key(nativeCap("ABC", highlight: highlighted.contains(.language))).frame(height: tallHeight)
+      }
+      .frame(width: col)
+      VStack(spacing: Self.rowGap) {
+        HStack(spacing: colGap) {
+          key(nativeCap(",。?!")).frame(width: col, height: rowHeight)
+          key(nativeCap("ABC")).frame(width: col, height: rowHeight)
+          key(nativeCap("DEF")).frame(width: col, height: rowHeight)
+        }
+        HStack(spacing: colGap) {
+          key(nativeCap("GHI")).frame(width: col, height: rowHeight)
+          key(nativeCap("JKL")).frame(width: col, height: rowHeight)
+          key(nativeCap("MNO")).frame(width: col, height: rowHeight)
+        }
+        HStack(spacing: colGap) {
+          key(nativeCap("PQRS")).frame(width: col, height: rowHeight)
+          key(nativeCap("TUV")).frame(width: col, height: rowHeight)
+          key(nativeCap("WXYZ")).frame(width: col, height: rowHeight)
+        }
+        HStack(spacing: colGap) {
+          key(nativeCap("选拼音")).frame(width: col, height: rowHeight)
+          key(nativeCap("空格")).frame(width: spaceWidth, height: rowHeight)
+        }
+      }
+      .frame(width: col * 3 + colGap * 2)
+      VStack(spacing: Self.rowGap) {
+        key(nativeCap("⌫")).frame(height: rowHeight)
+        key(nativeCap("^_^")).frame(height: rowHeight)
+        key(nativeCap("↵", highlight: highlighted.contains(.returnKey))).frame(height: tallHeight)
+      }
+      .frame(width: col)
+    }
   }
 
   /// 九键左侧的标点栏：一整条半透明底，标点竖排、平分高度，与键盘的 `nineKeySidebar` 画法相同。`highlighted` 时（用自定义符号表）每一格在栏内描一圈强调色。

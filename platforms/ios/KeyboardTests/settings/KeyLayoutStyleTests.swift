@@ -55,15 +55,17 @@ final class KeyLayoutStyleTests: XCTestCase {
     ]
     XCTAssertEqual(TouchKeyLayoutStyle(in: known),
                    TouchKeyLayoutStyle(twentySixKey: .commaPeriod, fourteenKey: .longSpace, nineKey: .emoji, numberRow: true))
+    XCTAssertEqual(TouchKeyLayoutStyle(in: ["touch_twenty_six_key_style": "lokey"]), TouchKeyLayoutStyle(twentySixKey: .lokey))
     XCTAssertEqual(TouchKeyLayoutStyle(in: ["touch_nine_key_style": "tall_return"]), TouchKeyLayoutStyle(nineKey: .tallReturn))
+    XCTAssertEqual(TouchKeyLayoutStyle(in: ["touch_nine_key_style": "ios_native"]), TouchKeyLayoutStyle(nineKey: .iosNative))
     // 线上写法与 client-core 的 `as_str` 一致。
-    XCTAssertEqual(TouchTwentySixKeyStyle.allCases.map(\.rawValue), ["standard", "comma_period", "long_space", "emoji"])
+    XCTAssertEqual(TouchTwentySixKeyStyle.allCases.map(\.rawValue), ["standard", "comma_period", "long_space", "emoji", "lokey"])
     XCTAssertEqual(TouchFourteenKeyStyle.allCases.map(\.rawValue), ["standard", "long_space", "emoji"])
-    XCTAssertEqual(TouchNineKeyStyle.allCases.map(\.rawValue), ["standard", "comma_period", "emoji", "tall_return"])
+    XCTAssertEqual(TouchNineKeyStyle.allCases.map(\.rawValue), ["standard", "comma_period", "emoji", "tall_return", "ios_native"])
     // 设置页上的名字。
-    XCTAssertEqual(TouchTwentySixKeyStyle.allCases.map(\.title), ["标准", "逗号句号", "长空格", "表情键"])
+    XCTAssertEqual(TouchTwentySixKeyStyle.allCases.map(\.title), ["标准", "逗号句号", "长空格", "表情键", "iOS 原生"])
     XCTAssertEqual(TouchFourteenKeyStyle.allCases.map(\.title), ["标准", "长空格", "表情键"])
-    XCTAssertEqual(TouchNineKeyStyle.allCases.map(\.title), ["标准", "底栏带标点", "表情键", "右侧大回车"])
+    XCTAssertEqual(TouchNineKeyStyle.allCases.map(\.title), ["标准", "底栏带标点", "表情键", "右侧大回车", "iOS 原生"])
   }
 
   /// 保存只写刚改的那一项，文档接受了才更新镜像；标准样式和关着的数字行不留在文档里。iOS 以前没有对应的本机设置，没有旧值要迁移：没写过的文档读出来就是现在的键盘。
@@ -86,14 +88,16 @@ final class KeyLayoutStyleTests: XCTestCase {
                    TouchKeyLayoutStyle(twentySixKey: .longSpace, nineKey: .commaPeriod, numberRow: true))
     XCTAssertTrue(TouchKeyLayoutStyle.save(fourteenKey: .emoji, stateRoot: state))
     XCTAssertTrue(TouchKeyLayoutStyle.save(twentySixKey: .standard, stateRoot: state))
+    XCTAssertTrue(TouchKeyLayoutStyle.save(nineKey: .standard, stateRoot: state))
     XCTAssertTrue(TouchKeyLayoutStyle.save(numberRow: false, stateRoot: state))
     document = try XCTUnwrap(MetasequoiaInputSessionBridge.loadSharedPreferences(stateRoot: state))
-    XCTAssertNil(document["touch_twenty_six_key_style"], "the default is not written")
+    XCTAssertEqual(document["touch_twenty_six_key_style"] as? String, "standard", "explicit standard is preserved when platform default is lokey")
+    XCTAssertEqual(document["touch_nine_key_style"] as? String, "standard", "explicit standard is preserved when platform default is ios_native")
     XCTAssertNil(document["touch_number_row"])
-    XCTAssertEqual(TouchKeyLayoutStyle(in: document), TouchKeyLayoutStyle(fourteenKey: .emoji, nineKey: .commaPeriod))
+    XCTAssertEqual(TouchKeyLayoutStyle(in: document), TouchKeyLayoutStyle(twentySixKey: .standard, fourteenKey: .emoji, nineKey: .standard))
     // 镜像只认文档：读不到文档时不动，文档里是什么就抄成什么。
     TouchKeyLayoutStyle.mirror(nil)
-    XCTAssertEqual(TouchKeyLayoutStyle.mirrored, TouchKeyLayoutStyle(fourteenKey: .emoji, nineKey: .commaPeriod))
+    XCTAssertEqual(TouchKeyLayoutStyle.mirrored, TouchKeyLayoutStyle(twentySixKey: .standard, fourteenKey: .emoji, nineKey: .standard))
     TouchKeyLayoutStyle.mirror(["touch_number_row": true])
     XCTAssertEqual(TouchKeyLayoutStyle.mirrored, TouchKeyLayoutStyle(numberRow: true))
   }
@@ -113,6 +117,14 @@ final class KeyLayoutStyleTests: XCTestCase {
                    ["layer 1.23", "comma 0.95", "space 4.32", "language 1.00", "returnKey 2.50"])
     XCTAssertEqual(row(TouchBottomRowLayout.twentySixKey(.emoji, globe: false)),
                    ["layer 1.23", "emoji 1.00", "space 3.32", "comma 0.95", "language 1.00", "returnKey 2.50"])
+    XCTAssertEqual(row(TouchBottomRowLayout.twentySixKey(.lokey, globe: false)),
+                   ["layer 1.17", "language 1.17", "space 5.15", "returnKey 2.51"])
+    XCTAssertEqual(row(TouchBottomRowLayout.twentySixKey(.lokey, globe: false, language: false)),
+                   ["layer 1.17", "space 6.32", "returnKey 2.51"])
+    XCTAssertEqual(row(TouchBottomRowLayout.twentySixKey(.lokey, globe: true)),
+                   ["layer 1.00", "globe 1.00", "language 1.00", "space 5.20", "returnKey 2.80"])
+    XCTAssertEqual(row(TouchBottomRowLayout.twentySixKey(.lokey, globe: true, language: false)),
+                   ["layer 1.00", "globe 1.00", "space 6.20", "returnKey 2.80"])
     XCTAssertEqual(row(TouchBottomRowLayout.letterGrid(.standard, globe: false)),
                    ["layer 1.15", "comma 0.95", "space 4.30", "period 0.95", "language 1.00", "returnKey 2.25"])
     XCTAssertEqual(row(TouchBottomRowLayout.letterGrid(.longSpace, globe: false)),
@@ -301,6 +313,8 @@ final class KeyLayoutStyleTests: XCTestCase {
         XCTAssertEqual(comma.cornerHint, "。", style.rawValue)
         XCTAssertFalse(comma.swipesCornerHint, style.rawValue)
         XCTAssertNil(comma.menu, style.rawValue)
+      case .lokey:
+        XCTAssertTrue(comma.isHidden, style.rawValue)
       }
       controller.viewDidDisappear(false)
     }
@@ -411,7 +425,7 @@ final class KeyLayoutStyleTests: XCTestCase {
       select(scheme)
       // 笔画只在测试宿主带了 msime-stroke.db 时才能选上（CI 不带）；没带时选择落到别的方案，跳过。
       if scheme == .stroke && InputSchemePreference.scheme != .stroke { continue }
-      for style in TouchNineKeyStyle.allCases where style != .tallReturn {
+      for style in TouchNineKeyStyle.allCases where style != .tallReturn && style != .iosNative {
         for hidesLanguage in [false, true] {
           KeyboardLayoutPreference.hideLanguageKey = hidesLanguage
           XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: style)))
@@ -446,7 +460,7 @@ final class KeyLayoutStyleTests: XCTestCase {
 
   /// 顶部数字行：26 键、14 键和 18 键的字母层上方一排 1 到 0，键盘整整高一排；数字页和符号页用补充行占住这一排，切层时高度不变；九键不画；手机横屏不画，存着的值不变。
   func testNumberRowAddsOneRowAndKeepsTheHeightAcrossLayers() throws {
-    XCTAssertTrue(write(TouchKeyLayoutStyle(numberRow: true)))
+    XCTAssertTrue(write(TouchKeyLayoutStyle(twentySixKey: .standard, numberRow: true)))
     let taller = KeyboardViewController.keyboardHeight(phoneNumberRow: true)
     XCTAssertEqual(taller - KeyboardViewController.defaultKeyboardHeight,
                    KeyboardHeightPercent.portraitKeyHeight(tablet: false) + CGFloat(KeyboardLayoutPreference.rowSpacing), accuracy: 0.01)
@@ -502,11 +516,19 @@ final class KeyLayoutStyleTests: XCTestCase {
       }
       controller.viewDidDisappear(false)
     }
-    // 九键不画。
+    // 九键不画数字行，高度与关闭数字行一致，且切 `123` 数字层不跳高度。
     select(.nineKey)
+    XCTAssertTrue(write(TouchKeyLayoutStyle(numberRow: false)))
     var controller = keyboard()
+    let nineKeyBaselineHeight = height(of: controller)
+    controller.viewDidDisappear(false)
+    XCTAssertTrue(write(TouchKeyLayoutStyle(numberRow: true)))
+    controller = keyboard()
     XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "numberRow" && shown($0) })
-    XCTAssertEqual(height(of: controller), KeyboardViewController.defaultKeyboardHeight, accuracy: 0.5)
+    XCTAssertEqual(height(of: controller), nineKeyBaselineHeight, accuracy: 0.5)
+    try button("iosNativeNineKeyNumbers", in: controller).sendActions(for: .primaryActionTriggered)
+    try layoutAtRequestedHeight(controller)
+    XCTAssertEqual(height(of: controller), nineKeyBaselineHeight, accuracy: 0.5, "nine-key number layer keeps height")
     controller.viewDidDisappear(false)
     // 手机横屏不画。
     select(.quanpin)
@@ -601,7 +623,7 @@ final class KeyLayoutStyleTests: XCTestCase {
 
   /// 数字行在同一趟排版里出现时（从九键换到全拼、横屏转回竖屏），26 键直接按 45pt 键帽算高度，键区面板的底边也停在同一处。
   func testLetterKeysStay44WhenTheNumberRowAppearsInOnePass() throws {
-    XCTAssertTrue(write(TouchKeyLayoutStyle(numberRow: true)))
+    XCTAssertTrue(write(TouchKeyLayoutStyle(twentySixKey: .standard, numberRow: true)))
     let taller = KeyboardViewController.keyboardHeight(letterKeys: true, phoneNumberRow: true)
     // 九键没有数字行，换成全拼时数字行和 26 键在同一趟里出现。
     select(.nineKey)
@@ -798,15 +820,17 @@ final class KeyLayoutStyleTests: XCTestCase {
     XCTAssertEqual(TouchKeyLayoutOffering.entrySubtitle, "各类键盘的底行样式、键位和顶部数字行")
     XCTAssertEqual(TouchKeyLayoutOffering.numberRowSubtitle, "在 26 键、14 键和 18 键上方加一行 1 到 0；横屏时不显示。")
     XCTAssertEqual(TouchTwentySixKeyStyle.allCases.map(TouchKeyLayoutOffering.note),
-                   [nil, nil, "符号键移到工具栏。", "长按 123 打开符号。"])
+                   [nil, nil, "符号键移到工具栏。", "长按 123 打开符号。", TouchKeyLayoutOffering.lokeyNote])
     XCTAssertEqual(TouchFourteenKeyStyle.allCases.map(TouchKeyLayoutOffering.note), [nil, nil, "长按 123 打开符号。"])
-    XCTAssertEqual(TouchNineKeyStyle.allCases.map(TouchKeyLayoutOffering.note), [nil, nil, nil, "回车竖占两行，符号键在左下角。"])
+    XCTAssertEqual(TouchNineKeyStyle.allCases.map(TouchKeyLayoutOffering.note),
+                   [nil, nil, nil, "回车竖占两行，符号键在左下角。", "5 等宽列，左下 ABC 与右下回车各占两行。"])
     // 页面按分段取当前样式的说明：换了分段说的是那一类选中的样式。
     let style = TouchKeyLayoutStyle(twentySixKey: .longSpace, fourteenKey: .standard, nineKey: .tallReturn)
     XCTAssertEqual(TouchKeyLayoutKind.twentySixKey.note(style), "符号键移到工具栏。")
     XCTAssertNil(TouchKeyLayoutKind.letterGrid.note(style))
     XCTAssertEqual(TouchKeyLayoutKind.nineKey.note(style), "回车竖占两行，符号键在左下角。")
-    XCTAssertNil(TouchKeyLayoutKind.twentySixKey.note(TouchKeyLayoutStyle()))
+    XCTAssertEqual(TouchKeyLayoutKind.twentySixKey.note(TouchKeyLayoutStyle()), TouchKeyLayoutOffering.lokeyNote)
+    XCTAssertNil(TouchKeyLayoutKind.twentySixKey.note(TouchKeyLayoutStyle(twentySixKey: .standard)))
     XCTAssertEqual(TouchKeyLayoutKind.letterGrid.note(TouchKeyLayoutStyle(fourteenKey: .emoji)), "长按 123 打开符号。")
   }
 
@@ -860,10 +884,10 @@ final class KeyLayoutStyleTests: XCTestCase {
   func testSettingsPreviewHighlightsWhatTheStyleChanges() {
     typealias Slots = Set<Slot>
     XCTAssertEqual(TouchTwentySixKeyStyle.allCases.map(TouchKeyLayoutOffering.highlightedSlots),
-                   [[], [.comma, .period], [.space], [.emoji]] as [Slots])
+                   [[], [.comma, .period], [.space], [.emoji], [.space, .returnKey]] as [Slots])
     XCTAssertEqual(TouchFourteenKeyStyle.allCases.map(TouchKeyLayoutOffering.highlightedSlots), [[], [.space], [.emoji]] as [Slots])
     XCTAssertEqual(TouchNineKeyStyle.allCases.map(TouchKeyLayoutOffering.highlightedSlots),
-                   [[], [.comma, .period], [.emoji], [.returnKey]] as [Slots])
+                   [[], [.comma, .period], [.emoji], [.returnKey], [.returnKey]] as [Slots])
     let styles = TouchTwentySixKeyStyle.allCases.flatMap { twentySix in
       TouchFourteenKeyStyle.allCases.flatMap { fourteen in
         TouchNineKeyStyle.allCases.map { TouchKeyLayoutStyle(twentySixKey: twentySix, fourteenKey: fourteen, nineKey: $0) }
@@ -908,8 +932,10 @@ final class KeyLayoutStyleTests: XCTestCase {
       }
       XCTAssertTrue(TouchKeyLayoutKind.twentySixKey.highlightedSlots(on).isSubset(of: Set(slots)), label)
     }
-    XCTAssertEqual(TouchKeyLayoutKind.twentySixKey.bottomRow(TouchKeyLayoutStyle(symbolFirst: true)).map(\.slot),
+    XCTAssertEqual(TouchKeyLayoutKind.twentySixKey.bottomRow(TouchKeyLayoutStyle(twentySixKey: .standard, symbolFirst: true)).map(\.slot),
                    [.layer, .space, .comma, .language, .returnKey])
+    XCTAssertEqual(TouchKeyLayoutKind.twentySixKey.bottomRow(TouchKeyLayoutStyle(symbolFirst: true)).map(\.slot),
+                   [.layer, .language, .space, .returnKey])
     XCTAssertEqual(TouchKeyLayoutKind.twentySixKey.bottomRow(TouchKeyLayoutStyle(twentySixKey: .commaPeriod, symbolFirst: true)).map(\.slot),
                    [.symbols, .layer, .comma, .space, .period, .language, .returnKey])
     let swapped = TouchKeyLayoutStyle(fourteenKey: .emoji, nineKey: .commaPeriod, symbolFirst: true)
@@ -945,6 +971,7 @@ final class KeyLayoutStyleTests: XCTestCase {
       .commaPeriod: [.layer, .symbols, .comma, .space, .period, .language, .returnKey],
       .longSpace: [.layer, .comma, .space, .language, .returnKey],
       .emoji: [.layer, .emoji, .space, .comma, .language, .returnKey],
+      .lokey: [.layer, .language, .space, .returnKey],
     ]
     for style in TouchTwentySixKeyStyle.allCases {
       let keyLayout = TouchKeyLayoutStyle(twentySixKey: style)
@@ -971,6 +998,7 @@ final class KeyLayoutStyleTests: XCTestCase {
       .commaPeriod: [.symbols, .layer, .comma, .space, .period, .language, .returnKey],
       .emoji: [.symbols, .layer, .emoji, .space, .language, .returnKey],
       .tallReturn: [.symbols, .layer, .space, .language, .returnKey],
+      .iosNative: [.symbols, .layer, .space, .language, .returnKey],
     ]
     for style in TouchNineKeyStyle.allCases {
       let keyLayout = TouchKeyLayoutStyle(nineKey: style)
@@ -1007,8 +1035,10 @@ final class KeyLayoutStyleTests: XCTestCase {
                                           style: TouchKeyLayoutStyle(twentySixKey: style, symbolFirst: true), language: true)
       XCTAssertEqual(on.bottomRow, TouchBottomRowLayout.symbolFirst(TouchBottomRowLayout.twentySixKey(style, globe: false)), style.rawValue)
     }
-    let standard = KeyboardPreviewLetterLayer(nineKey: false, letterGrid: false, style: TouchKeyLayoutStyle(symbolFirst: true), language: true)
+    let standard = KeyboardPreviewLetterLayer(nineKey: false, letterGrid: false, style: TouchKeyLayoutStyle(twentySixKey: .standard, symbolFirst: true), language: true)
     XCTAssertEqual(standard.bottomRow.map(\.slot), [.layer, .space, .comma, .language, .returnKey])
+    let lokey = KeyboardPreviewLetterLayer(nineKey: false, letterGrid: false, style: TouchKeyLayoutStyle(twentySixKey: .lokey, symbolFirst: true), language: true)
+    XCTAssertEqual(lokey.bottomRow.map(\.slot), [.layer, .language, .space, .returnKey])
     let swapped = KeyboardPreviewLetterLayer(nineKey: false, letterGrid: false,
                                              style: TouchKeyLayoutStyle(twentySixKey: .commaPeriod, symbolFirst: true), language: true)
     XCTAssertEqual(swapped.bottomRow.map(\.slot), [.symbols, .layer, .comma, .space, .period, .language, .returnKey])
@@ -1033,7 +1063,7 @@ final class KeyLayoutStyleTests: XCTestCase {
       XCTAssertEqual(space(hidden), space(shown) + expectedDelta, accuracy: 0.0001, label)
     }
 
-    let zero = KeyboardPreviewLetterLayer(nineKey: true, letterGrid: false, style: TouchKeyLayoutStyle(), language: true, nineKeyZero: true)
+    let zero = KeyboardPreviewLetterLayer(nineKey: true, letterGrid: false, style: TouchKeyLayoutStyle(nineKey: .standard), language: true, nineKeyZero: true)
     XCTAssertEqual(zero.bottomRow, TouchBottomRowLayout.nineKey(.standard, globe: false, zero: true))
     XCTAssertEqual(zero.bottomRow.map(\.slot), [.symbols, .layer, .space, .zero, .language, .returnKey])
     // 26 键和 14/18 键没有 0，传了也不画。
@@ -1044,7 +1074,7 @@ final class KeyLayoutStyleTests: XCTestCase {
   /// 「中/英键放在空格左边」（#10228）：键盘页和皮肤页的整块预览与键盘排同一行，三类都在最后一步把中/英挪到空格左边，九键双拼的 0 跟着空格一起右移；隐藏了中/英键时不变；换了左列的表时底行照样排。
   func testSkinPreviewBottomRowFollowsLanguageKeySide() {
     for (nineKey, letterGrid) in [(false, false), (false, true), (true, false)] {
-      for style in [TouchKeyLayoutStyle(), TouchKeyLayoutStyle(twentySixKey: .commaPeriod, fourteenKey: .emoji, nineKey: .tallReturn)] {
+      for style in [TouchKeyLayoutStyle(twentySixKey: .standard), TouchKeyLayoutStyle(twentySixKey: .commaPeriod, fourteenKey: .emoji, nineKey: .tallReturn)] {
         var left = style
         left.languageKeySide = .left
         let right = KeyboardPreviewLetterLayer(nineKey: nineKey, letterGrid: letterGrid, style: style, language: true)
@@ -1057,9 +1087,13 @@ final class KeyLayoutStyleTests: XCTestCase {
                        "\(right.kind)")
       }
     }
-    let left = TouchKeyLayoutStyle(languageKeySide: .left)
+    let left = TouchKeyLayoutStyle(twentySixKey: .standard, languageKeySide: .left)
     XCTAssertEqual(KeyboardPreviewLetterLayer(nineKey: false, letterGrid: false, style: left, language: true).bottomRow.map(\.slot),
                    [.layer, .language, .space, .comma, .returnKey])
+    // iOS 原生（lokey）26 键默认已将中/英放在空格左边，languageKeySide 偏好保持原底行不变。
+    let lokeyLeft = TouchKeyLayoutStyle(twentySixKey: .lokey, languageKeySide: .left)
+    XCTAssertEqual(KeyboardPreviewLetterLayer(nineKey: false, letterGrid: false, style: lokeyLeft, language: true).bottomRow.map(\.slot),
+                   [.layer, .language, .space, .returnKey])
     let zero = KeyboardPreviewLetterLayer(nineKey: true, letterGrid: false, style: left, language: true, nineKeyZero: true)
     XCTAssertEqual(zero.bottomRow.map(\.slot), [.symbols, .layer, .language, .space, .zero, .returnKey])
     let custom = TouchKeyLayoutStyle(nineKeySidebar: ["@", "#", "~"], languageKeySide: .left)
@@ -1307,7 +1341,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     }
     KeyboardLayoutPreference.tabletFullKeys = false
     select(.nineKey)
-    XCTAssertTrue(write(TouchKeyLayoutStyle(numberRow: true)))
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .standard, numberRow: true)))
     let controller = tablet()
     let standard = try standardNineKeyWidths(controller, "iPad")
     let tall = try button("tallReturnKey", in: controller)
@@ -1331,7 +1365,7 @@ final class KeyLayoutStyleTests: XCTestCase {
         KeyboardLayoutPreference.hideLanguageKey = hidesLanguage
         let label = "\(scheme.rawValue) hidesLanguage=\(hidesLanguage)"
         // 先按标准样式量底行，再让同一个键盘当场换成右侧大回车。
-        XCTAssertTrue(write(TouchKeyLayoutStyle()))
+        XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .standard)))
         let controller = keyboard()
         let measured = try standardNineKeyWidths(controller, label)
         if scheme == .nineKey { pinyinStandard[hidesLanguage] = measured }
@@ -1450,7 +1484,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     }
     KeyboardLayoutPreference.hideLanguageKey = false
     // 标准外框：同样两处键距里靠右列第三格的一半归 ！。
-    XCTAssertTrue(write(TouchKeyLayoutStyle()))
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .standard)))
     let controller = keyboard()
     let root = try XCTUnwrap(descendants(controller.view).first { $0 is KeyAreaStackView })
     let closing = try button("nineKeyClosingMark", in: controller)
@@ -1473,6 +1507,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     }
     select(.nineKey)
     // 先量 3pt 键距下标准九键底行的键宽，再让同一个键盘当场换成 6pt 键距的右侧大回车。
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .standard)))
     XCTAssertTrue(KeyboardLayoutPreference.saveGeometry(keySpacing: 3))
     let controller = keyboard()
     let standard = try standardNineKeyWidths(controller, "3pt")
@@ -1529,14 +1564,15 @@ final class KeyLayoutStyleTests: XCTestCase {
         XCTAssertFalse(isShown("nineKeySidebar"), "\(label) digits sidebar")
         XCTAssertFalse(isShown("nineKeyDelete"), "\(label) digits right column")
         XCTAssertFalse(isShown("numberPadSymbolPanelKey"), "\(label) digits sidebar 符")
-        XCTAssertFalse(shown(try button("bottomLanguageKey", in: controller)), "\(label) digits 中/英")
         if scheme == .quanpin {
+          XCTAssertTrue(shown(try button("bottomLanguageKey", in: controller)), "\(label) digits 中/英")
           XCTAssertEqual(try button("symbolLayerKey0_0", in: controller).configuration?.title, "1", label)
           XCTAssertTrue(shown(try button("spaceKey", in: controller)), "\(label) digits space")
           XCTAssertTrue(shown(try button("returnKey", in: controller)), "\(label) digits return")
           XCTAssertTrue(shown(try button("symbolLayerDeleteKey", in: controller)), "\(label) digits symbol ⌫")
           XCTAssertEqual(try button("layoutToggleButton", in: controller).configuration?.title, "拼音", label)
         } else {
+          XCTAssertFalse(shown(try button("bottomLanguageKey", in: controller)), "\(label) digits 中/英")
           XCTAssertEqual(try button("nineKey7", in: controller).configuration?.title, "7", label)
           XCTAssertFalse(shown(try button("spaceKey", in: controller)), "\(label) digits space")
           XCTAssertFalse(shown(try button("returnKey", in: controller)), "\(label) digits return")
@@ -1606,11 +1642,13 @@ final class KeyLayoutStyleTests: XCTestCase {
       try assertRow(bottom, draws: TypingKeyHeatmap.nineKeyBottomCells(for: style))
       controller.viewDidDisappear(false)
     }
-    // 标准样式就是原来那张图。
+    // 默认（iOS 原生 / lokey）与标准样式底行均不带句号/符/表情键/数字行。
     XCTAssertEqual(TypingKeyHeatmap.letterRows(for: TouchKeyLayoutStyle()), TypingKeyHeatmap.keyboardRows)
     XCTAssertEqual(TypingKeyHeatmap.nineKeyBottomCells(for: .standard), TypingKeyHeatmap.nineKeyBottomRow)
     let counts = TypingKeyHeatmap(counts: ["Period": 4, TypingKeyID.symbol: 3, TypingKeyID.emoji: 2, "Digit1": 1])
     XCTAssertEqual(counts.others(nineKey: false).map(\.id), ["Period", TypingKeyID.symbol, TypingKeyID.emoji, "Digit1"])
+    XCTAssertEqual(counts.others(nineKey: false, style: TouchKeyLayoutStyle(twentySixKey: .standard)).map(\.id),
+                   ["Period", TypingKeyID.symbol, TypingKeyID.emoji, "Digit1"])
     XCTAssertEqual(counts.others(nineKey: false, style: TouchKeyLayoutStyle(twentySixKey: .commaPeriod)).map(\.id),
                    [TypingKeyID.emoji, "Digit1"])
     XCTAssertEqual(counts.others(nineKey: false, style: TouchKeyLayoutStyle(twentySixKey: .longSpace)).map(\.id),
@@ -1715,8 +1753,8 @@ final class KeyLayoutStyleTests: XCTestCase {
                      "\(style.rawValue) symbol layer")
       controller.viewDidDisappear(false)
     }
-    // 标准与表情键样式没有 符，互换不起作用，123 符号层底行仍以返回打头。
-    for style in [TouchTwentySixKeyStyle.standard, .emoji] {
+    // 标准、表情键与 Lokey 样式没有 符，互换不起作用，123 符号层底行仍以返回打头。
+    for style in [TouchTwentySixKeyStyle.standard, .emoji, .lokey] {
       XCTAssertTrue(write(TouchKeyLayoutStyle(twentySixKey: style, symbolFirst: true)))
       let controller = keyboard()
       XCTAssertEqual(visibleBottomRow(controller).first?.slot, .layer, style.rawValue)
@@ -1727,7 +1765,7 @@ final class KeyLayoutStyleTests: XCTestCase {
       controller.viewDidDisappear(false)
     }
     // 英文 26 键已去掉 符，互换不起作用，123 与 #+= 两层都保持返回键打头。
-    XCTAssertTrue(write(TouchKeyLayoutStyle(symbolFirst: true)))
+    XCTAssertTrue(write(TouchKeyLayoutStyle(twentySixKey: .standard, symbolFirst: true)))
     var controller = keyboard()
     try button("bottomLanguageKey", in: controller).sendActions(for: .primaryActionTriggered)
     controller.view.layoutIfNeeded()
@@ -1763,10 +1801,12 @@ final class KeyLayoutStyleTests: XCTestCase {
   func testHeatmapFollowsSymbolFirst() {
     let swapped = TypingKeyHeatmap.letterRows(for: TouchKeyLayoutStyle(twentySixKey: .commaPeriod, symbolFirst: true))
     XCTAssertEqual(swapped.last?.prefix(2).map(\.id), [TypingKeyID.symbol, TypingKeyID.layer])
-    XCTAssertEqual(TypingKeyHeatmap.letterRows(for: TouchKeyLayoutStyle()).last?.prefix(2).map(\.id),
+    XCTAssertEqual(TypingKeyHeatmap.letterRows(for: TouchKeyLayoutStyle(twentySixKey: .standard)).last?.prefix(2).map(\.id),
+                   [TypingKeyID.layer, TypingKeyID.space])
+    XCTAssertEqual(TypingKeyHeatmap.letterRows(for: TouchKeyLayoutStyle(twentySixKey: .standard, symbolFirst: true)).last?.prefix(2).map(\.id),
                    [TypingKeyID.layer, TypingKeyID.space])
     XCTAssertEqual(TypingKeyHeatmap.letterRows(for: TouchKeyLayoutStyle(symbolFirst: true)).last?.prefix(2).map(\.id),
-                   [TypingKeyID.layer, TypingKeyID.space])
+                   [TypingKeyID.layer, TypingKeyID.language])
   }
 
   // MARK: - 左侧符号栏
@@ -1827,13 +1867,14 @@ final class KeyLayoutStyleTests: XCTestCase {
     XCTAssertFalse(TouchKeyLayoutKind.nineKey.highlightsSidebar(TouchKeyLayoutStyle(digitSidebar: ["="])))
     XCTAssertTrue(TouchKeyLayoutKind.nineKey.highlightsSidebar(TouchKeyLayoutStyle(nineKeySidebar: ["、"])))
     XCTAssertFalse(TouchKeyLayoutKind.twentySixKey.highlightsSidebar(TouchKeyLayoutStyle(nineKeySidebar: ["、"])))
-    XCTAssertEqual(TouchKeyLayoutKind.nineKey.highlightedSlots(TouchKeyLayoutStyle(nineKeySidebar: ["、"])), [])
+    XCTAssertEqual(TouchKeyLayoutKind.nineKey.highlightedSlots(TouchKeyLayoutStyle(nineKey: .standard, nineKeySidebar: ["、"])), [])
     XCTAssertEqual(TypingKeyHeatmap.cells(nineKey: true, style: TouchKeyLayoutStyle(nineKeySidebar: five)).first?.face, "，。？")
   }
 
   /// 出厂表时左列仍是原来的 ，。？ 三格：贴满符号栏、等高平分，与改版前逐点相同，自定义表的滚动列藏着。当场换成自定义表再换回出厂表，三格的帧和原来一样。
   func testFactorySidebarKeepsItsFrames() async throws {
     select(.nineKey)
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .standard)))
     let controller = keyboard()
     let sidebar = try view("nineKeySidebar", in: controller)
     let custom = try view("nineKeyCustomSidebar", in: controller)
@@ -1846,9 +1887,9 @@ final class KeyLayoutStyleTests: XCTestCase {
       XCTAssertEqual(mark.frame.width, sidebar.bounds.width, accuracy: 0.5, mark.title)
     }
     XCTAssertFalse(shown(custom))
-    try await restyle(controller, TouchKeyLayoutStyle(nineKeySidebar: ["、", "；"]), "custom") { self.shown(custom) }
+    try await restyle(controller, TouchKeyLayoutStyle(nineKey: .standard, nineKeySidebar: ["、", "；"]), "custom") { self.shown(custom) }
     XCTAssertEqual(sidebarMarks(sidebar).map(\.title), ["、", "；"])
-    try await restyle(controller, TouchKeyLayoutStyle(), "factory again") { !self.shown(custom) }
+    try await restyle(controller, TouchKeyLayoutStyle(nineKey: .standard), "factory again") { !self.shown(custom) }
     let again = sidebarMarks(sidebar)
     XCTAssertEqual(again.map(\.title), factory.map(\.title))
     for (drawn, original) in zip(again, factory) {
@@ -1863,7 +1904,7 @@ final class KeyLayoutStyleTests: XCTestCase {
   func testCustomLetterSidebarScrollsThreeAScreen() throws {
     select(.nineKey)
     let five = ["、", "；", "：", "……", ":-)"]
-    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKeySidebar: five)))
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .standard, nineKeySidebar: five)))
     let controller = keyboard()
     let scroll = try XCTUnwrap(try view("nineKeyCustomSidebar", in: controller) as? NineKeySidebarScrollView)
     let sidebar = try view("nineKeySidebar", in: controller)
@@ -1890,7 +1931,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     }
     controller.viewDidDisappear(false)
 
-    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKeySidebar: ["、", "；"])))
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .standard, nineKeySidebar: ["、", "；"])))
     let short = keyboard()
     let shortScroll = try XCTUnwrap(try view("nineKeyCustomSidebar", in: short) as? NineKeySidebarScrollView)
     XCTAssertEqual(shortScroll.visibleRows, 2)
@@ -2007,7 +2048,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     let document = SidebarDocument()
     try attach(document)
     select(.nineKey)
-    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKeySidebar: ["（）", "、", ":-)"], digitSidebar: ["()", "="])))
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .standard, nineKeySidebar: ["（）", "、", ":-)"], digitSidebar: ["()", "="])))
     let controller = keyboard()
     try button("nineKeySidebarSymbol0", in: controller).sendActions(for: .primaryActionTriggered)
     XCTAssertEqual(document.text, "（）")
@@ -2324,7 +2365,9 @@ final class KeyLayoutStyleTests: XCTestCase {
         let label = "\(kind.rawValue) \(right)"
         XCTAssertEqual(kind.bottomRow(left), TouchBottomRowLayout.languageBeforeSpace(kind.bottomRow(right)), label)
         XCTAssertEqual(kind.bottomRow(left, language: false), kind.bottomRow(right, language: false), "\(label) hidden 中/英")
-        XCTAssertEqual(kind.highlightedSlots(left), kind.highlightedSlots(right).union([.language]), label)
+        let hasLanguage = kind.bottomRow(left).contains { $0.slot == .language }
+        let expectedHighlighted = hasLanguage ? kind.highlightedSlots(right).union([.language]) : kind.highlightedSlots(right)
+        XCTAssertEqual(kind.highlightedSlots(left), expectedHighlighted, label)
         XCTAssertTrue(kind.highlightedSlots(left).isSubset(of: Set(kind.bottomRow(left).map(\.slot))), label)
         XCTAssertFalse(kind.highlightedSlots(right).contains(.language), label)
       }
@@ -2337,11 +2380,14 @@ final class KeyLayoutStyleTests: XCTestCase {
 
   /// 统计热力图跟着画：26 键和九键（含右侧大回车）的底行与键盘同一次序，键的 id 和宽度不变。
   func testHeatmapFollowsTheLanguageKeySide() {
-    let left = TouchKeyLayoutStyle(languageKeySide: .left)
+    let left = TouchKeyLayoutStyle(twentySixKey: .standard, languageKeySide: .left)
     XCTAssertEqual(TypingKeyHeatmap.letterRows(for: left).last?.map(\.id),
                    [TypingKeyID.layer, TypingKeyID.language, TypingKeyID.space, TypingKeyID.quickPunctuation, TypingKeyID.enter])
     XCTAssertEqual(Set(TypingKeyHeatmap.letterRows(for: left).last!.map(\.width)),
-                   Set(TypingKeyHeatmap.letterRows(for: TouchKeyLayoutStyle()).last!.map(\.width)))
+                   Set(TypingKeyHeatmap.letterRows(for: TouchKeyLayoutStyle(twentySixKey: .standard)).last!.map(\.width)))
+    let lokeyLeft = TouchKeyLayoutStyle(twentySixKey: .lokey, languageKeySide: .left)
+    XCTAssertEqual(TypingKeyHeatmap.letterRows(for: lokeyLeft).last?.map(\.id),
+                   [TypingKeyID.layer, TypingKeyID.language, TypingKeyID.space, TypingKeyID.enter])
     XCTAssertEqual(TypingKeyHeatmap.nineKeyBottomCells(for: .standard, languageLeft: true).map(\.id),
                    [TypingKeyID.symbol, TypingKeyID.layer, TypingKeyID.language, TypingKeyID.space, TypingKeyID.enter])
     XCTAssertEqual(TypingKeyHeatmap.nineKeyBottomCells(for: .tallReturn, languageLeft: true).map(\.id),
@@ -2397,7 +2443,13 @@ final class KeyLayoutStyleTests: XCTestCase {
       for symbolFirst in [false, true] {
         let label = "26 键 \(style.rawValue) symbolFirst=\(symbolFirst)"
         let row = try rows(TouchKeyLayoutStyle(twentySixKey: style, symbolFirst: symbolFirst), label)
-        assertMoved(row, label)
+        if style == .lokey {
+          // iOS 原生（lokey）样式默认已把中/英键排在空格左边，languageKeySide 偏好不改变底行顺序。
+          XCTAssertEqual(row.left.map(\.slot), row.right.map(\.slot), label)
+          XCTAssertTrue(row.left.contains { $0.slot == .language }, label)
+        } else {
+          assertMoved(row, label)
+        }
         let globe = row.right.contains { $0.slot == .globe }
         let table = TouchBottomRowLayout.twentySixKey(style, globe: globe)
         XCTAssertEqual(row.left.map(\.slot),
@@ -2405,7 +2457,7 @@ final class KeyLayoutStyleTests: XCTestCase {
       }
     }
     // 英文 26 键：中/英在 空格 左边。
-    let english = try rows(TouchKeyLayoutStyle(), "英文 26 键") { controller in
+    let english = try rows(TouchKeyLayoutStyle(twentySixKey: .standard), "英文 26 键") { controller in
       try self.button("bottomLanguageKey", in: controller).sendActions(for: .primaryActionTriggered)
       controller.view.layoutIfNeeded()
     }
@@ -2434,7 +2486,7 @@ final class KeyLayoutStyleTests: XCTestCase {
     }
 
     select(.nineKey)
-    for style in TouchNineKeyStyle.allCases {
+    for style in TouchNineKeyStyle.allCases where style != .iosNative {
       let label = "九键 \(style.rawValue)"
       let row = try rows(TouchKeyLayoutStyle(nineKey: style), label)
       assertMoved(row, label)
@@ -2452,11 +2504,541 @@ final class KeyLayoutStyleTests: XCTestCase {
     XCTAssertEqual(handwriting.left.map(\.slot).filter { $0 != .globe }, [.layer, .language, .comma, .space, .period, .returnKey])
   }
 
+  /// 九键「iOS 原生」样式：作为 iOS 默认九键样式，拼音九键字母层展示 5 等宽列 × 4 等高行对称网格，左下 ABC 与右下回车各占两行、空格占两列；空态 1 键显示 `,。?!`、空格显示 `空格`、选拼音保持全不透明实体键帽；组字中 1 键切「分词」、右中键切「重输」、点按「选拼音」直接打开候选面板（选拼音展示在顶部候选栏、候选词展示在下方候选面板）。
+  func testIOSNativeNineKeyFrame() throws {
+    XCTAssertEqual(TouchKeyLayoutStyle().nineKey, .iosNative)
+    select(.nineKey)
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .iosNative)))
+    let controller = keyboard()
+    defer { controller.viewDidDisappear(false) }
+    func frame(_ target: UIView) -> CGRect { target.convert(target.bounds, to: controller.view) }
+
+    let native = try view("iosNativeNineKeyView", in: controller)
+    XCTAssertTrue(shown(native))
+    XCTAssertFalse(descendants(controller.view).contains { $0.accessibilityIdentifier == "nineKeySidebar" && shown($0) })
+
+    let numbers = try button("iosNativeNineKeyNumbers", in: controller)
+    let key1 = try button("iosNativeNineKey1", in: controller)
+    let key2 = try button("iosNativeNineKey2", in: controller)
+    let key3 = try button("iosNativeNineKey3", in: controller)
+    let delete = try button("iosNativeNineKeyDelete", in: controller)
+    let abc = try button("iosNativeNineKeyABC", in: controller)
+    let enter = try button("iosNativeNineKeyReturn", in: controller)
+    let middle = try button("iosNativeNineKeyMiddle", in: controller)
+    let spelling = try button("iosNativeNineKeySpelling", in: controller)
+    let space = try button("iosNativeNineKeySpace", in: controller)
+
+    // 5 等宽列校验
+    let colWidth = frame(numbers).width
+    for other in [key1, key2, key3, delete, spelling] {
+      XCTAssertEqual(frame(other).width, colWidth, accuracy: 1.5, other.accessibilityIdentifier ?? "")
+    }
+    // 左右双高键校验：高度 = 2 × 行高 + 行距
+    let rowHeight = frame(numbers).height
+    let rowGap = frame(middle).minY - frame(delete).maxY
+    XCTAssertEqual(frame(abc).height, rowHeight * 2 + rowGap, accuracy: 1.5)
+    XCTAssertEqual(frame(enter).height, rowHeight * 2 + rowGap, accuracy: 1.5)
+    // 空格宽校验（无地球键时占满 2 列 + 1 道列距）
+    let colGap = frame(key1).minX - frame(numbers).maxX
+    if !controller.needsInputModeSwitchKey {
+      XCTAssertEqual(frame(space).width, colWidth * 2 + colGap, accuracy: 2.0)
+    }
+
+    // 实测原生十键几何校验：10 pt 连续圆角、7 pt 行距、49 pt 单行键高、外边距 6.5–7.5 pt
+    XCTAssertEqual(numbers.configuration?.background.cornerRadius ?? 0, IOSNativeNineKeyView.nativeCornerRadius, accuracy: 0.1)
+    XCTAssertEqual(enter.configuration?.background.cornerRadius ?? 0, IOSNativeNineKeyView.nativeCornerRadius, accuracy: 0.1)
+    XCTAssertEqual(rowGap, IOSNativeNineKeyView.nativeRowSpacing, accuracy: 0.5)
+    XCTAssertEqual(rowHeight, IOSNativeNineKeyView.nativeRowHeight, accuracy: 1.5)
+    XCTAssertGreaterThanOrEqual(frame(numbers).minX, 6.0)
+
+    // 空态键面：1 键为紧凑 `,。?!`、空格显示「空格」、右中键展示双层堆叠颜文字图标、选拼音保持全不透明且点按空态无副作用
+    XCTAssertEqual(key1.configuration?.title, ",。?!")
+    XCTAssertEqual(space.configuration?.title, "空格")
+    XCTAssertNil(middle.configuration?.title)
+    XCTAssertNotNil(middle.configuration?.image)
+    XCTAssertTrue(spelling.isEnabled)
+    XCTAssertEqual(spelling.alpha, 1.0, accuracy: 0.01)
+
+    // 校验真实 UIKit NSAttributedString.Key.kern 生效（避免 SwiftUIAttributes.kern 被 UIButton 静默忽略）且末字符不带尾部字距
+    let key7 = try button("iosNativeNineKey7", in: controller)
+    let key9 = try button("iosNativeNineKey9", in: controller)
+    func uikitKern(_ btn: UIButton, at index: Int) -> CGFloat? {
+      guard let text = btn.titleLabel?.attributedText, index < text.length else { return nil }
+      return (text.attribute(.kern, at: index, effectiveRange: nil) as? NSNumber).map { CGFloat($0.doubleValue) }
+    }
+    XCTAssertEqual(uikitKern(key2, at: 0) ?? 0, IOSNativeNineKeyView.threeLetterKern, accuracy: 0.01)
+    XCTAssertNil(uikitKern(key2, at: 2), "末字符不加尾部字距，保持水平居中")
+    XCTAssertEqual(uikitKern(key7, at: 0) ?? 0, IOSNativeNineKeyView.pqrsKern, accuracy: 0.01)
+    XCTAssertEqual(uikitKern(key9, at: 0) ?? 0, IOSNativeNineKeyView.wxyzKern, accuracy: 0.01)
+    XCTAssertEqual(uikitKern(key1, at: 1) ?? 0, IOSNativeNineKeyView.punctuationPerCharKerns[1], accuracy: 0.01)
+    XCTAssertEqual(uikitKern(spelling, at: 0) ?? 0, IOSNativeNineKeyView.chineseLabelKern, accuracy: 0.01)
+    XCTAssertEqual(uikitKern(space, at: 0) ?? 0, IOSNativeNineKeyView.spaceLabelKern, accuracy: 0.01)
+    spelling.sendActions(for: .primaryActionTriggered)
+    XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "candidatePanel" })
+
+    // 按下 6（MNO）进入组字态：1 键切分词、右中切重输、候选词上方展示常驻预留的候选拼音条（高度与空闲态完全一致不跳动，键高不变），点按底部「选拼音」原地循环切换拼音，不展开面板
+    let idleHeight = height(of: controller)
+    let key6 = try button("iosNativeNineKey6", in: controller)
+    key6.sendActions(for: .primaryActionTriggered)
+    try layoutAtRequestedHeight(controller)
+    XCTAssertEqual(key1.configuration?.title, "分词")
+    XCTAssertEqual(middle.configuration?.title, "重输")
+    XCTAssertNil(middle.configuration?.image)
+    XCTAssertTrue(spelling.isEnabled)
+    let composingHeight = height(of: controller)
+    XCTAssertEqual(
+      composingHeight,
+      idleHeight,
+      accuracy: 0.5,
+      "原生九键常驻预留候选拼音行高度，进入组字态总高度保持恒定不跳动")
+    XCTAssertEqual(frame(numbers).height, rowHeight, accuracy: 1.5, "下方九宫格按键行高保持不变")
+
+    let nativeTopSpellingBar = try view("iosNativeNineKeyTopSpellingBar", in: controller)
+    XCTAssertTrue(shown(nativeTopSpellingBar), "原生九键组字态候选词上方应展示横向候选拼音条")
+    let candidateScroll = try XCTUnwrap(descendants(controller.view).first {
+      $0 is CandidateScrollView && !$0.isDescendant(of: nativeTopSpellingBar) && shown($0)
+    })
+    XCTAssertLessThanOrEqual(
+      frame(nativeTopSpellingBar).maxY,
+      frame(candidateScroll).minY + 1.0,
+      "候选拼音条必须位于候选词条正上方")
+    let collapsedSpellings = descendants(nativeTopSpellingBar).compactMap { $0 as? UIButton }.filter { !$0.isHidden }
+    XCTAssertEqual(
+      collapsedSpellings.compactMap { $0.configuration?.title },
+      ["m", "n", "o"],
+      "原生九键单按 6(MNO) 上方应只展示单字母 m | n | o，不应混入多字母补全音节")
+    XCTAssertTrue(collapsedSpellings.allSatisfy { !$0.isSelected }, "未选拼音前上方候选拼音条不应提前高亮")
+
+    // 点按底部「选拼音」：原地高亮第 0 项并在上方拼音条中循环切换，不打开候选面板
+    spelling.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "candidatePanel" }, "点底部选拼音应原地切拼音而非打开候选面板")
+    let collapsedFirstSelected = descendants(nativeTopSpellingBar).compactMap { $0 as? UIButton }
+      .filter { !$0.isHidden && $0.isSelected }
+    XCTAssertEqual(collapsedFirstSelected.count, 1)
+    let collapsedFirstTitle = collapsedFirstSelected.first?.configuration?.title
+    XCTAssertEqual(collapsedFirstTitle, collapsedSpellings.first?.configuration?.title)
+    spelling.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let collapsedSecondTitle = descendants(nativeTopSpellingBar).compactMap { $0 as? UIButton }
+      .first { !$0.isHidden && $0.isSelected }?.configuration?.title
+    XCTAssertNotEqual(collapsedSecondTitle, collapsedFirstTitle, "再点底部选拼音应切换到下一项候选拼音")
+
+    // 点按候选栏右侧展开箭头 ⌄ 打开完整候选面板：隐藏上方独立拼音行，键盘总高度保持恒定，避免与展开态顶栏选拼音条重复
+    try button("expandCandidates", in: controller).sendActions(for: .primaryActionTriggered)
+    try layoutAtRequestedHeight(controller)
+    let panel = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "candidatePanel" })
+    XCTAssertFalse(shown(nativeTopSpellingBar), "展开候选面板时隐藏上方独立拼音行，避免双拼音条重复")
+    XCTAssertEqual(height(of: controller), idleHeight, accuracy: 0.5, "展开候选面板时键盘总高度保持恒定")
+    let spellingBar = try view("nineKeyStripSpellingBar", in: controller)
+    XCTAssertTrue(shown(spellingBar), "选拼音横向条显示在顶部候选栏")
+    let leadingColumn = try view("candidatePanelSpellingColumn", in: controller)
+    XCTAssertTrue(leadingColumn.isHidden, "拼音模式下隐藏面板左栏，把宽度让给候选网格")
+    let topBarSpellings = descendants(spellingBar).compactMap { $0 as? UIButton }.filter { !$0.isHidden }
+    XCTAssertFalse(topBarSpellings.isEmpty, "顶部候选栏展示可选拼音")
+    let panelChips = descendants(panel).compactMap { $0 as? UIButton }
+      .filter { ($0.accessibilityIdentifier ?? "").hasPrefix("panelCandidate-") && !$0.isHidden }
+    XCTAssertFalse(panelChips.isEmpty, "候选面板展示候选词")
+
+    // 九键展开候选面板右栏顶部为「选拼音」键（非「返回」），按选拼音切到下一项且仅当前选中项显示容器
+    XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "candidatePanelBack" })
+    let cycleSpelling = try button("candidatePanelSpellingCycle", in: controller)
+    XCTAssertEqual(cycleSpelling.configuration?.title, "选拼音")
+    let beforePanelCycleTitle = descendants(spellingBar).compactMap { $0 as? UIButton }
+      .first { !$0.isHidden && $0.isSelected }?.configuration?.title
+    cycleSpelling.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    XCTAssertNotNil(descendants(controller.view).first { $0.accessibilityIdentifier == "candidatePanel" }, "按选拼音切换候选拼音时面板保持打开")
+    let afterFirstTapButtons = descendants(spellingBar).compactMap { $0 as? UIButton }.filter { !$0.isHidden }
+    let firstSelectedButtons = afterFirstTapButtons.filter(\.isSelected)
+    XCTAssertEqual(firstSelectedButtons.count, 1, "点选拼音后顶部候选拼音条仅有一项处于选中高亮状态")
+    for btn in afterFirstTapButtons {
+      if btn.isSelected {
+        XCTAssertNotEqual(btn.configuration?.background.backgroundColor, .clear, "当前选中拼音应显示容器底色")
+      } else {
+        XCTAssertEqual(btn.configuration?.background.backgroundColor, .clear, "未选中拼音应去掉底部容器")
+        XCTAssertEqual(btn.configuration?.background.strokeWidth ?? 0, 0, accuracy: 0.01, "未选中拼音不应有边框")
+      }
+    }
+    let firstSelectedTitle = firstSelectedButtons.first?.configuration?.title
+    XCTAssertNotEqual(firstSelectedTitle, beforePanelCycleTitle, "面板内按选拼音应继续切换到下一个候选拼音")
+    cycleSpelling.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let nextSelectedTitle = descendants(spellingBar).compactMap { $0 as? UIButton }
+      .first { !$0.isHidden && $0.isSelected }?.configuration?.title
+    XCTAssertNotEqual(nextSelectedTitle, firstSelectedTitle, "再次按选拼音应切换到下一个候选拼音")
+
+    // 点击顶栏收起箭头收起候选面板：仍在组字态，上方候选拼音条恢复展示且高度恒定；再点按重输清空组字、隐藏拼音条且高度恒定
+    try button("expandCandidates", in: controller).sendActions(for: .primaryActionTriggered)
+    try layoutAtRequestedHeight(controller)
+    XCTAssertNil(descendants(controller.view).first { $0.accessibilityIdentifier == "candidatePanel" })
+    XCTAssertFalse(shown(spellingBar))
+    XCTAssertTrue(shown(nativeTopSpellingBar), "收起候选面板后仍在组字态，应恢复候选词上方拼音条")
+    XCTAssertEqual(height(of: controller), idleHeight, accuracy: 0.5)
+    middle.sendActions(for: .primaryActionTriggered)
+    try layoutAtRequestedHeight(controller)
+    XCTAssertFalse(shown(nativeTopSpellingBar), "清空组字后上方候选拼音条隐藏")
+    XCTAssertEqual(height(of: controller), idleHeight, accuracy: 0.5, "清空组字后键盘总高度保持恒定")
+    XCTAssertEqual(key1.configuration?.title, ",。?!")
+    XCTAssertNil(middle.configuration?.title)
+    XCTAssertNotNil(middle.configuration?.image)
+
+    // 单键 5(JKL) 只展示 j | k | l，单键 8(TUV) 只展示 t，不再把 ta/tong/ti/tian 等补全音节塞到单键顶栏
+    try button("iosNativeNineKey5", in: controller).sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let key5Titles = descendants(nativeTopSpellingBar).compactMap { $0 as? UIButton }
+      .filter { !$0.isHidden }.compactMap { $0.configuration?.title }
+    XCTAssertEqual(key5Titles, ["j", "k", "l"], "单按 5(JKL) 应与 iOS 原生一致只展示 j | k | l")
+    middle.sendActions(for: .primaryActionTriggered)
+
+    try button("iosNativeNineKey8", in: controller).sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let key8Titles = descendants(nativeTopSpellingBar).compactMap { $0 as? UIButton }
+      .filter { !$0.isHidden }.compactMap { $0.configuration?.title }
+    XCTAssertEqual(key8Titles, ["t"], "单按 8(TUV) 应只展示起头单字母 t，而非 ta/tong/ti/tian")
+    // 继续按第 2 键 2(ABC) 凑出 82，自动恢复 2 键音节候选（含 ta）
+    try button("iosNativeNineKey2", in: controller).sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let key82Titles = descendants(nativeTopSpellingBar).compactMap { $0 as? UIButton }
+      .filter { !$0.isHidden }.compactMap { $0.configuration?.title }
+    XCTAssertTrue(key82Titles.contains("ta"), "按第 2 键 82 后应恢复多字母音节候选：\(key82Titles)")
+    middle.sendActions(for: .primaryActionTriggered)
+    attach(controller, "9 键 iOS 原生")
+
+    // 非「iOS 原生」九键（如标准样式，左侧已有竖排拼音栏）组字时不显示上方独立拼音条且不改变键盘高度
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .standard)))
+    let standardNineKey = keyboard()
+    defer { standardNineKey.viewDidDisappear(false) }
+    let standardIdleHeight = height(of: standardNineKey)
+    let standardKey6 = try XCTUnwrap(
+      descendants(standardNineKey.view).compactMap { $0 as? UIButton }
+        .first { $0.tag == 6 && shown($0) })
+    standardKey6.sendActions(for: .primaryActionTriggered)
+    try layoutAtRequestedHeight(standardNineKey)
+    let standardTopBar = try view("iosNativeNineKeyTopSpellingBar", in: standardNineKey)
+    XCTAssertFalse(shown(standardTopBar), "标准九键已有左侧拼音栏，不应在候选词上方重复展示拼音条")
+    XCTAssertEqual(height(of: standardNineKey), standardIdleHeight, accuracy: 0.5, "标准九键组字态高度不变")
+  }
+
+  /// 九键展开候选面板：未限定拼音时不提前伪造高亮，按「选拼音」原地循环顶栏全部项（含音节、首字母与末尾数字），且仅当前实际选中项画容器。
+  func testNineKeyExpandedPanelCyclesSpellingsAndHighlightsOnlySelectedContainer() throws {
+    select(.nineKey)
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .iosNative)))
+    let controller = keyboard()
+    defer { controller.viewDidDisappear(false) }
+
+    // 1. 纯规则校验：未锁定时（56/ko、64/ni、64426/ni'hao、7/qi）均返回 nil，不伪造高亮；
+    //    仅真正浏览、锁定换选或限定首字母时才返回对应下标。
+    let choices56 = ["lo", "kou", "lou", "kong", "long", "J", "K", "L", "5"]
+    XCTAssertNil(
+      NineKeySpellingCyclePolicy.selectedIndex(in: choices56, preedit: "56", reading: "ko"),
+      "56 未锁定时 reading=ko 不得误高亮 lo")
+    XCTAssertEqual(
+      NineKeySpellingCyclePolicy.selectedIndex(in: choices56, preedit: "lo", reading: "lo"),
+      0, "56 锁定 lo 后应高亮 lo")
+    XCTAssertEqual(
+      NineKeySpellingCyclePolicy.selectedIndex(in: choices56, preedit: "kou", reading: "kou"),
+      1, "56 锁定 kou 后应高亮 kou")
+    XCTAssertEqual(
+      NineKeySpellingCyclePolicy.nextIndex(in: choices56, currentSelected: nil),
+      0, "未选中时首次按选拼音应选中第 0 项 lo")
+
+    let choices = ["ni", "mi", "o", "M", "N", "O", "6"]
+    XCTAssertEqual(NineKeySpellingCyclePolicy.cyclableIndices(in: choices), [0, 1, 2, 3, 4, 5, 6])
+    XCTAssertNil(NineKeySpellingCyclePolicy.selectedIndex(in: choices, preedit: "64", reading: "ni"))
+    XCTAssertNil(NineKeySpellingCyclePolicy.selectedIndex(in: choices, preedit: "64426", reading: "ni'hao"))
+    XCTAssertEqual(NineKeySpellingCyclePolicy.nextIndex(in: choices, currentSelected: nil), 0)
+    XCTAssertEqual(NineKeySpellingCyclePolicy.nextIndex(in: choices, currentSelected: 0), 1)
+    XCTAssertEqual(NineKeySpellingCyclePolicy.nextIndex(in: choices, currentSelected: 2), 3)
+    XCTAssertEqual(NineKeySpellingCyclePolicy.nextIndex(in: choices, currentSelected: 6), 0)
+    XCTAssertEqual(
+      NineKeySpellingCyclePolicy.selectedIndex(
+        in: choices, preedit: "mi'426", reading: "mi'hao", lastChosen: ("mi", choices, true)),
+      1, "多音节原地浏览态应精确高亮正在浏览的拼音")
+    XCTAssertEqual(
+      NineKeySpellingCyclePolicy.selectedIndex(
+        in: choices, preedit: "m4'426", reading: "mi'hao"),
+      3, "带分词符的首字母限定态应精确高亮对应大写字母")
+    XCTAssertEqual(
+      NineKeySpellingCyclePolicy.selectedIndex(
+        in: choices, preedit: "64426", reading: "", lastChosen: ("6", choices, true)),
+      6, "浏览到末尾数字项时应精确高亮数字容器")
+    let repeatChoices = ["ni", "mi", "o", "M", "N", "O"]
+    XCTAssertNil(
+      NineKeySpellingCyclePolicy.selectedIndex(
+        in: repeatChoices, preedit: "ni'ni'64", reading: "ni'ni'ni", lastChosen: ("ni", repeatChoices, false)),
+      "直点锁定推进到同名下一段且仍有未锁定数字时，不应误高亮下一段的同名项")
+    let singleDigitChoices = ["P", "Q", "R", "S", "7"]
+    XCTAssertEqual(NineKeySpellingCyclePolicy.cyclableIndices(in: singleDigitChoices), [0, 1, 2, 3, 4])
+    XCTAssertNil(NineKeySpellingCyclePolicy.selectedIndex(in: singleDigitChoices, preedit: "7", reading: "qi"))
+    XCTAssertEqual(NineKeySpellingCyclePolicy.selectedIndex(in: singleDigitChoices, preedit: "q", reading: "qi"), 1)
+    XCTAssertEqual(NineKeySpellingCyclePolicy.nextIndex(in: singleDigitChoices, currentSelected: 1), 2)
+
+    // 2. 真实输入多音节 64426（ni'hao）并通过右侧 ⌄ 展开候选面板：刚展开时未限定拼音，顶栏不显示高亮胶囊；
+    //    连续点击「选拼音」应原地走遍顶栏全部项（ni -> mi -> o -> M -> N -> O -> 6 -> ni），
+    //    切到 M/N/O 不缩表、切到 6 在候选首位展示 6 而不误上屏、绕回开头恢复第 0 项。
+    for digit in ["6", "4", "4", "2", "6"] {
+      try button("iosNativeNineKey\(digit)", in: controller).sendActions(for: .primaryActionTriggered)
+    }
+    try button("expandCandidates", in: controller).sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+
+    let spellingBar = try view("nineKeyStripSpellingBar", in: controller)
+    let cycleButton = try button("candidatePanelSpellingCycle", in: controller)
+    XCTAssertEqual(cycleButton.configuration?.title, "选拼音")
+
+    func visibleSpellingButtons() -> [UIButton] {
+      descendants(spellingBar).compactMap { $0 as? UIButton }.filter { !$0.isHidden }
+    }
+    func assertNoSelectedContainer(_ buttons: [UIButton]) {
+      XCTAssertTrue(buttons.allSatisfy { !$0.isSelected }, "未限定拼音时顶栏不应高亮任何容器")
+      for btn in buttons {
+        XCTAssertEqual(btn.configuration?.background.backgroundColor, .clear)
+        XCTAssertEqual(btn.configuration?.background.strokeWidth ?? 0, 0, accuracy: 0.01)
+      }
+    }
+    func assertOnlySelectedHasContainer(_ buttons: [UIButton], expectedTitle: String) {
+      let selected = buttons.filter(\.isSelected)
+      XCTAssertEqual(selected.count, 1)
+      XCTAssertEqual(selected.first?.configuration?.title, expectedTitle)
+      for btn in buttons {
+        if btn.isSelected {
+          XCTAssertNotEqual(btn.configuration?.background.backgroundColor, .clear)
+        } else {
+          XCTAssertEqual(btn.configuration?.background.backgroundColor, .clear)
+          XCTAssertEqual(btn.configuration?.background.strokeWidth ?? 0, 0, accuracy: 0.01)
+        }
+      }
+    }
+
+    let initialButtons = visibleSpellingButtons()
+    let initialRawTitles = initialButtons.compactMap { $0.configuration?.title }
+    XCTAssertTrue(initialRawTitles.contains("M") && initialRawTitles.contains("6"), "\(initialRawTitles)")
+    let cyclableTitles = NineKeySpellingCyclePolicy.cyclableIndices(in: initialRawTitles).map { initialRawTitles[$0] }
+    XCTAssertEqual(cyclableTitles, initialRawTitles)
+    assertNoSelectedContainer(initialButtons)
+
+    // 连续按完一整圈再多按 1 下验证回绕（第 1 下命中第 0 项 ni，第 N 下命中 6，第 N+1 下回绕到 ni）：
+    for step in 0...cyclableTitles.count {
+      cycleButton.sendActions(for: .primaryActionTriggered)
+      controller.view.layoutIfNeeded()
+      let currentButtons = visibleSpellingButtons()
+      XCTAssertEqual(
+        currentButtons.compactMap { $0.configuration?.title },
+        initialRawTitles,
+        "多音节下按「选拼音」循环不得提前跳段或缩表")
+      let expectedTitle = cyclableTitles[step % cyclableTitles.count]
+      assertOnlySelectedHasContainer(currentButtons, expectedTitle: expectedTitle)
+      if expectedTitle == "6" {
+        let panel = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "candidatePanel" })
+        let collection = try XCTUnwrap(descendants(panel).compactMap { $0 as? UICollectionView }.first)
+        collection.layoutIfNeeded()
+        XCTAssertEqual(collection.numberOfItems(inSection: 0), 1, "浏览到数字 6 时候选网格应只展示 6")
+        let cell = try XCTUnwrap(collection.cellForItem(at: IndexPath(item: 0, section: 0)))
+        let firstPanelCandidate = descendants(cell).compactMap { $0 as? UIButton }.first
+        let title = firstPanelCandidate?.configuration?.attributedTitle.map { String($0.characters) }
+          ?? firstPanelCandidate?.configuration?.title
+        XCTAssertEqual(title, "6", "浏览到数字 6 时候选首位应展示 6 而非误上屏")
+      }
+    }
+
+    // 浏览后再直接点顶栏中的具体拼音，正式锁定并推进到下一段拼音，且新段未选前不高亮容器。
+    let directButton = try XCTUnwrap(visibleSpellingButtons().first { $0.configuration?.title == cyclableTitles[1] })
+    directButton.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let advancedButtons = visibleSpellingButtons()
+    XCTAssertNotEqual(
+      advancedButtons.compactMap { $0.configuration?.title },
+      initialRawTitles,
+      "直接点选顶栏具体拼音应正式锁定并推进到下一段剩余数字")
+    assertNoSelectedContainer(advancedButtons)
+  }
+
+  /// 回归：九键输入 56（默认首选「口」、读音 `ko`，顶栏首位是精确 2 键音节 `lo`）展开候选面板并切单字时，
+  /// 未选拼音前绝不能把 `lo` 误画成已选中高亮；点击 `lo` 或按「选拼音」选中 `lo` 后，首候选必须切为 `lo` 读音的字（如「咯」）而非「口」；
+  /// 再切到 `kou` 回到「口」，退格撤销后恢复未高亮态。
+  func testNineKeyExpandedPanel56DoesNotFalselyHighlightLoBeforeSelection() throws {
+    select(.nineKey)
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .iosNative)))
+    let controller = keyboard()
+    defer { controller.viewDidDisappear(false) }
+
+    for digit in ["5", "6"] {
+      try button("iosNativeNineKey\(digit)", in: controller).sendActions(for: .primaryActionTriggered)
+    }
+    controller.view.layoutIfNeeded()
+
+    // 收起态（候选词上方直接展示候选拼音条）：未选拼音前 lo 不得误高亮；点底部「选拼音」选中 lo 后，候选栏首位切为 lo 读音字而非「口」；点退格恢复未高亮。
+    let topSpellingBar = try view("iosNativeNineKeyTopSpellingBar", in: controller)
+    XCTAssertTrue(shown(topSpellingBar))
+    let collapsedInitial = descendants(topSpellingBar).compactMap { $0 as? UIButton }.filter { !$0.isHidden }
+    XCTAssertEqual(collapsedInitial.first?.configuration?.title, "lo")
+    XCTAssertTrue(collapsedInitial.allSatisfy { !$0.isSelected }, "收起态未选拼音前 lo 不得误高亮")
+    try button("iosNativeNineKeySpelling", in: controller).sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let collapsedAfterLo = descendants(topSpellingBar).compactMap { $0 as? UIButton }.filter { !$0.isHidden }
+    XCTAssertEqual(collapsedAfterLo.filter(\.isSelected).compactMap { $0.configuration?.title }, ["lo"])
+    let firstStripChip = try button("candidate-1", in: controller)
+    let firstStripTitle = firstStripChip.configuration?.attributedTitle.map { String($0.characters) }
+      ?? firstStripChip.configuration?.title ?? ""
+    XCTAssertFalse(["口", "空", "扣"].contains(firstStripTitle), "收起态选中 lo 后首候选不应再是 kou/kong：\(firstStripTitle)")
+    try button("iosNativeNineKeyDelete", in: controller).sendActions(for: .touchUpInside)
+    controller.view.layoutIfNeeded()
+    XCTAssertTrue(
+      descendants(topSpellingBar).compactMap { $0 as? UIButton }.filter { !$0.isHidden }.allSatisfy { !$0.isSelected },
+      "收起态退格撤销选拼音后应恢复未高亮")
+
+    // 再点展开箭头 ⌄ 进入展开候选面板并切单字，验证展开态逻辑完全一致
+    try button("expandCandidates", in: controller).sendActions(for: .primaryActionTriggered)
+    try button("candidatePanelSingleToggle", in: controller).sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+
+    let spellingBar = try view("nineKeyStripSpellingBar", in: controller)
+    let cycleButton = try button("candidatePanelSpellingCycle", in: controller)
+    let singleToggle = try button("candidatePanelSingleToggle", in: controller)
+    XCTAssertEqual(singleToggle.configuration?.title, "全部")
+
+    func visibleSpellingButtons() -> [UIButton] {
+      descendants(spellingBar).compactMap { $0 as? UIButton }.filter { !$0.isHidden }
+    }
+    func firstPanelCandidateTitle() throws -> String {
+      let panel = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "candidatePanel" })
+      let collection = try XCTUnwrap(descendants(panel).compactMap { $0 as? UICollectionView }.first)
+      collection.layoutIfNeeded()
+      XCTAssertGreaterThan(collection.numberOfItems(inSection: 0), 0)
+      let cell = try XCTUnwrap(collection.cellForItem(at: IndexPath(item: 0, section: 0)))
+      let btn = try XCTUnwrap(descendants(cell).compactMap { $0 as? UIButton }.first)
+      return btn.configuration?.attributedTitle.map { String($0.characters) } ?? btn.configuration?.title ?? ""
+    }
+
+    let initialButtons = visibleSpellingButtons()
+    let titles = initialButtons.compactMap { $0.configuration?.title }
+    XCTAssertEqual(titles.first, "lo", "56 顶栏首位应为精确 2 键音节 lo：\(titles)")
+    XCTAssertTrue(titles.contains("kou"), "\(titles)")
+    XCTAssertEqual(try firstPanelCandidateTitle(), "口", "未限定拼音时 56 单字首选应为 口")
+    XCTAssertTrue(
+      initialButtons.allSatisfy { !$0.isSelected && $0.configuration?.background.backgroundColor == .clear },
+      "未选中 lo 时不得把 lo 画成选中高亮容器")
+
+    // 首次按「选拼音」真正选中 lo：顶栏仅 lo 高亮，候选过滤掉 kou/kong（不再出现「口/空/扣」），只出 lo 读音的单字（如 咯/囖/啰）
+    cycleButton.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let afterLo = visibleSpellingButtons()
+    XCTAssertEqual(afterLo.filter(\.isSelected).compactMap { $0.configuration?.title }, ["lo"])
+    let loFirst = try firstPanelCandidateTitle()
+    XCTAssertFalse(["口", "空", "扣"].contains(loFirst), "选中 lo 后首选不得再是 kou/kong 读音：\(loFirst)")
+    XCTAssertTrue(["咯", "囖", "啰"].contains(loFirst), "选中 lo 后首选应切为 lo 读音的字：\(loFirst)")
+
+    // 再按「选拼音」切到 kou：顶栏仅 kou 高亮，首候选回到「口」
+    cycleButton.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let afterKou = visibleSpellingButtons()
+    XCTAssertEqual(afterKou.filter(\.isSelected).compactMap { $0.configuration?.title }, ["kou"])
+    XCTAssertEqual(try firstPanelCandidateTitle(), "口", "切到 kou 后首选应为「口」")
+
+    // 按退格撤销原地浏览：恢复未限定状态，顶栏不再高亮任何容器，首候选仍为「口」
+    try button("candidatePanelDelete", in: controller).sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let afterUndo = visibleSpellingButtons()
+    XCTAssertTrue(afterUndo.allSatisfy { !$0.isSelected }, "退格撤销选拼音后顶栏应恢复未高亮态")
+    XCTAssertEqual(try firstPanelCandidateTitle(), "口")
+
+    // 直接点选顶栏的 lo：正式锁定 lo，仅 lo 高亮且首候选切为 lo 读音的字而非「口」
+    try button("candidatePanelSpelling_lo", in: controller).sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    let afterDirectLo = visibleSpellingButtons()
+    XCTAssertEqual(afterDirectLo.filter(\.isSelected).compactMap { $0.configuration?.title }, ["lo"])
+    let directLoFirst = try firstPanelCandidateTitle()
+    XCTAssertFalse(["口", "空", "扣"].contains(directLoFirst), "直点 lo 后首选不得再是 kou/kong 读音：\(directLoFirst)")
+    XCTAssertTrue(["咯", "囖", "啰"].contains(directLoFirst), "直点 lo 后首选应切为 lo 读音的字：\(directLoFirst)")
+  }
+
+  /// 九键原生布局点击 1 键（`,。?!`）进入常用标点候选态后：
+  /// 1) 候选条默认高亮第 1 项（`，`）；
+  /// 2) 点按「选拼音」键可循环切换高亮候选符号（含末尾回绕）；
+  /// 3) 点按「空格」键直接确认当前高亮符号上屏并清空候选条，不额外插入空格；
+  /// 4) 点按退格键可取消常用标点候选条且不误删正文。
+  func testIOSNativeNineKeyQuickSymbolsCycleWithSpellingKeyAndConfirmWithSpace() throws {
+    let document = SidebarDocument()
+    try attach(document)
+    select(.nineKey)
+    XCTAssertTrue(write(TouchKeyLayoutStyle(nineKey: .iosNative)))
+    let controller = keyboard()
+    defer { controller.viewDidDisappear(false) }
+
+    let key1 = try button("iosNativeNineKey1", in: controller)
+    let spelling = try button("iosNativeNineKeySpelling", in: controller)
+    let space = try button("iosNativeNineKeySpace", in: controller)
+    let delete = try button("iosNativeNineKeyDelete", in: controller)
+
+    func visibleStripChips() -> [UIButton] {
+      (1...12).compactMap { index in
+        descendants(controller.view).first {
+          $0.accessibilityIdentifier == "candidate-\(index)" && !$0.isHidden
+        } as? UIButton
+      }
+    }
+    func assertHighlightedChip(at expectedIndex: Int, in chips: [UIButton]) {
+      for (idx, chip) in chips.enumerated() {
+        let isHighlighted = chip.configuration?.background.backgroundColor != .clear
+        XCTAssertEqual(isHighlighted, idx == expectedIndex, "符号候选第 \(idx) 项高亮底框状态不符")
+        XCTAssertEqual(chip.accessibilityTraits.contains(.selected), idx == expectedIndex, "符号候选第 \(idx) 项无障碍选中态不符")
+      }
+    }
+
+    // 1. 点击 1 键展示常用符号，默认高亮第 0 项「，」
+    key1.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    var chips = visibleStripChips()
+    let expectedSymbols = ["，", "。", "？", "！", "、", "；", "："]
+    XCTAssertEqual(chips.compactMap { $0.configuration?.title }, expectedSymbols)
+    assertHighlightedChip(at: 0, in: chips)
+
+    // 2. 连按两下「选拼音」依次高亮「。」与「？」
+    spelling.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    chips = visibleStripChips()
+    assertHighlightedChip(at: 1, in: chips)
+
+    spelling.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    chips = visibleStripChips()
+    assertHighlightedChip(at: 2, in: chips)
+
+    // 3. 按「空格」确认当前高亮的「？」上屏并清空常用符号栏（不插空格）
+    space.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    XCTAssertEqual(document.text, "？", "空格应确认当前高亮的候选符号上屏")
+    XCTAssertTrue(visibleStripChips().isEmpty, "确认上屏后应清空常用符号候选条")
+
+    // 4. 再按 1 键并连按「选拼音」走满一圈回绕到第 0 项「，」，按空格确认上屏
+    key1.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    for _ in 0..<expectedSymbols.count {
+      spelling.sendActions(for: .primaryActionTriggered)
+    }
+    controller.view.layoutIfNeeded()
+    assertHighlightedChip(at: 0, in: visibleStripChips())
+    space.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    XCTAssertEqual(document.text, "？，", "循环回绕到首位后空格应确认「，」上屏")
+    XCTAssertTrue(visibleStripChips().isEmpty)
+
+    // 5. 再按 1 键后按退格：收起常用符号栏，不误删已有正文
+    key1.sendActions(for: .primaryActionTriggered)
+    controller.view.layoutIfNeeded()
+    XCTAssertEqual(visibleStripChips().count, expectedSymbols.count)
+    delete.sendActions(for: .touchUpInside)
+    controller.view.layoutIfNeeded()
+    XCTAssertTrue(visibleStripChips().isEmpty, "退格应取消常用符号候选条")
+    XCTAssertEqual(document.text, "？，", "取消常用符号候选条时不应删掉已有正文")
+  }
+
   /// 中/英不再紧挨回车时回车不让出左边：回车键帽左缘那一段归回车自己，中/英照常接自己的触摸；读屏顺序跟着排列次序走。
   func testReturnKeepsItsEdgeWhenTheLanguageKeyMovesLeft() throws {
     for scheme in [ChineseInputScheme.quanpin, .nineKey] {
       select(scheme)
-      XCTAssertTrue(write(TouchKeyLayoutStyle(languageKeySide: .left)))
+      XCTAssertTrue(write(TouchKeyLayoutStyle(twentySixKey: .standard, nineKey: .standard, languageKeySide: .left)))
       let controller = keyboard()
       let language = try button("bottomLanguageKey", in: controller), enter = try button("returnKey", in: controller)
       let space = try button("spaceKey", in: controller)

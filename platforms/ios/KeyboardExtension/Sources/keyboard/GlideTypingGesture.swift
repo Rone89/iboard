@@ -12,6 +12,10 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
   var keyFrames: @MainActor () -> [CGRect] = { [] }
   /// 按下键是否允许纵向直接起滑（当同键启用了同向角标纵滑时收紧）。
   var allowsVerticalGlide: @MainActor (Int, CGPoint, CGPoint) -> Bool = { _, _, _ in true }
+  /// 按下时刻是否正处于快速点按打字节律内（26 键连打时提高起滑门槛防误触）。
+  var isRapidTyping: @MainActor () -> Bool = { false }
+  /// 按下键是否已触发角标符号或长按弹窗；一旦触发立即放弃滑行判定，避免横移拖选时误抢手势。
+  var shouldAbortBeforeStarting: @MainActor (Int) -> Bool = { _ in false }
   var onBegan: @MainActor () -> Void = {}
   /// 滑行开始后每次移动都带着到目前为止的全部采样，用来画轨迹。
   var onMoved: @MainActor ([GlideTyping.Sample]) -> Void = { _ in }
@@ -24,10 +28,14 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
   private(set) var predictedPoints: [CGPoint] = []
   /// 当前这一笔起手时快照到的 26 字母键矩形，供实时预览读取。
   var currentFrames: [CGRect] { frames }
+  /// 当前这一笔已累计的轨迹弧长（pt），增量维护，供 120Hz 实时预览以 O(1) 读取而无需每帧重扫全部采样。
+  private(set) var cumulativePathLength: CGFloat = 0
   private var tracked: UITouch?
   private var downKey = 0
   private var downLocation = CGPoint.zero
   private var downTime: TimeInterval = 0
+  private var startedInGap = false
+  private var rapidTypingAtDown = false
   private var frames: [CGRect] = []
   private var samples: [GlideTyping.Sample] = []
   /// 滑行已经开始、还没有交给 `onEnded` 或 `onCancelled`。手势不经过抬手或系统取消就被重置时（例如被停用）据此补一次 `onCancelled`，键区不会一直挡着新的手指。
@@ -45,16 +53,42 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
   override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
     super.touchesBegan(touches, with: event)
     guard tracked == nil else {
-      // 滑行开始前又落下一根手指：放弃这次判定，两根手指照常打字。滑行开始后落下的手指不参与。
+      // 滑行开始前又落下一根手指：放弃这次判定，两根手指照常打字。
+      // 若刚进入滑行不到 80–90ms 且路径很短时第二指立刻落下，大概率是双指快打 rollover 误起滑行，直接取消本次滑行让位给正常打字。
       if isGliding {
-        for touch in touches { ignore(touch, for: event) }
+        let elapsedMs = (touches.first?.timestamp ?? downTime) - downTime
+        let isNineKey = GlideTyping.isNineKeyFrames(frames)
+        let refSpan = frames.filter { !$0.isEmpty }.map { isNineKey ? min($0.width, $0.height) : $0.width }.min() ?? 0
+        let isEarlyRollover: Bool
+        if isNineKey {
+          isEarlyRollover = elapsedMs < 0.08
+            && refSpan > 0
+            && cumulativePathLength < refSpan * 0.85
+        } else {
+          isEarlyRollover = elapsedMs < 0.09
+            && refSpan > 0
+            && cumulativePathLength < refSpan * 1.35
+        }
+        if isEarlyRollover {
+          state = .cancelled
+          unfinished = false
+          onCancelled()
+        } else {
+          for touch in touches { ignore(touch, for: event) }
+        }
       } else {
         state = .failed
       }
       return
     }
     guard touches.count == 1, let touch = touches.first, let view, let hit = touch.view,
-          isArmed(), let key = letterIndex(hit) else {
+          isArmed() else {
+      state = .failed
+      return
+    }
+    let direct = letterIndex(hit)
+    // 落在 Shift/退格/空格/123/回车等非字母按钮上时立刻短路，避免对每个功能键按下都触发 26 次坐标换算。
+    if direct == nil && (hit is UIButton) {
       state = .failed
       return
     }
@@ -63,11 +97,27 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
       state = .failed
       return
     }
+    let location = touch.location(in: view)
+    let gapPadding: CGFloat = GlideTyping.isNineKeyFrames(frames) ? 10 : GlideTyping.twentySixKeyGapPadding
+    let key: Int
+    if let direct {
+      key = direct
+      startedInGap = false
+    } else if let snapped = GlideTyping.nearestKeyIndex(at: location, in: frames, maxGapPadding: gapPadding) {
+      // 拇指落在两枚字母键之间的键缝时吸附到最近字母键起滑。
+      key = snapped
+      startedInGap = true
+    } else {
+      state = .failed
+      return
+    }
     tracked = touch
     downKey = key
-    downLocation = touch.location(in: view)
+    downLocation = location
     downTime = touch.timestamp
+    rapidTypingAtDown = isRapidTyping()
     self.frames = frames
+    cumulativePathLength = 0
     samples = [GlideTyping.Sample(x: downLocation.x, y: downLocation.y, milliseconds: 0)]
   }
 
@@ -81,10 +131,21 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
       state = .changed
       onMoved(samples)
     } else if state == .possible {
+      if shouldAbortBeforeStarting(downKey) {
+        state = .failed
+        return
+      }
       let current = touch.location(in: view)
       let allowVertical = allowsVerticalGlide(downKey, downLocation, current)
+      let elapsed = touch.timestamp - downTime
+      let velocity: CGFloat = elapsed >= 0.014
+        ? hypot(current.x - downLocation.x, current.y - downLocation.y) / CGFloat(elapsed)
+        : 0
       if GlideTyping.startsGlide(downKey: downKey, down: downLocation, current: current, frames: frames,
-                                 allowsVerticalGlide: allowVertical) {
+                                 allowsVerticalGlide: allowVertical,
+                                 rapidTyping: rapidTypingAtDown,
+                                 startedInGap: startedInGap,
+                                 velocity: velocity) {
         state = .began
         unfinished = true
         onBegan()
@@ -101,6 +162,12 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
       return
     }
     if let view { record(touch, in: view) }
+    if GlideTyping.isAccidentalShortSlip(samples: samples, frames: frames, pathLength: cumulativePathLength) {
+      state = .cancelled
+      unfinished = false
+      onCancelled()
+      return
+    }
     state = .ended
     unfinished = false
     onEnded(samples, frames)
@@ -125,15 +192,25 @@ final class GlideTypingGestureRecognizer: UIGestureRecognizer {
       onCancelled()
     }
     tracked = nil
+    startedInGap = false
+    rapidTypingAtDown = false
     frames = []
     samples = []
     predictedPoints = []
+    cumulativePathLength = 0
   }
 
   private func record(_ touch: UITouch, in view: UIView) {
     let point = touch.location(in: view)
     let elapsed = max(0, (touch.timestamp - downTime) * 1_000)
-    if let last = samples.last, last.x == point.x, last.y == point.y, last.milliseconds == elapsed { return }
+    if let last = samples.last {
+      if last.x == point.x, last.y == point.y, last.milliseconds == elapsed { return }
+      let dx = point.x - last.x
+      let dy = point.y - last.y
+      if dx.isFinite, dy.isFinite {
+        cumulativePathLength += hypot(dx, dy)
+      }
+    }
     GlideTyping.appendBounded(
       GlideTyping.Sample(x: point.x, y: point.y, milliseconds: elapsed), to: &samples)
   }
@@ -203,7 +280,7 @@ final class GlideTrailView: UIView {
     for point in predicted where point.x.isFinite && point.y.isFinite {
       windowPoints.append(point)
     }
-    for point in SwipeTrailGeometry.smoothed(windowPoints) { geometry.append(point) }
+    geometry.replace(with: SwipeTrailGeometry.smoothed(windowPoints))
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     shape.opacity = 1
@@ -211,23 +288,34 @@ final class GlideTrailView: UIView {
     redraw()
   }
 
-  /// 抬手后重画一次冻结帧再淡出：透明度 1→0、0.4s easeOut、动画键 "fade"，
+  /// 抬手后重画一次冻结帧，并以「向笔尖收束 + 透明度渐隐」组合动画消散（0.18s 舒缓出曲线、动画键 "fade"），
   /// 模型透明度立即置 0。淡出途中开始新的一笔时 `draw` 会把动画移走。
   func fadeOut() {
     guard !geometry.isEmpty else { return }
-    redraw()
+    let startPath = geometry.path()
+    let endPath = geometry.retractedPath()
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    shape.path = startPath
+    shape.opacity = 0
+    CATransaction.commit()
+
+    let curve = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
     let fade = CABasicAnimation(keyPath: "opacity")
     fade.fromValue = 1
     fade.toValue = 0
-    fade.duration = 0.4
-    fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-    fade.isRemovedOnCompletion = false
-    fade.fillMode = .forwards
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    shape.opacity = 0
-    CATransaction.commit()
-    shape.add(fade, forKey: "fade")
+
+    let retract = CABasicAnimation(keyPath: "path")
+    retract.fromValue = startPath
+    retract.toValue = endPath
+
+    let group = CAAnimationGroup()
+    group.animations = [fade, retract]
+    group.duration = 0.18
+    group.timingFunction = curve
+    group.isRemovedOnCompletion = false
+    group.fillMode = .forwards
+    shape.add(group, forKey: "fade")
   }
 
   /// 立刻清空，不做动画（滑行被系统打断时）。
@@ -247,5 +335,110 @@ final class GlideTrailView: UIView {
     CATransaction.setDisableActions(true)
     shape.path = geometry.path()
     CATransaction.commit()
+  }
+}
+
+/// 滑行途中音节拐点与驻留锚定检测器：
+/// - 仅在手指发生明显折转（夹角 >= 68°，即 `cos <= 0.37`）或在某键上短暂驻留（`>= 85ms` 且位移受限）时触发；
+/// - 直线匀速掠过的中间过路键绝不误触发；
+/// - 带 `65ms` 最小时间门控与同键去重，供键盘主控对拐点目标键施加轻柔脉冲高亮与微触感反馈。
+struct GlideInflectionTracker: Equatable {
+  /// 最小折转余弦阈值（约 68° 转向）。
+  static let cornerCosineThreshold: CGFloat = 0.37
+  /// 计算折转向量的最小弦长（pt），过滤原地高频微抖。
+  static let minimumChordLength: CGFloat = 12
+  /// 判定键内驻留的最短持续时间（毫秒）。
+  static let dwellDurationMs: Double = 85
+  /// 驻留判定的最大活动半径（pt）。
+  static let dwellRadius: CGFloat = 11
+  /// 两次拐点锚定反馈之间的最小冷却间隔（毫秒）。
+  static let minimumCooldownMs: Double = 65
+
+  private(set) var lastAnchoredKey: Int?
+  private(set) var lastAnchorTimeMs: Double = -.infinity
+
+  mutating func reset(initialKey: Int? = nil) {
+    lastAnchoredKey = initialKey
+    lastAnchorTimeMs = -.infinity
+  }
+
+  /// 检查最新采样是否在某个新按键上形成了有效拐点或驻留锚定；命中时返回该键下标（26 键为 `0..<26`，九键为其代表槽位下标）。
+  mutating func detectAnchor(samples: [GlideTyping.Sample], frames: [CGRect]) -> Int? {
+    guard samples.count >= 4,
+          frames.count == GlideTyping.letters.count,
+          let latest = samples.last else { return nil }
+    guard latest.milliseconds - lastAnchorTimeMs >= Self.minimumCooldownMs else { return nil }
+
+    let latestPoint = CGPoint(x: latest.x, y: latest.y)
+    guard let currentKey = GlideTyping.keyIndex(at: latestPoint, in: frames),
+          currentKey != lastAnchoredKey else { return nil }
+
+    let isNineKey = GlideTyping.isNineKeyFrames(frames)
+    let nineKeyMinSide = isNineKey
+      ? (frames.first(where: { !$0.isEmpty }).map { min($0.width, $0.height) } ?? 49)
+      : 0
+    let effectiveDwellRadius: CGFloat = isNineKey
+      ? max(14, nineKeyMinSide * 0.30)
+      : Self.dwellRadius
+    let effectiveChordLength: CGFloat = isNineKey
+      ? max(18, nineKeyMinSide * 0.42)
+      : Self.minimumChordLength
+
+    // 1. 键内驻留判定：最近 85ms 内的采样全部停留在有效驻留半径以内。
+    var dwellCandidate = false
+    for index in stride(from: samples.count - 2, through: 0, by: -1) {
+      let sample = samples[index]
+      if hypot(latest.x - sample.x, latest.y - sample.y) > effectiveDwellRadius {
+        break
+      }
+      if latest.milliseconds - sample.milliseconds >= Self.dwellDurationMs {
+        dwellCandidate = true
+        break
+      }
+    }
+    if dwellCandidate {
+      lastAnchoredKey = currentKey
+      lastAnchorTimeMs = latest.milliseconds
+      return currentKey
+    }
+
+    // 2. 明显拐弯判定：以最新采样为出射点，向前回溯找到距离 >= effectiveChordLength 的拐点顶点与入射锚点。
+    var vertexIndex: Int?
+    for index in stride(from: samples.count - 2, through: 1, by: -1) {
+      let dist = hypot(latest.x - samples[index].x, latest.y - samples[index].y)
+      if dist >= effectiveChordLength {
+        vertexIndex = index
+        break
+      }
+    }
+    guard let vIdx = vertexIndex, vIdx >= 1 else { return nil }
+    let vertex = samples[vIdx]
+    let vertexPoint = CGPoint(x: vertex.x, y: vertex.y)
+    guard let vertexKey = GlideTyping.keyIndex(at: vertexPoint, in: frames),
+          vertexKey != lastAnchoredKey else { return nil }
+
+    var entryIndex: Int?
+    for index in stride(from: vIdx - 1, through: 0, by: -1) {
+      let dist = hypot(vertex.x - samples[index].x, vertex.y - samples[index].y)
+      if dist >= effectiveChordLength {
+        entryIndex = index
+        break
+      }
+    }
+    guard let eIdx = entryIndex else { return nil }
+    let entry = samples[eIdx]
+    let inDx = vertex.x - entry.x
+    let inDy = vertex.y - entry.y
+    let outDx = latest.x - vertex.x
+    let outDy = latest.y - vertex.y
+    let inLen = hypot(inDx, inDy)
+    let outLen = hypot(outDx, outDy)
+    guard inLen > 0.5, outLen > 0.5 else { return nil }
+    let cosine = (inDx * outDx + inDy * outDy) / (inLen * outLen)
+    guard cosine <= Self.cornerCosineThreshold else { return nil }
+
+    lastAnchoredKey = vertexKey
+    lastAnchorTimeMs = latest.milliseconds
+    return vertexKey
   }
 }

@@ -59,6 +59,8 @@ private func msimeClientNineKeyShuangpinLayout(_ request: UnsafePointer<MSIMEByt
 private func msimeClientShuangpinKeyHints(_ profile: UnsafePointer<MSIMEByte>?, _ length: UInt) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("msime_client_choose_nine_key_spelling")
 private func msimeClientChooseNineKeySpellingRaw(_ session: UInt64, _ generation: UInt64, _ index: UInt) -> UnsafeMutablePointer<CChar>?
+@_silgen_name("msime_client_browse_nine_key_spelling")
+private func msimeClientBrowseNineKeySpellingRaw(_ session: UInt64, _ generation: UInt64, _ index: UInt) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("msime_client_set_nine_key_filter")
 private func msimeClientSetNineKeyFilterRaw(_ session: UInt64, _ singleCharacter: Bool, _ strokes: UnsafePointer<MSIMEByte>?, _ length: UInt) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("msime_client_set_key_grid")
@@ -73,6 +75,10 @@ private func msimeClientSetAICredentialRaw(_ session: UInt64, _ token: UnsafePoi
 private func msimeClientSetCharacterWidthRaw(_ session: UInt64, _ fullwidth: Bool) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("msime_client_set_private_session")
 private func msimeClientSetPrivateSessionRaw(_ session: UInt64, _ enabled: Bool) -> UnsafeMutablePointer<CChar>?
+@_silgen_name("msime_client_set_surrounding_context")
+private func msimeClientSetSurroundingContextRaw(_ session: UInt64, _ text: UnsafePointer<MSIMEByte>?, _ length: UInt) -> UnsafeMutablePointer<CChar>?
+@_silgen_name("msime_client_undo_last_learning")
+private func msimeClientUndoLastLearningRaw(_ session: UInt64, _ text: UnsafePointer<MSIMEByte>?, _ length: UInt) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("msime_client_update_preferences")
 private func msimeClientUpdatePreferencesRaw(_ session: UInt64, _ snapshot: UnsafePointer<MSIMEByte>?, _ length: UInt) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("msime_client_load_preferences")
@@ -300,6 +306,10 @@ private func msimeClientChooseNineKeySpelling(_ session: UInt64, _ generation: U
   MSIMEInputThread.shared.sync { msimeClientChooseNineKeySpellingRaw(session, generation, index) }
 }
 
+private func msimeClientBrowseNineKeySpelling(_ session: UInt64, _ generation: UInt64, _ index: UInt) -> UnsafeMutablePointer<CChar>? {
+  MSIMEInputThread.shared.sync { msimeClientBrowseNineKeySpellingRaw(session, generation, index) }
+}
+
 private func msimeClientSetNineKeyFilter(_ session: UInt64, _ singleCharacter: Bool, _ strokes: UnsafePointer<MSIMEByte>?, _ length: UInt) -> UnsafeMutablePointer<CChar>? {
   MSIMEInputThread.shared.sync { msimeClientSetNineKeyFilterRaw(session, singleCharacter, strokes, length) }
 }
@@ -344,6 +354,18 @@ private func msimeClientEnglishCompletions(
   _ session: UInt64, _ prefix: UnsafePointer<MSIMEByte>?, _ prefixLength: UInt, _ limit: UInt
 ) -> UnsafeMutablePointer<CChar>? {
   MSIMEInputThread.shared.sync { msimeClientEnglishCompletionsRaw(session, prefix, prefixLength, limit) }
+}
+
+private func msimeClientSetSurroundingContext(
+  _ session: UInt64, _ text: UnsafePointer<MSIMEByte>?, _ length: UInt
+) -> UnsafeMutablePointer<CChar>? {
+  MSIMEInputThread.shared.sync { msimeClientSetSurroundingContextRaw(session, text, length) }
+}
+
+private func msimeClientUndoLastLearning(
+  _ session: UInt64, _ text: UnsafePointer<MSIMEByte>?, _ length: UInt
+) -> UnsafeMutablePointer<CChar>? {
+  MSIMEInputThread.shared.sync { msimeClientUndoLastLearningRaw(session, text, length) }
 }
 
 private func msimeClientApplyTranslations(
@@ -1362,12 +1384,13 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
     var isEmpty: Bool { reading.isEmpty && candidates.isEmpty }
   }
 
-  /// 在独立输入线程上原子执行一次「滑行试解码 -> 提取候选 -> 立刻取消」，确保不残留任何临时组字也不阻塞主线程。
-  /// 调用方需保证当前会话没有正在进行的正式组字。
+  /// 在独立输入线程上查询滑行实时预览：
+  /// - 请求携带 `"preview":true` 时走引擎只读预览路径，完全不触碰当前组字状态，可在连续滑行期间安全调用；
+  /// - 兼容旧版不带 `preview` 标记的请求，仍执行试解码并立刻取消不留残态。
   @MainActor
   func previewGlideAsync(
     _ request: Data,
-    maxCandidates: Int = 4,
+    maxCandidates: Int = 9,
     completion: @escaping @MainActor (GlideLivePreview?) -> Void
   ) {
     precondition(Thread.isMainThread)
@@ -1375,6 +1398,7 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
       completion(nil)
       return
     }
+    let isReadOnlyPreview = request.range(of: Data("\"preview\":true".utf8)) != nil
     let sessionHandle = handle
     MSIMEInputThread.shared.async {
       var preview: GlideLivePreview?
@@ -1390,7 +1414,7 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
           preview = GlideLivePreview(reading: reading, candidates: candidates)
         }
       }
-      if let cancelResponse = msimeClientCommandRaw(sessionHandle, 3) {
+      if !isReadOnlyPreview, let cancelResponse = msimeClientCommandRaw(sessionHandle, 3) {
         msimeClientStringFree(cancelResponse)
       }
       let delivered = preview
@@ -1406,7 +1430,7 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
   @MainActor
   func previewCharactersAsync(
     _ text: String,
-    maxCandidates: Int = 4,
+    maxCandidates: Int = 9,
     completion: @escaping @MainActor (GlideLivePreview?) -> Void
   ) {
     precondition(Thread.isMainThread)
@@ -1467,6 +1491,49 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
     return request.withUnsafeBytes { bytes in
       dispatch { msimeClientGlide(handle, bytes.bindMemory(to: MSIMEByte.self).baseAddress, UInt(request.count)) }
     }
+  }
+
+  /// 异步提交滑行请求到 `MSIMEInputThread` 并挂入 `pendingCharacters` 串行队列，不阻塞主线程 UI 渲染，且与后续空格/退格/选词严格保序。
+  @discardableResult
+  func enqueueGlide(_ request: Data, completion: @escaping (MetasequoiaInputSnapshot) -> Void) -> Bool {
+    precondition(Thread.isMainThread)
+    let resumeEpoch = asyncResume.activeEpoch
+    guard (handle != 0 || resumeEpoch != nil), !request.isEmpty, request.count <= 65_536 else { return false }
+    let pending = PendingCharacter(completion)
+    let capturedHandle = handle
+    let resumeState = asyncResume
+    pendingCharactersLock.lock()
+    pendingCharacters.append(pending)
+    pendingCharactersLock.unlock()
+    MSIMEInputThread.shared.async { [weak self] in
+      guard let self else { return }
+      let sessionHandle = capturedHandle != 0
+        ? capturedHandle
+        : (resumeEpoch.map { resumeState.liveHandle(for: $0) } ?? 0)
+      let snapshot: MetasequoiaInputSnapshot
+      if sessionHandle == 0 {
+        snapshot = MetasequoiaInputSnapshot(diagnosticText: "输入运行时尚未准备完成。")
+      } else {
+        do {
+          let rawResponse: UnsafeMutablePointer<CChar>? = request.withUnsafeBytes { bytes in
+            msimeClientGlideRaw(sessionHandle, bytes.bindMemory(to: MSIMEByte.self).baseAddress, UInt(request.count))
+          }
+          guard let value = try Self.decode(rawResponse) as? [String: Any]
+          else { throw InputBridgeFailure.invalidResponse }
+          snapshot = try Self.snapshot(value)
+        } catch {
+          snapshot = MetasequoiaInputSnapshot(diagnosticText: error.localizedDescription)
+        }
+      }
+      pendingCharactersLock.lock()
+      pending.snapshot = snapshot
+      pendingCharactersLock.unlock()
+      DispatchQueue.main.async { [weak self] in
+        self?.settleAsyncResumeIfNeeded()
+        self?.deliverCompletedCharacters()
+      }
+    }
+    return true
   }
 
   func handleCandidateKey(_ character: String) -> MetasequoiaInputSnapshot {
@@ -1620,6 +1687,57 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
       return completions
     } catch {
       return []
+    }
+  }
+
+  /// 上一次已同步到引擎的光标前文（绑定句柄，重建会话或提交新词后自动失效），避免焦点和光标微动时重复跨 FFI 传递。
+  private var lastSyncedSurroundingContext: (handle: UInt64, text: String)?
+
+  /// 标记光标前文缓存失效，使下一次 `setSurroundingContext` 重新推送到引擎。
+  func invalidateSurroundingContextCache() {
+    lastSyncedSurroundingContext = nil
+  }
+
+  /// 在空闲态把光标前的文档文本同步到引擎重排上下文（`ai_context` / `rescoring_context`）。
+  /// 密码框与隐私场景应传空串，绝不落盘或打印日志。
+  func setSurroundingContext(_ text: String) {
+    guard handle != 0, !dictionarySessionSuspended else { return }
+    let capped: String
+    if text.unicodeScalars.count > 200 {
+      capped = String(text.unicodeScalars.suffix(200))
+    } else {
+      capped = text
+    }
+    if let previous = lastSyncedSurroundingContext, previous.handle == handle, previous.text == capped { return }
+    lastSyncedSurroundingContext = (handle, capped)
+    let bytes = Array(capped.utf8)
+    let pointer: UnsafeMutablePointer<CChar>?
+    if bytes.isEmpty {
+      pointer = msimeClientSetSurroundingContext(handle, nil, 0)
+    } else {
+      pointer = bytes.withUnsafeBufferPointer { buffer in
+        msimeClientSetSurroundingContext(handle, buffer.baseAddress, UInt(buffer.count))
+      }
+    }
+    if let pointer { msimeClientStringFree(pointer) }
+  }
+
+  /// 撤销刚上屏词产生的自动词频、九键最近槽位与个人二元/三元学习，避免误选秒删污染词序。
+  @discardableResult
+  func undoLastLearning(expectedText: String) -> Bool {
+    flushPendingCharacters()
+    guard handle != 0, !dictionarySessionSuspended else { return false }
+    lastSyncedSurroundingContext = nil
+    let bytes = Array(expectedText.utf8)
+    do {
+      let response: Any = try bytes.withUnsafeBufferPointer { buffer in
+        try Self.decode(msimeClientUndoLastLearning(
+          handle, bytes.isEmpty ? nil : buffer.baseAddress, UInt(buffer.count)))
+      }
+      guard let value = response as? [String: Any] else { return false }
+      return value["undone"] as? Bool ?? false
+    } catch {
+      return false
     }
   }
 
@@ -1994,6 +2112,15 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
 
   func chooseNineKeySpelling(generation: UInt64, at index: UInt) -> MetasequoiaInputSnapshot {
     dispatch(preservingViewOnRejection: true) { msimeClientChooseNineKeySpelling(handle, generation, index) }
+  }
+
+  func browseNineKeySpelling(at index: UInt) -> MetasequoiaInputSnapshot {
+    let generation = (try? view()).flatMap { Self.strictUInt64($0["generation"]) } ?? 0
+    return browseNineKeySpelling(generation: generation, at: index)
+  }
+
+  func browseNineKeySpelling(generation: UInt64, at index: UInt) -> MetasequoiaInputSnapshot {
+    dispatch(preservingViewOnRejection: true) { msimeClientBrowseNineKeySpelling(handle, generation, index) }
   }
 
   /// 九键展开面板的候选筛选：`singleCharacter` 只留单字，`strokes` 是首字笔顺前缀（h 横、s 竖、p 撇、n 点、z 折，最多 64 笔，空串表示不按笔画）。两项一起交给 Engine，作用到这次组字结束；当前状态从快照的 `nineKeySingleCharacter`、`nineKeyStrokes` 读。
@@ -2681,7 +2808,9 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
     }
     do {
       guard let value = try Self.decode(operation()) as? [String: Any] else { throw InputBridgeFailure.invalidResponse }
-      return try Self.snapshot(value)
+      let snapshot = try Self.snapshot(value)
+      if snapshot.commitText != nil { lastSyncedSurroundingContext = nil }
+      return snapshot
     }
     catch InputBridgeFailure.response(let message) {
       // 旧画面的身份被运行时拒绝时，组字仍在；返回当前视图，避免把错误误画成清空。
@@ -2765,6 +2894,11 @@ final class MetasequoiaInputSessionBridge: @unchecked Sendable {
     preferences["candidate_page_size"] = CandidatePageSizePreference.size
     // Cloud candidates are opt-in on iOS; see CloudCandidatePreference. Never persisted: the shared document keeps the desktop's value.
     preferences["cloud_candidates"] = CloudCandidatePreference.enabled
+    // iOS 默认开箱启用内置八股文紧凑版语法模型（除非用户显式选了关闭或万象 LTS），不污染共享文档的桌面默认值。
+    let effectiveGrammar = SentenceAssociationPreference.grammarModel(in: preferences)
+    var association = preferences[SentenceAssociationPreference.documentKey] as? [String: Any] ?? [:]
+    association["grammar_model"] = effectiveGrammar.rawValue
+    preferences[SentenceAssociationPreference.documentKey] = association
     return preferences
   }
 

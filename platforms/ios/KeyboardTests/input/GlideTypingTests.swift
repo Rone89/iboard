@@ -71,20 +71,70 @@ final class GlideTypingTests: XCTestCase {
   func testAGlideStartsOverAnotherLetterFarEnoughSideways() {
     let frames = Self.frames
     let g = GlideTyping.letters.firstIndex(of: "g")!
+    let h = GlideTyping.letters.firstIndex(of: "h")!
     let down = Self.center("g")
     // 还在按下的键上，走多远都不算。
     XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x + 14, y: down.y), frames: frames))
-    // 进了隔壁的 h，横向已超过 0.4 个键宽。
+    // 进了隔壁的 h 中心（位移 36pt = 1.2 倍键宽），正常起滑。
     XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: down, current: Self.center("h"), frames: frames))
+    // 仅贴边蹭进 h 外缘 2pt（从 g 右缘偏右起手只移 14pt），属于点按滚滑，不能误起滑行。
+    let edgeDown = CGPoint(x: frames[g].maxX - 3, y: down.y)
+    let edgeGraze = CGPoint(x: frames[h].minX + 2, y: down.y)
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: edgeDown, current: edgeGraze, frames: frames))
     // 键距里的点不在任何键上。
     XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: frames[g].maxX + 3, y: down.y), frames: frames))
-    // 竖直往上滑到 t 上：关闭纵向保护时支持二维直滑起滑；开启角标纵滑保护时留给同一个键上的竖直手势。
+    // 竖直往上滑到 t 上：关闭纵向保护时支持二维直滑起滑；开启角标纵滑保护时，小幅斜滑（dx < dy * 0.85）仍留给角标，不被滑行抢走。
     let t = Self.frames[GlideTyping.letters.firstIndex(of: "t")!]
     XCTAssertTrue(t.contains(CGPoint(x: down.x - 6, y: t.midY)))
     XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x - 6, y: t.midY), frames: frames))
     XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x - 6, y: t.midY), frames: frames, allowsVerticalGlide: false))
-    XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x - 12, y: t.midY), frames: frames, allowsVerticalGlide: false))
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: down, current: CGPoint(x: down.x - 12, y: t.midY), frames: frames, allowsVerticalGlide: false))
+    // 横向明确滑入邻键（如 g → h 中心）即使同键开启角标保护也能正常起滑。
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: down, current: Self.center("h"), frames: frames, allowsVerticalGlide: false))
     XCTAssertFalse(GlideTyping.startsGlide(downKey: 26, down: down, current: Self.center("h"), frames: frames), "按下的键不存在")
+  }
+
+  func testTwentySixKeyAntiMisfireGuardsRapidTypingGapStartsAndShortSlips() {
+    let frames = Self.frames
+    let g = GlideTyping.letters.firstIndex(of: "g")!
+    let h = GlideTyping.letters.firstIndex(of: "h")!
+    let downRight = CGPoint(x: frames[g].maxX - 4, y: frames[g].midY)
+    // 从 g 右偏处滑入 h 内部（位移 24pt = 0.8 倍键宽）：常态已过 0.72 门槛可起滑，但在连打节律或键缝起手下仍拦截防误触。
+    let targetInsideH = CGPoint(x: downRight.x + 24, y: frames[h].midY)
+    XCTAssertTrue(frames[h].contains(targetInsideH))
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: downRight, current: targetInsideH, frames: frames))
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: downRight, current: targetInsideH, frames: frames, rapidTyping: true))
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: downRight, current: targetInsideH, frames: frames, startedInGap: true))
+    // 连打中主动跨过整键距（如 g 中心 → h 中心 = 36pt = 1.2 倍键宽）依然可以顺滑切入滑行。
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: Self.center("g"), current: Self.center("h"), frames: frames, rapidTyping: true))
+
+    // 26 键 4pt 键缝容差：覆盖相邻键 6pt 键缝，但不会吸附距离底排 8pt 的空格边缘触摸。
+    XCTAssertEqual(GlideTyping.nearestKeyIndex(at: CGPoint(x: 31.5, y: 20), in: frames, maxGapPadding: GlideTyping.twentySixKeyGapPadding),
+                   GlideTyping.letters.firstIndex(of: "q"))
+    XCTAssertNil(GlideTyping.nearestKeyIndex(at: CGPoint(x: frames[g].midX, y: frames[GlideTyping.letters.firstIndex(of: "b")!].maxY + 7),
+                                             in: frames, maxGapPadding: GlideTyping.twentySixKeyGapPadding))
+
+    // 超短瞬时蹭键（40ms、净位移 22pt < 0.85 * 30 = 25.5pt）被判定为误滑；真实快速相邻滑行（g → h 中心 = 36pt）放行。
+    let slip = [
+      GlideTyping.Sample(x: downRight.x, y: downRight.y, milliseconds: 0),
+      GlideTyping.Sample(x: downRight.x + 22, y: downRight.y, milliseconds: 40),
+    ]
+    XCTAssertTrue(GlideTyping.isAccidentalShortSlip(samples: slip, frames: frames, pathLength: 22))
+    let realShortGlide = [
+      GlideTyping.Sample(x: Self.center("g").x, y: Self.center("g").y, milliseconds: 0),
+      GlideTyping.Sample(x: Self.center("h").x, y: Self.center("h").y, milliseconds: 45),
+    ]
+    XCTAssertFalse(GlideTyping.isAccidentalShortSlip(samples: realShortGlide, frames: frames, pathLength: 36))
+
+    // 速度自适应起滑：常态主动快滑（velocity >= 360 pt/s）在跨入邻键且位移达 0.60 倍键宽（18pt）即刻起滑；慢速滚滑（velocity = 120）与连打节律下仍拦截防误触。
+    let fastTarget = CGPoint(x: frames[h].minX + 4, y: frames[h].midY)
+    let fastDown = CGPoint(x: fastTarget.x - 18, y: frames[g].midY)
+    XCTAssertTrue(frames[g].contains(fastDown))
+    XCTAssertTrue(frames[h].contains(fastTarget))
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: fastDown, current: fastTarget, frames: frames, velocity: 120))
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: g, down: fastDown, current: fastTarget, frames: frames, velocity: 480))
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: fastDown, current: fastTarget, frames: frames, rapidTyping: true, velocity: 480))
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: g, down: fastDown, current: fastTarget, frames: frames, startedInGap: true, velocity: 480))
   }
 
   func testKeyIndexSkipsHiddenKeysAndGaps() {
@@ -93,6 +143,52 @@ final class GlideTypingTests: XCTestCase {
     XCTAssertNil(GlideTyping.keyIndex(at: CGPoint(x: 33, y: 20), in: frames), "q 与 w 之间的键距")
     frames[GlideTyping.letters.firstIndex(of: "q")!] = .null
     XCTAssertNil(GlideTyping.keyIndex(at: Self.center("q", in: Self.frames), in: frames))
+  }
+
+  func testNearestKeyIndexSnapsGapTouchesWithinPadding() {
+    let frames = Self.frames
+    let q = GlideTyping.letters.firstIndex(of: "q")!
+    let w = GlideTyping.letters.firstIndex(of: "w")!
+    // 落在 q 与 w 之间 6pt 键缝内偏左/偏右，应分别吸附到最近的字母键。
+    XCTAssertEqual(GlideTyping.nearestKeyIndex(at: CGPoint(x: 31.5, y: 20), in: frames), q)
+    XCTAssertEqual(GlideTyping.nearestKeyIndex(at: CGPoint(x: 34.5, y: 20), in: frames), w)
+    // 超出键缝容差（如落到最下方功能行），不吸附。
+    XCTAssertNil(GlideTyping.nearestKeyIndex(at: CGPoint(x: 20, y: 170), in: frames))
+  }
+
+  func testTrimmedLiftoffHookRemovesShortReverseTailOnly() {
+    let clean = Self.stroke("nihao")
+    XCTAssertEqual(GlideTyping.trimmedLiftoffHook(clean, frames: Self.frames), clean)
+
+    var hooked = clean
+    let last = clean.last!
+    let prev = clean[clean.count - 2]
+    let dx = last.x - prev.x
+    let dy = last.y - prev.y
+    let len = max(hypot(dx, dy), 1)
+    hooked.append(GlideTyping.Sample(
+      x: last.x - (dx / len) * 9,
+      y: last.y - (dy / len) * 9,
+      milliseconds: last.milliseconds + 10
+    ))
+    let trimmed = GlideTyping.trimmedLiftoffHook(hooked, frames: Self.frames)
+    XCTAssertEqual(trimmed.count, clean.count, "应裁掉末段 10ms 反向短回勾")
+    XCTAssertEqual(trimmed.last, clean.last)
+  }
+
+  func testRequestWithExternalReadingsEncodesValidReadingsOnly() throws {
+    let samples = Self.stroke("nihao")
+    let data = try XCTUnwrap(GlideTyping.request(
+      frames: Self.frames,
+      samples: samples,
+      bilingual: true,
+      readings: ["nihao", "BAD!", "", "ni"],
+      preview: true
+    ))
+    let json = try decode(data)
+    XCTAssertEqual(json["bilingual"] as? Bool, true)
+    XCTAssertEqual(json["preview"] as? Bool, true)
+    XCTAssertEqual(json["readings"] as? [String], ["nihao", "ni"])
   }
 
   // MARK: - 请求
@@ -274,7 +370,8 @@ final class GlideTypingTests: XCTestCase {
     defer { InputSchemePreference.scheme = previous }
     XCTAssertTrue(try gesture(keyboard(.quanpin, glide: true)).isArmed())
     XCTAssertFalse(try gesture(keyboard(.quanpin, glide: false)).isArmed(), "默认关")
-    XCTAssertFalse(try gesture(keyboard(.nineKey, glide: true)).isArmed())
+    XCTAssertTrue(try gesture(keyboard(.nineKey, glide: true)).isArmed(), "拼音九键开滑行后同样武装")
+    XCTAssertFalse(try gesture(keyboard(.nineKey, glide: false)).isArmed())
     XCTAssertFalse(try gesture(keyboard(.shuangpin, glide: true)).isArmed())
     XCTAssertFalse(try gesture(keyboard(.korean, glide: true)).isArmed(), "韩文键帽")
 
@@ -507,5 +604,194 @@ final class GlideTypingTests: XCTestCase {
     glide.onCancelled()
     XCTAssertFalse(area.suppressesKeyHits)
     XCTAssertTrue(controller.view.hitTest(point, with: nil) === q)
+  }
+
+  func testNineKeyGlideFramesAndArming() throws {
+    let previousScheme = InputSchemePreference.scheme
+    let previousStyle = TouchKeyLayoutStyle.mirrored
+    defer {
+      InputSchemePreference.scheme = previousScheme
+      TouchKeyLayoutStyle.mirrored = previousStyle
+    }
+
+    // 校验 2–9 矩形到 26 槽坐标的映射及跨键起滑判定。
+    var digitRects: [Int: CGRect] = [:]
+    for digit in 2...9 {
+      let row = (digit - 1) / 3
+      let col = (digit - 1) % 3
+      digitRects[digit] = CGRect(x: CGFloat(col) * 86, y: CGFloat(row) * 56, width: 80, height: 49)
+    }
+    let frames = GlideTyping.nineKeyFrames(from: digitRects)
+    XCTAssertEqual(frames.count, 26)
+    XCTAssertEqual(frames[0], digitRects[2])
+    XCTAssertEqual(frames[12], digitRects[6])
+    XCTAssertEqual(frames[25], digitRects[9])
+    let downKey = try XCTUnwrap(GlideTyping.nineKeyRepresentativeIndex(forDigit: 7))
+    let from7 = CGPoint(x: digitRects[7]!.midX, y: digitRects[7]!.midY)
+    let to4 = CGPoint(x: digitRects[4]!.midX, y: digitRects[4]!.midY)
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: downKey, down: from7, current: to4, frames: frames))
+
+    // 九键短距竖滑（从 7 上半部向上滑入 4 下半部，总位移 ~22pt < 键宽*0.4=32pt 但 >= 键高*0.4=19.6pt）也应顺滑起滑。
+    let shortFrom7 = CGPoint(x: digitRects[7]!.midX, y: digitRects[7]!.minY + 6)
+    let shortTo4 = CGPoint(x: digitRects[4]!.midX, y: digitRects[4]!.maxY - 9)
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: downKey, down: shortFrom7, current: shortTo4, frames: frames))
+
+    // 九键键序兜底预览应显示数字路径（`742`）而非首字母乱码（`pga`）。
+    XCTAssertTrue(GlideTyping.isNineKeyFrames(frames))
+    let nineKeySamples = [
+      GlideTyping.Sample(x: digitRects[7]!.midX, y: digitRects[7]!.midY, milliseconds: 0),
+      GlideTyping.Sample(x: digitRects[4]!.midX, y: digitRects[4]!.midY, milliseconds: 40),
+      GlideTyping.Sample(x: digitRects[2]!.midX, y: digitRects[2]!.midY, milliseconds: 80),
+    ]
+    XCTAssertEqual(GlideLivePreviewPolicy.keyPathPreview(samples: nineKeySamples, frames: frames), "742")
+
+    // 真键盘在标准九键下武装滑行，26 槽坐标有效，且九键上滑输数字自动让位。
+    TouchKeyLayoutStyle.mirrored = TouchKeyLayoutStyle(nineKey: .standard)
+    let controller = keyboard(.nineKey, glide: true)
+    let glide = try gesture(controller)
+    XCTAssertTrue(glide.isArmed())
+    XCTAssertEqual(glide.keyFrames().count, 26)
+    XCTAssertEqual(controller.activeNineKeySwipeDigits, .off)
+  }
+
+  func testNineKeyGlideAntiMisfireAndShortVerticalHookTrimming() throws {
+    var digitRects: [Int: CGRect] = [:]
+    for digit in 2...9 {
+      let row = (digit - 1) / 3
+      let col = (digit - 1) % 3
+      digitRects[digit] = CGRect(x: CGFloat(col) * 86, y: CGFloat(row) * 56, width: 80, height: 49)
+    }
+    let frames = GlideTyping.nineKeyFrames(from: digitRects)
+    let down7 = try XCTUnwrap(GlideTyping.nineKeyRepresentativeIndex(forDigit: 7))
+    let r7 = try XCTUnwrap(digitRects[7])
+    let r4 = try XCTUnwrap(digitRects[4])
+
+    // 1. 浅边缘 2pt 蹭入邻键应被内缩拦下，避免快打误起滑行。
+    let downNearTop7 = CGPoint(x: r7.midX, y: r7.minY + 14)
+    let grazeBottom4 = CGPoint(x: r4.midX, y: r4.maxY - 2)
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: down7, down: downNearTop7, current: grazeBottom4, frames: frames))
+
+    // 2. 连打节律（rapidTyping）与键缝起手（startedInGap）提高门槛，22pt 微滑不误触；蓄意跨入中心（56pt）照常起滑。
+    let shortFrom7 = CGPoint(x: r7.midX, y: r7.minY + 6)
+    let shortTo4 = CGPoint(x: r4.midX, y: r4.maxY - 9) // ~22pt
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: down7, down: shortFrom7, current: shortTo4, frames: frames, rapidTyping: true))
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: down7, down: shortFrom7, current: shortTo4, frames: frames, startedInGap: true))
+    let center7 = CGPoint(x: r7.midX, y: r7.midY)
+    let center4 = CGPoint(x: r4.midX, y: r4.midY)
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: down7, down: center7, current: center4, frames: frames, rapidTyping: true))
+
+    // 3. 主动快滑（velocity >= 320pt/s）放宽到 0.36×49 ≈ 17.6pt，保证干脆起滑。
+    let fastFrom7 = CGPoint(x: r7.midX, y: r7.minY + 4)
+    let fastTo4 = CGPoint(x: r4.midX, y: r4.maxY - 8) // 19pt
+    XCTAssertFalse(GlideTyping.startsGlide(downKey: down7, down: fastFrom7, current: fastTo4, frames: frames, velocity: 120))
+    XCTAssertTrue(GlideTyping.startsGlide(downKey: down7, down: fastFrom7, current: fastTo4, frames: frames, velocity: 400))
+
+    // 4. 九键超短误滑兜底：35ms、22pt 边缘蹭键应取消；40ms、56pt 真实快速 7→4 竖滑绝不取消。
+    let accidentalSlip = [
+      GlideTyping.Sample(x: shortFrom7.x, y: shortFrom7.y, milliseconds: 0),
+      GlideTyping.Sample(x: shortTo4.x, y: shortTo4.y, milliseconds: 35),
+    ]
+    XCTAssertTrue(GlideTyping.isAccidentalShortSlip(samples: accidentalSlip, frames: frames, pathLength: 22))
+    let fastRealVertical = [
+      GlideTyping.Sample(x: center7.x, y: center7.y, milliseconds: 0),
+      GlideTyping.Sample(x: center4.x, y: center4.y, milliseconds: 40),
+    ]
+    XCTAssertFalse(GlideTyping.isAccidentalShortSlip(samples: fastRealVertical, frames: frames, pathLength: 56))
+
+    // 5. 九键抬手回勾裁剪改用短边 49pt（maxTailHookLength ≈ 23.5pt）：
+    //    真实 14pt 离屏回勾应裁掉；而 30pt 主动折返（若误用 80pt 键宽会被 38.4pt 误裁）必须完整保留。
+    let baseStroke: [GlideTyping.Sample] = [
+      .init(x: center7.x, y: center7.y, milliseconds: 0),
+      .init(x: center7.x, y: center7.y - 14, milliseconds: 22),
+      .init(x: center7.x, y: center7.y - 28, milliseconds: 44),
+      .init(x: center7.x, y: center7.y - 42, milliseconds: 66),
+      .init(x: center4.x, y: center4.y, milliseconds: 88),
+    ]
+    let withHook = baseStroke + [.init(x: center4.x, y: center4.y + 14, milliseconds: 100)]
+    XCTAssertEqual(GlideTyping.trimmedLiftoffHook(withHook, frames: frames).count, baseStroke.count)
+    let withDeliberateReturn = baseStroke + [.init(x: center4.x, y: center4.y + 30, milliseconds: 100)]
+    XCTAssertEqual(GlideTyping.trimmedLiftoffHook(withDeliberateReturn, frames: frames).count, withDeliberateReturn.count)
+  }
+
+  func testGlideInflectionTrackerAnchorsCornersAndDwellsButIgnoresStraightPassThrough() throws {
+    var tracker = GlideInflectionTracker()
+    func keyFrame(_ letter: Character) throws -> CGRect {
+      let idx = try XCTUnwrap(GlideTyping.letters.firstIndex(of: letter))
+      return Self.frames[idx]
+    }
+    let a = try keyFrame("a")
+    let s = try keyFrame("s")
+    let d = try keyFrame("d")
+    let f = try keyFrame("f")
+    let r = try keyFrame("r")
+
+    tracker.reset(initialKey: GlideTyping.letters.firstIndex(of: "a"))
+    // 1. 沿第 2 排从 A 直线匀速划过 S、D 到 F：中间过路键不应触发拐点锚定。
+    let straightSamples = [
+      GlideTyping.Sample(x: a.midX, y: a.midY, milliseconds: 0),
+      GlideTyping.Sample(x: s.midX, y: s.midY, milliseconds: 30),
+      GlideTyping.Sample(x: d.midX, y: d.midY, milliseconds: 60),
+      GlideTyping.Sample(x: f.midX, y: f.midY, milliseconds: 90),
+    ]
+    XCTAssertNil(tracker.detectAnchor(samples: straightSamples, frames: Self.frames))
+
+    // 2. 在 F 键拐弯向上滑往第 1 排的 R（折角 ~90° >= 68°）：应锚定拐点顶点 F。
+    let cornerSamples = straightSamples + [
+      GlideTyping.Sample(x: r.midX, y: r.midY, milliseconds: 130),
+    ]
+    let fIndex = try XCTUnwrap(GlideTyping.letters.firstIndex(of: "f"))
+    XCTAssertEqual(tracker.detectAnchor(samples: cornerSamples, frames: Self.frames), fIndex)
+
+    // 3. 在 R 键上驻留满 85ms（且距上次锚定已过 65ms 冷却）：应锚定驻留键 R。
+    let rIndex = try XCTUnwrap(GlideTyping.letters.firstIndex(of: "r"))
+    let dwellSamples = cornerSamples + [
+      GlideTyping.Sample(x: r.midX + 1, y: r.midY, milliseconds: 165),
+      GlideTyping.Sample(x: r.midX + 2, y: r.midY + 1, milliseconds: 220),
+    ]
+    XCTAssertEqual(tracker.detectAnchor(samples: dwellSamples, frames: Self.frames), rIndex)
+  }
+
+  func testGlideInflectionTrackerScalesChordAndDwellForNineKeyFrames() throws {
+    var digitRects: [Int: CGRect] = [:]
+    for digit in 2...9 {
+      let row = (digit - 1) / 3
+      let col = (digit - 1) % 3
+      digitRects[digit] = CGRect(x: CGFloat(col) * 86, y: CGFloat(row) * 56, width: 80, height: 49)
+    }
+    let frames = GlideTyping.nineKeyFrames(from: digitRects)
+    let r7 = try XCTUnwrap(digitRects[7])
+    let r8 = try XCTUnwrap(digitRects[8])
+    let r5 = try XCTUnwrap(digitRects[5])
+    let key7 = try XCTUnwrap(GlideTyping.nineKeyRepresentativeIndex(forDigit: 7))
+    let key8 = try XCTUnwrap(GlideTyping.nineKeyRepresentativeIndex(forDigit: 8))
+    let key5 = try XCTUnwrap(GlideTyping.nineKeyRepresentativeIndex(forDigit: 5))
+
+    var tracker = GlideInflectionTracker()
+    tracker.reset(initialKey: key7)
+
+    // 1. 宽九键（80×49pt）内 14pt 的小幅折抖（< effectiveChordLength ≈ 20.6pt）不应误触发拐点反馈。
+    let microJitter = [
+      GlideTyping.Sample(x: r7.midX, y: r7.midY, milliseconds: 0),
+      GlideTyping.Sample(x: r8.midX - 14, y: r8.midY, milliseconds: 30),
+      GlideTyping.Sample(x: r8.midX, y: r8.midY, milliseconds: 50),
+      GlideTyping.Sample(x: r8.midX, y: r8.midY - 14, milliseconds: 70),
+    ]
+    XCTAssertNil(tracker.detectAnchor(samples: microJitter, frames: frames))
+
+    // 2. 明确跨键 90° 拐弯（7 → 8 → 5）应准确锚定拐点键 8。
+    let realCorner = [
+      GlideTyping.Sample(x: r7.midX, y: r7.midY, milliseconds: 0),
+      GlideTyping.Sample(x: r8.midX, y: r8.midY, milliseconds: 40),
+      GlideTyping.Sample(x: r8.midX, y: r8.midY - 10, milliseconds: 60),
+      GlideTyping.Sample(x: r5.midX, y: r5.midY, milliseconds: 90),
+    ]
+    XCTAssertEqual(tracker.detectAnchor(samples: realCorner, frames: frames), key8)
+
+    // 3. 在 5 键内以 ~13.4pt 轻微晃动驻留 95ms（26 键 11pt 会漏判，九键缩放半径 ~14.7pt 应正常锚定 5 键）。
+    let nineKeyDwell = realCorner + [
+      GlideTyping.Sample(x: r5.midX + 6, y: r5.midY + 4, milliseconds: 140),
+      GlideTyping.Sample(x: r5.midX + 12, y: r5.midY + 6, milliseconds: 185),
+    ]
+    XCTAssertEqual(tracker.detectAnchor(samples: nineKeyDwell, frames: frames), key5)
   }
 }

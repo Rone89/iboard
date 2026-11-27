@@ -13,16 +13,32 @@ final class KeyboardToolbarButton: UIButton {
   static let activeDuration: TimeInterval = 0.15
   private static let disabledAlpha: CGFloat = 0.4
 
-  /// 图标、底板和标志跟着工具栏这一行缩小的倍数：行高到 `topRowMinimumHeight`（42pt）时是 1；「候选栏大小」调小、这一行更矮时按行高等比缩小，不再伸出这一行被裁掉。行更高时保持设计尺寸，与 Android 跟随候选栏时按钮最高 44 dp 一致（#10137）。
-  static func contentScale(rowHeight: CGFloat) -> CGFloat {
-    guard rowHeight > 0 else { return 1 }
-    return min(1, rowHeight / KeyboardViewController.topRowMinimumHeight)
+  /// 图标、底板和标志跟着工具栏这一行缩小的倍数：行高到 `baseline`（默认 `topRowMinimumHeight` 42pt，iOS 26 紧凑顶栏为 31pt）时是 1；「候选栏大小」调小、这一行更矮时按行高等比缩小，不再伸出这一行被裁掉。行更高时保持设计尺寸，与 Android 跟随候选栏时按钮最高 44 dp 一致（#10137）。
+  static func contentScale(rowHeight: CGFloat, baseline: CGFloat = KeyboardViewController.topRowMinimumHeight) -> CGFloat {
+    guard rowHeight > 0, baseline > 0 else { return 1 }
+    return min(1, rowHeight / baseline)
   }
 
   let icon: KeyboardIcon
   private let pad = UIView()
   private var renderedSize = CGSize.zero
   private var skin = KeyboardTheme.current
+  /// 图标缩放基准行高（默认 42pt；iOS 26 顶栏压缩至 31pt 时设为 31pt，保持工具栏图标全尺寸不缩水）。
+  var contentScaleBaseline: CGFloat = KeyboardViewController.topRowMinimumHeight {
+    didSet {
+      guard abs(contentScaleBaseline - oldValue) > 0.01 else { return }
+      renderedSize = .zero
+      setNeedsLayout()
+    }
+  }
+  /// 视觉垂直微调偏移（负值向上贴顶），保持按钮完整点击热区同时让图标在液态玻璃顶部区域中视觉居中。
+  var verticalOpticalOffset: CGFloat = 0 {
+    didSet {
+      guard abs(verticalOpticalOffset - oldValue) > 0.01 else { return }
+      renderedSize = .zero
+      setNeedsLayout()
+    }
+  }
 
   var activePadCornerRadius: CGFloat { pad.layer.cornerRadius }
   var activePadBorderWidth: CGFloat { pad.layer.borderWidth }
@@ -90,21 +106,23 @@ final class KeyboardToolbarButton: UIButton {
       renderIcon(size: bounds.size)
       super.layoutSubviews()
     }
-    let scale = Self.contentScale(rowHeight: bounds.height)
+    let scale = Self.contentScale(rowHeight: bounds.height, baseline: contentScaleBaseline)
     let usesGlassPill = skin.isNative && SystemKeyboardTokens.drawsLiquidGlassKeyboard
     let baseSide = usesGlassPill ? Self.nativeGlassPadSide : Self.padSide
     let side = min(baseSide * scale, bounds.width, bounds.height)
     pad.bounds = CGRect(x: 0, y: 0, width: side, height: side)
-    pad.center = CGPoint(x: bounds.midX, y: bounds.midY)
+    let centerY = max(side / 2, min(bounds.height - side / 2, bounds.midY + verticalOpticalOffset))
+    pad.center = CGPoint(x: bounds.midX, y: centerY)
     pad.layer.cornerRadius = usesGlassPill ? side / 2 : min(Self.padRadius * scale, side / 2)
   }
 
   /// UIKit 的跨进程键盘命中使用按钮的原生内容；仅挂 CAShapeLayer 的空按钮在真机上收不到触摸。
   private func renderIcon(size: CGSize) {
-    let rowScale = Self.contentScale(rowHeight: size.height)
+    let rowScale = Self.contentScale(rowHeight: size.height, baseline: contentScaleBaseline)
     func glyph(scale: CGFloat) -> UIImage {
       let side = (icon == .collapse ? Self.collapseIconSide : Self.iconSide) * rowScale * scale
-      let rect = CGRect(x: (size.width - side) / 2, y: (size.height - side) / 2, width: side, height: side)
+      let iconY = max(0, min(size.height - side, (size.height - side) / 2 + verticalOpticalOffset))
+      let rect = CGRect(x: (size.width - side) / 2, y: iconY, width: side, height: side)
       return UIGraphicsImageRenderer(size: size).image { _ in
         let path = icon.path(in: rect)
         UIColor.black.set()

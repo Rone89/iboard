@@ -8,7 +8,7 @@ final class KeyboardNineKeyPanelColumns {
   enum Action: Equatable {
     case spelling(Int)
     case stroke(String)
-    case back, delete, clear, toggleStrokes, toggleSingleCharacter
+    case back, cycleSpelling, delete, clear, toggleStrokes, toggleSingleCharacter
   }
 
   /// 筛选能用的五种笔画（不含通配，Engine 的筛选不认它）。
@@ -36,7 +36,8 @@ final class KeyboardNineKeyPanelColumns {
   private var singleToggle: UIButton!
 
   /// `makeKey` 造一个与键区同样外观的功能键：标题、无障碍名称、按下动作。
-  init(makeKey: (String, String, @escaping () -> Void) -> UIButton) {
+  /// `cyclesSpellings` 为真时（九键布局），右栏顶部按钮由「返回」改为「选拼音」，按一下切换下一个候选拼音。
+  init(cyclesSpellings: Bool = false, makeKey: (String, String, @escaping () -> Void) -> UIButton) {
     leading.accessibilityIdentifier = "candidatePanelSpellingColumn"
     leading.backgroundColor = KeyboardTheme.current.opaqueKeyBackground.withAlphaComponent(0.5)
     leading.layer.cornerRadius = 8
@@ -89,8 +90,11 @@ final class KeyboardNineKeyPanelColumns {
     trailing.spacing = 6
     trailing.distribution = .fillEqually
     trailing.accessibilityIdentifier = "candidatePanelFunctionColumn"
+    let topFunction: (String, String, String, Action) = cyclesSpellings
+      ? ("选拼音", "切换下一个候选拼音", "candidatePanelSpellingCycle", .cycleSpelling)
+      : ("返回", "收起候选", "candidatePanelBack", .back)
     let functions: [(String, String, String, Action)] = [
-      ("返回", "收起候选", "candidatePanelBack", .back),
+      topFunction,
       ("⌫", "删除", "candidatePanelDelete", .delete),
       ("重输", "清空重新输入", "candidatePanelClear", .clear),
       ("笔画", "按笔画筛选", "candidatePanelStrokeToggle", .toggleStrokes),
@@ -99,7 +103,9 @@ final class KeyboardNineKeyPanelColumns {
     for (title, label, identifier, action) in functions {
       let button = makeKey(title, label) { [weak self] in self?.onAction?(action) }
       button.configuration?.contentInsets = .zero
+      button.configuration?.titleLineBreakMode = .byClipping
       button.titleLabel?.adjustsFontSizeToFitWidth = true
+      button.titleLabel?.minimumScaleFactor = 0.72
       button.accessibilityIdentifier = identifier
       // 这个 ⌫ 和键区的删除键一样按下就响退格声，动作里删笔画、删拼音时的 `playInputClick(.backspace)` 在松手里不再出声（#10768）。
       if action == .delete { (button as? KeyboardKeyButton)?.pressSoundClass = .backspace }

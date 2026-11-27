@@ -521,11 +521,11 @@ struct TypingKeyHeatmap: Equatable {
   /// 顶部数字行：一排 1 到 0，记 `Digit1`…`Digit0`。「按键布局」页的预览也画这一排。
   static let numberRow: [Cell] = "1234567890".map { Cell("Digit\($0)", String($0)) }
 
-  /// 26 键的三排字母（默认小写以对齐 iOS 原生）：第三排两端是 ⇧（记 `ShiftLeft`）和 ⌫，各占同排字母键的 1.5 倍。「按键布局」页的预览也画这三排。
+  /// 26 键的三排字母（默认小写以对齐 iOS 原生）：第三排两端是 ⇧（记 `ShiftLeft`）和 ⌫，占同排字母键的 1.43 倍（兼容标准 13% 与 Lokey 1.348× 两种边缘比例）。「按键布局」页的预览也画这三排。
   static let twentySixKeyLetterRows: [[Cell]] = [
     letters("qwertyuiop"),
     letters("asdfghjkl"),
-    [Cell(TypingKeyID.shift, "⇧", width: 1.5)] + letters("zxcvbnm") + [Cell(TypingKeyID.backspace, "删除", width: 1.5)],
+    [Cell(TypingKeyID.shift, "⇧", width: 1.43)] + letters("zxcvbnm") + [Cell(TypingKeyID.backspace, "删除", width: 1.43)],
   ]
 
   /// 26 键热力图里第二排字母（要两侧缩进的那一排）的下标：数字行打开时往下挪一排。

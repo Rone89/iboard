@@ -4,16 +4,19 @@ import XCTest
 final class BackspaceSyllableSettingsTests: XCTestCase {
   private var state: URL!
   private var previous = false
+  private var previousGlideOnly = false
 
   override func setUp() {
     super.setUp()
     state = FileManager.default.temporaryDirectory
       .appendingPathComponent("msime-backspace-syllable-settings-\(UUID().uuidString)", isDirectory: true)
     previous = TouchBackspaceSyllablePreference.isEnabled
+    previousGlideOnly = TouchBackspaceSyllablePreference.glideOnly
   }
 
   override func tearDown() {
     TouchBackspaceSyllablePreference.isEnabled = previous
+    TouchBackspaceSyllablePreference.glideOnly = previousGlideOnly
     try? FileManager.default.removeItem(at: state)
     super.tearDown()
   }
@@ -50,5 +53,14 @@ final class BackspaceSyllableSettingsTests: XCTestCase {
     XCTAssertFalse(TouchBackspaceSyllablePreference.isEnabled(in: nil))
     XCTAssertFalse(TouchBackspaceSyllablePreference.isEnabled(in: [:]))
     XCTAssertFalse(TouchBackspaceSyllablePreference.isEnabled(in: ["touch_backspace_by_syllable": "打开"]))
+  }
+
+  func testGlideOnlyDefaultsOffAndPersistsInAppGroup() {
+    InputSchemePreference.appGroupDefaults.removeObject(forKey: TouchBackspaceSyllablePreference.glideOnlyAppGroupKey)
+    XCTAssertFalse(TouchBackspaceSyllablePreference.glideOnly)
+    TouchBackspaceSyllablePreference.glideOnly = true
+    XCTAssertTrue(TouchBackspaceSyllablePreference.glideOnly)
+    TouchBackspaceSyllablePreference.glideOnly = false
+    XCTAssertFalse(TouchBackspaceSyllablePreference.glideOnly)
   }
 }

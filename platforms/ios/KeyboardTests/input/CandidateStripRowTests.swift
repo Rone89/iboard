@@ -280,7 +280,9 @@ final class CandidateStripRowTests: XCTestCase {
     }
     controller.view.layoutIfNeeded()
 
-    let scroll = try XCTUnwrap(descendants(controller.view).first { $0 is CandidateScrollView } as? CandidateScrollView)
+    let scroll = try XCTUnwrap(descendants(controller.view).first {
+      $0 is CandidateScrollView && !($0.superview is NineKeyStripSpellingBar)
+    } as? CandidateScrollView)
     XCTAssertTrue(scroll.isScrollEnabled)
     let fullStrip = shownStripButtons()
     XCTAssertGreaterThan(fullStrip.count, 1)

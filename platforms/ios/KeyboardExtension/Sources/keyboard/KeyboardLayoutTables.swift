@@ -26,8 +26,11 @@ enum SymbolLayerLayout {
   private static let chineseMoreSymbolsSecond = ["_", "\\", "|", "~", "《", "》", "€", "&", "·", "…"]
   private static let englishMoreSymbolsSecond = ["_", "\\", "|", "~", "<", ">", "€", "&", "·", "£"]
 
-  /// 一层的字符键，从上到下：两行各十个，然后是层切换键与 ⌫ 之间的五个标点键。`more` 选 #+= 层，`chinese` 选中文版，`cornerQuotes` 让中文 123 层的引号键用直角引号。
-  static func characterRows(more: Bool, chinese: Bool, cornerQuotes: Bool = false) -> [[String]] {
+  /// 一层的字符键，从上到下：两行各十个，然后是层切换键与 ⌫ 之间的五个（或 Lokey 样式六个）标点键。`more` 选 #+= 层，`chinese` 选中文版，`cornerQuotes` 让中文 123 层的引号键用直角引号，`lokey` 启用 Lokey 6 标点与全角括号符号表。
+  static func characterRows(more: Bool, chinese: Bool, cornerQuotes: Bool = false, lokey: Bool = false) -> [[String]] {
+    if lokey {
+      return LokeyLayoutMetrics.symbolCharacterRows(more: more, chinese: chinese, cornerQuotes: cornerQuotes)
+    }
     let punctuation = chinese ? chinesePunctuation : englishPunctuation
     if more {
       return [moreSymbolsFirst, chinese ? chineseMoreSymbolsSecond : englishMoreSymbolsSecond, punctuation]

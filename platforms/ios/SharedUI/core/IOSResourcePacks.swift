@@ -7,6 +7,8 @@ private func listResourcePacks(_ request: UnsafePointer<UInt8>?, _ length: UInt)
 private func installResourcePack(_ request: UnsafePointer<UInt8>?, _ length: UInt, _ progress: PackProgressCallback?, _ context: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("msime_client_resource_pack_cancel")
 private func cancelResourcePack(_ id: UnsafePointer<UInt8>?, _ length: UInt)
+@_silgen_name("msime_client_resource_pack_remove")
+private func removeResourcePack(_ request: UnsafePointer<UInt8>?, _ length: UInt) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("msime_client_string_free")
 private func freeResourcePackResponse(_ response: UnsafeMutablePointer<CChar>?)
 
@@ -63,6 +65,17 @@ enum IOSResourcePacks {
     data.withUnsafeBytes { cancelResourcePack($0.bindMemory(to: UInt8.self).baseAddress, UInt(data.count)) }
   }
 
+  /// 卸载已下载的按需资源包（如万象 LTS 语法模型），并先驱逐进程内已映射句柄。
+  @discardableResult
+  static func remove(_ id: String, stateRoot: URL? = nil) throws -> Bool {
+    let request = try requestData(["state_root": root(stateRoot), "pack": id])
+    let response = request.withUnsafeBytes {
+      removeResourcePack($0.bindMemory(to: UInt8.self).baseAddress, UInt(request.count))
+    }
+    let value = try read(response) as? [String: Any]
+    return value?["removed"] as? Bool ?? false
+  }
+
   static func root(_ override: URL?) -> String { override?.path ?? MetasequoiaInputSessionBridge.sharedStateDirectory }
 
   /// 主应用的词库在内嵌扩展里；键盘与测试宿主则在自身 bundle 里。
@@ -81,7 +94,9 @@ enum IOSResourcePacks {
     case "japanese": names = ["EngineResources/msime-japanese.dat"]
     case "language-dictionaries":
       names = ["language-dictionaries/msime-cantonese.db", "language-dictionaries/msime-zhuyin.db", "language-dictionaries/msime-stroke.db"]
-    // 其余资源包（如英文音标表）不随 App 分发，只能下载；不能按语言词库的文件判断，否则带着语言词库的版本会把它们当成已安装。
+    case "grammar-model-baguwen-compact":
+      names = ["grammar-models/zh-hans-t-essay-bgw-compact.gram"]
+    // 其余资源包（如万象 LTS 语法模型、英文音标表）不随 App 分发，只能按需下载。
     default: return false
     }
     return resourceBundles(in: bundle).contains { resourceBundle in

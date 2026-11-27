@@ -20,11 +20,12 @@ import CoreGraphics
 final class GlideBeamEngine {
   static let shared = GlideBeamEngine()
 
-  private let queue = DispatchQueue(label: "keyboard.glideBeamEngine")
+  private let queue = DispatchQueue(label: "keyboard.glideBeamEngine", qos: .userInitiated)
   private let readyLock = NSLock()
   private var loadedReady = false
   private var handle: OpaquePointer?
-  private var layoutSignature: String?
+  private var lastRegisteredKeys: [GKKeyC] = []
+  private var lastRegisteredWidth: Float = 0
 
   /// 词典是否已加载完。用独立锁读取，避免后台正在加载时阻塞主线程。
   var isReady: Bool {
@@ -71,7 +72,8 @@ final class GlideBeamEngine {
       gkEngineFree(existing)
       handle = nil
     }
-    layoutSignature = nil
+    lastRegisteredKeys = []
+    lastRegisteredWidth = 0
     lastDecodeDiagnostics = nil
     readyLock.lock()
     loadedReady = false
@@ -119,20 +121,25 @@ final class GlideBeamEngine {
 
   private func decodeReadingsLocked(samples: [GlideTyping.Sample], letters: [UInt32], frames: [CGRect], limit: Int) -> [String] {
     guard let handle, letters.count == frames.count, frames.count >= 20, limit >= 1 else { return [] }
-    var pairs = Array(zip(letters, frames))
-    guard pairs.count == letters.count else { return [] }
-    pairs.sort { $0.0 < $1.0 }
     var keys = [GKKeyC]()
-    keys.reserveCapacity(pairs.count)
+    keys.reserveCapacity(letters.count)
     var width = Float(0)
-    for (letter, frame) in pairs {
+    var isSorted = true
+    var previousLetter: UInt32 = 0
+    for index in 0..<letters.count {
+      let letter = letters[index]
+      let frame = frames[index]
+      if index > 0 && letter < previousLetter { isSorted = false }
+      previousLetter = letter
       keys.append(GKKeyC(codepoint: letter, x: Float(frame.midX), y: Float(frame.midY)))
       width += Float(frame.width)
     }
+    if !isSorted {
+      keys.sort { $0.codepoint < $1.codepoint }
+    }
     width = max(width / Float(frames.count), 1)
-    let signature = "\(width):" + keys.map { "\($0.codepoint),\($0.x),\($0.y)" }.joined(separator: ";")
     var keysResult: Int32 = 0
-    if signature != layoutSignature {
+    if width != lastRegisteredWidth || keys != lastRegisteredKeys {
       keysResult = keys.withUnsafeBufferPointer {
         gkSetKeys(handle, $0.baseAddress, $0.count, width)
       }
@@ -140,11 +147,14 @@ final class GlideBeamEngine {
         lastDecodeDiagnostics = (keysResult, -1, -1)
         return []
       }
-      layoutSignature = signature
+      lastRegisteredKeys = keys
+      lastRegisteredWidth = width
     }
+    // 120Hz ProMotion 长轨迹先均匀抽稀到 256 点以内，避免抬手解码耗掉多余帧预算。
+    let boundedSamples = GlideTyping.downsampled(samples, limit: 256)
     var points = [GKPointC]()
-    points.reserveCapacity(samples.count)
-    for sample in samples {
+    points.reserveCapacity(boundedSamples.count)
+    for sample in boundedSamples {
       points.append(GKPointC(x: Float(sample.x), y: Float(sample.y),
                              timeMS: Int64(sample.milliseconds)))
     }
@@ -179,8 +189,8 @@ final class GlideBeamEngine {
     var buffer = [UInt8](repeating: 0, count: Int(size))
     let written = gkCandidate(handle, index, &buffer, Int(size), &score)
     guard written > 0 else { return nil }
-    return buffer.prefix(Int(written)).prefix { $0 != 0 }
-      .map { UnicodeScalar($0) }.compactMap { $0 }.map { String($0) }.joined()
+    let valid = buffer.prefix(Int(written)).prefix { $0 != 0 }
+    return String(decoding: valid, as: UTF8.self)
   }
 
   private func loadIfNeeded() {
@@ -217,7 +227,7 @@ final class GlideBeamEngine {
 // MARK: - C ABI（glide_keyboard.h 的子集）
 
 /// 与 C `struct GKKey { uint32_t codepoint; float x, y; }` 逐字节一致。
-struct GKKeyC {
+struct GKKeyC: Equatable {
   var codepoint: UInt32
   var x: Float
   var y: Float

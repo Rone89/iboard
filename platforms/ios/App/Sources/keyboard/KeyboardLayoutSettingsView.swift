@@ -26,6 +26,7 @@ struct KeyboardLayoutSettingsView: View {
   @State private var glideEngine = GlideEnginePreference.choice
   @State private var bilingualGlide = KeyboardLayoutPreference.bilingualGlide
   @State private var backspaceBySyllable = TouchBackspaceSyllablePreference.isEnabled
+  @State private var backspaceBySyllableGlideOnly = TouchBackspaceSyllablePreference.glideOnly
   @State private var cursorSwipe = KeyboardLayoutPreference.cursorSwipe
   @State private var swipeSymbols = KeyboardLayoutPreference.swipeSymbols
   @State private var swipeSymbolsDirection = KeyboardLayoutPreference.swipeSymbolsDirection
@@ -441,6 +442,15 @@ struct KeyboardLayoutSettingsView: View {
                       isOn: Binding(get: { backspaceBySyllable }, set: { saveBackspaceBySyllable($0) }))
         .accessibilityIdentifier("appBackspaceBySyllableSwitch")
       DesignDivider()
+      DesignToggleRow(title: "仅滑行输入生效",
+                      info: "开启后，只有滑行输入的拼音内容才按音节回删，逐键点按的字母仍按单个字母删除。",
+                      enabled: backspaceBySyllable,
+                      isOn: Binding(get: { backspaceBySyllableGlideOnly }, set: { enabled in
+                        backspaceBySyllableGlideOnly = enabled
+                        TouchBackspaceSyllablePreference.glideOnly = enabled
+                      }))
+        .accessibilityIdentifier("appBackspaceBySyllableGlideOnlySwitch")
+      DesignDivider()
       DesignToggleRow(title: "横滑键盘移动光标", info: "无组字时从字符键左右滑动；开启滑行输入时，字母键优先输入拼音",
                       isOn: Binding(get: { cursorSwipe }, set: { enabled in
                         cursorSwipe = enabled
@@ -694,6 +704,7 @@ struct KeyboardLayoutSettingsView: View {
     shuangpinLayout = TouchShuangpinLayoutPreference.layout(in: preferences)
     wubiLayout = TouchWubiLayoutPreference.layout(in: preferences)
     backspaceBySyllable = TouchBackspaceSyllablePreference.isEnabled(in: preferences)
+    backspaceBySyllableGlideOnly = TouchBackspaceSyllablePreference.glideOnly
     keySpacing = KeyboardLayoutPreference.keySpacing
     rowSpacing = KeyboardLayoutPreference.rowSpacing
     height = KeyboardLayoutPreference.heightAdjustment

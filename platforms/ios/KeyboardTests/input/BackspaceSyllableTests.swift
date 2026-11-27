@@ -83,6 +83,7 @@ final class BackspaceSyllableTests: XCTestCase {
 
   override func tearDown() {
     TouchBackspaceSyllablePreference.isEnabled = false
+    TouchBackspaceSyllablePreference.glideOnly = false
     super.tearDown()
   }
 
@@ -90,6 +91,7 @@ final class BackspaceSyllableTests: XCTestCase {
     let document = Document()
     let controller = try makeKeyboard(document)
     TouchBackspaceSyllablePreference.isEnabled = true
+    TouchBackspaceSyllablePreference.glideOnly = false
 
     for letter in "MEIYOU" { try key(letter, in: controller).sendActions(for: .primaryActionTriggered) }
     XCTAssertEqual(document.spelling, "meiyou")
@@ -102,12 +104,86 @@ final class BackspaceSyllableTests: XCTestCase {
     let document = Document()
     let controller = try makeKeyboard(document)
     TouchBackspaceSyllablePreference.isEnabled = false
+    TouchBackspaceSyllablePreference.glideOnly = false
 
     for letter in "MEIYOU" { try key(letter, in: controller).sendActions(for: .primaryActionTriggered) }
     XCTAssertEqual(document.spelling, "meiyou")
 
     try deleteKey(in: controller).sendActions(for: .touchUpInside)
     XCTAssertEqual(document.spelling, "meiyo", "开关关闭时照旧按字母删")
+  }
+
+  func testGlideOnlyDeletesTypedByLetterAndGlidedBySyllable() throws {
+    let previousGlide = KeyboardLayoutPreference.defaults.object(forKey: KeyboardLayoutPreference.glideTypingKey)
+    let previousBilingual = KeyboardLayoutPreference.defaults.object(forKey: KeyboardLayoutPreference.bilingualGlideKey)
+    let previousEngine = GlideEnginePreference.choice
+    addTeardownBlock {
+      if let previousGlide { KeyboardLayoutPreference.defaults.set(previousGlide, forKey: KeyboardLayoutPreference.glideTypingKey) }
+      else { KeyboardLayoutPreference.defaults.removeObject(forKey: KeyboardLayoutPreference.glideTypingKey) }
+      if let previousBilingual { KeyboardLayoutPreference.defaults.set(previousBilingual, forKey: KeyboardLayoutPreference.bilingualGlideKey) }
+      else { KeyboardLayoutPreference.defaults.removeObject(forKey: KeyboardLayoutPreference.bilingualGlideKey) }
+      GlideEnginePreference.choice = previousEngine
+    }
+    KeyboardLayoutPreference.glideTyping = true
+    KeyboardLayoutPreference.bilingualGlide = false
+    GlideEnginePreference.choice = .msime
+
+    let document = Document()
+    let controller = try makeKeyboard(document)
+    TouchBackspaceSyllablePreference.isEnabled = true
+    TouchBackspaceSyllablePreference.glideOnly = true
+
+    // 1. 纯点按输入：仅滑行生效开启时，仍逐字母删除。
+    for letter in "MEIYOU" { try key(letter, in: controller).sendActions(for: .primaryActionTriggered) }
+    XCTAssertEqual(document.spelling, "meiyou")
+    try deleteKey(in: controller).sendActions(for: .touchUpInside)
+    XCTAssertEqual(document.spelling, "meiyo", "仅滑行生效时，逐键点按的字母仍按单字母回删")
+
+    // 清空残余组字。
+    while !document.spelling.isEmpty {
+      try deleteKey(in: controller).sendActions(for: .touchUpInside)
+    }
+
+    // 2. 纯滑行输入多音节：按音节一次删一个音节，而不是一次清空整段或逐字母退。
+    let glide = try XCTUnwrap(descendants(controller.view)
+      .compactMap { ($0 as? KeyAreaStackView)?.gestureRecognizers?.first { $0 is GlideTypingGestureRecognizer } as? GlideTypingGestureRecognizer }
+      .first)
+    let frames = glide.keyFrames()
+    glide.onEnded(Self.stroke("nihao", in: frames), frames)
+    XCTAssertEqual(document.spelling, "nihao")
+    try deleteKey(in: controller).sendActions(for: .touchUpInside)
+    XCTAssertEqual(document.spelling, "ni", "滑行输入在仅滑行按音节回删下应一次删掉最后一个音节 hao")
+    try deleteKey(in: controller).sendActions(for: .touchUpInside)
+    XCTAssertEqual(document.spelling, "", "再次退格删掉剩余滑行音节 ni")
+
+    // 3. 点按 + 滑行混打：末尾滑行音节按音节删，回到前面点按部分后自动切回单字母删。
+    for letter in "NI" { try key(letter, in: controller).sendActions(for: .primaryActionTriggered) }
+    glide.onEnded(Self.stroke("hao", in: frames), frames)
+    XCTAssertEqual(document.spelling, "nihao")
+    try deleteKey(in: controller).sendActions(for: .touchUpInside)
+    XCTAssertEqual(document.spelling, "ni", "末尾滑行段 hao 一次按音节删掉")
+    try deleteKey(in: controller).sendActions(for: .touchUpInside)
+    XCTAssertEqual(document.spelling, "n", "退回点按段 ni 后恢复单字母回删")
+  }
+
+  private static func stroke(_ word: String, in frames: [CGRect]) -> [GlideTyping.Sample] {
+    let centers = word.map { letter -> CGPoint in
+      let frame = frames[GlideTyping.letters.firstIndex(of: letter)!]
+      return CGPoint(x: frame.midX, y: frame.midY)
+    }
+    var samples: [GlideTyping.Sample] = []
+    func add(_ point: CGPoint) {
+      samples.append(GlideTyping.Sample(x: point.x, y: point.y, milliseconds: Double(samples.count) * 8))
+    }
+    for (from, to) in zip(centers, centers.dropFirst()) {
+      let steps = max(1, Int((hypot(to.x - from.x, to.y - from.y) / 6).rounded(.up)))
+      for step in 0..<steps {
+        let t = CGFloat(step) / CGFloat(steps)
+        add(CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t))
+      }
+    }
+    add(centers[centers.count - 1])
+    return samples
   }
 
   func testWithoutACompositionBackspaceStillDeletesDocumentText() throws {

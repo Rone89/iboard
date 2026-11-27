@@ -22,6 +22,8 @@ struct CandidateOptionsSettingsView: View {
   private var cloudCandidates = false
   @AppStorage(CandidatePageSizePreference.key, store: CandidatePageSizePreference.defaults)
   private var pageSize = CandidatePageSizePreference.defaultSize
+  @AppStorage(CandidateTransitionPreference.key, store: CandidateTransitionPreference.defaults)
+  private var candidateTransitionRaw = CandidateTransitionPreference.defaultStyle.rawValue
   @AppStorage(EnglishSuggestionsPreference.enabledKey, store: EnglishSuggestionsPreference.defaults)
   private var englishSuggestions = true
   @State private var candidateSize = CandidateFontPreference.defaultCandidateSize
@@ -48,6 +50,19 @@ struct CandidateOptionsSettingsView: View {
           DesignSliderRow(title: "候选栏大小", info: "候选字和工具栏一起缩放，按键大小不变", value: scaleSlider,
                           range: Double(CandidateFontPreference.scaleRange.lowerBound)...Double(CandidateFontPreference.scaleRange.upperBound),
                           step: Double(CandidateFontPreference.scaleStep), identifier: "candidateScale") { "\(Int($0))%" }
+          DesignDivider()
+          DesignSelectRow(
+            title: "候选词切换动画",
+            info: "输入或删改拼音时候选栏词语更新的过渡动画；开启系统「减弱动态效果」时自动改为轻柔淡入。",
+            options: CandidateTransitionStyle.allCases.map {
+              DesignOption(title: $0.title, value: $0, identifier: "candidateTransition-\($0.rawValue)")
+            },
+            selection: candidateTransitionBinding,
+            sheetTitle: "候选词切换动画",
+            identifier: "candidateTransitionStyle"
+          )
+          DesignDivider()
+          CandidateTransitionPreviewRow(style: candidateTransitionStyle)
         }
 
         DesignGroup(title: "字体") {
@@ -172,6 +187,17 @@ struct CandidateOptionsSettingsView: View {
     .designCanvasBackground()
     .navigationTitle("候选栏").navigationBarTitleDisplayMode(.inline)
     .reloadOnAppearAndActive(reload)
+  }
+
+  private var candidateTransitionStyle: CandidateTransitionStyle {
+    CandidateTransitionPreference.parse(candidateTransitionRaw)
+  }
+
+  private var candidateTransitionBinding: Binding<CandidateTransitionStyle> {
+    Binding(
+      get: { candidateTransitionStyle },
+      set: { candidateTransitionRaw = $0.rawValue }
+    )
   }
 
   private var sliderRange: ClosedRange<Double> {
@@ -463,5 +489,143 @@ private struct CloudCandidateServiceSettingsView: View {
       "response_path": responsePath, "timeout_ms": milliseconds, "cache_enabled": cacheEnabled]
     saveFailed = !MetasequoiaInputSessionBridge.updateSharedPreferences { $0["cloud_candidate_provider"] = provider }
     if !saveFailed { dismiss() }
+  }
+}
+
+/// 候选词切换动画的紧凑预览条：切换样式时自动演播一次，轻点也可立即重放对比。
+private struct CandidateTransitionPreviewRow: View {
+  let style: CandidateTransitionStyle
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var batchIndex = 0
+  @State private var revealed = true
+  @State private var replayGeneration = 0
+
+  private static let batches: [[String]] = [
+    ["你好", "世界", "顺畅", "输入"],
+    ["明天", "开心", "效率", "切换"],
+  ]
+
+  private var effectiveStyle: CandidateTransitionStyle {
+    style.resolved(reduceMotion: reduceMotion)
+  }
+
+  private var words: [String] {
+    Self.batches[batchIndex % Self.batches.count]
+  }
+
+  var body: some View {
+    Button(action: replay) {
+      HStack(spacing: 8) {
+        HStack(spacing: 12) {
+          ForEach(Array(words.enumerated()), id: \.offset) { index, word in
+            Text(word)
+              .font(.system(size: 16, weight: index == 0 ? .semibold : .regular))
+              .foregroundStyle(index == 0 ? MetasequoiaTheme.accent : Color.primary)
+              .padding(.horizontal, index == 0 ? 10 : 0)
+              .padding(.vertical, index == 0 ? 4 : 0)
+              .background {
+                if index == 0 {
+                  Capsule()
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                }
+              }
+              .opacity(revealed ? 1 : startOpacity)
+              .animation(opacityAnimation(index: index), value: revealed)
+              .offset(x: revealed ? 0 : startOffsetX, y: revealed ? 0 : startOffsetY)
+              .scaleEffect(revealed ? 1 : startScale)
+              .animation(motionAnimation(index: index), value: revealed)
+          }
+        }
+        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+        .padding(.horizontal, 12)
+        .background(
+          RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(MetasequoiaTheme.segBg)
+        )
+        .clipped()
+
+        Image(systemName: "arrow.clockwise")
+          .font(.system(size: 14, weight: .medium))
+          .foregroundStyle(MetasequoiaTheme.sub)
+          .frame(width: 28, height: 28)
+      }
+      .padding(.vertical, 10)
+      .padding(.horizontal, 20)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(PressFillButtonStyle())
+    .accessibilityLabel("预览候选词切换动画")
+    .accessibilityValue(style.title)
+    .accessibilityIdentifier("candidateTransitionPreview")
+    .onChange(of: style) { _, _ in
+      replay()
+    }
+  }
+
+  private var startOffsetX: CGFloat {
+    effectiveStyle == .slide ? 22 : 0
+  }
+
+  private var startOffsetY: CGFloat {
+    switch effectiveStyle {
+    case .rise: return 20
+    case .drop: return -20
+    default: return 0
+    }
+  }
+
+  private var startScale: CGFloat {
+    effectiveStyle == .scale ? 0.88 : 1
+  }
+
+  private var startOpacity: Double {
+    effectiveStyle == .none ? 1 : 0
+  }
+
+  private func opacityAnimation(index: Int) -> Animation? {
+    guard revealed else { return nil }
+    let delay = Double(index) * 0.008
+    switch effectiveStyle {
+    case .none:
+      return nil
+    case .fade:
+      return .timingCurve(0.22, 0.68, 0.28, 1.0, duration: 0.11).delay(delay)
+    case .rise, .drop, .slide, .scale:
+      return .timingCurve(0.22, 0.68, 0.28, 1.0, duration: 0.10).delay(delay)
+    }
+  }
+
+  private func motionAnimation(index: Int) -> Animation? {
+    guard revealed else { return nil }
+    let delay = Double(index) * 0.008
+    switch effectiveStyle {
+    case .none, .fade:
+      return nil
+    case .slide:
+      return .spring(response: 0.17, dampingFraction: 0.95).delay(delay)
+    case .scale:
+      return .spring(response: 0.15, dampingFraction: 0.86).delay(delay)
+    case .rise, .drop:
+      return .spring(response: 0.16, dampingFraction: 0.95).delay(delay)
+    }
+  }
+
+  private func replay() {
+    batchIndex += 1
+    guard effectiveStyle != .none else {
+      revealed = true
+      return
+    }
+    replayGeneration &+= 1
+    let current = replayGeneration
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction) {
+      revealed = false
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+      guard replayGeneration == current else { return }
+      revealed = true
+    }
   }
 }

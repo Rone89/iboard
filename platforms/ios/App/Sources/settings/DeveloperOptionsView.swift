@@ -227,8 +227,9 @@ private enum DeveloperDiagnostics {
                                            KeyboardLayoutPreference.spaceVoiceKey, KeyboardLayoutPreference.swipeSymbolsKey,
                                            KeyboardLayoutPreference.swipeSymbolsDirectionKey, KeyboardLayoutPreference.letterCornerHintsKey,
                                            NineKeySwipeDigits.mirrorKey] + KeyboardLayoutPreference.placementKeys),
-      // 「按音节回删」的文档字段由 restoreDefaults 恢复，这里删它的镜像。
-      (InputSchemePreference.appGroupDefaults, [TouchBackspaceSyllablePreference.appGroupKey]),
+      // 「按音节回删」的文档字段由 restoreDefaults 恢复，这里删它的镜像及「仅滑行输入生效」本机开关。
+      (InputSchemePreference.appGroupDefaults, [TouchBackspaceSyllablePreference.appGroupKey,
+                                                TouchBackspaceSyllablePreference.glideOnlyAppGroupKey]),
       (KeyboardFeedbackPreference.defaults, [KeyboardFeedbackPreference.soundKey, KeyboardFeedbackPreference.hapticsKey,
                                              KeyboardFeedbackPreference.strengthKey]),
       (KeyboardPrivacyPreference.defaults, [KeyboardPrivacyPreference.incognitoKey]),
@@ -237,6 +238,7 @@ private enum DeveloperDiagnostics {
       (EnglishSuggestionsPreference.defaults, [EnglishSuggestionsPreference.enabledKey]),
       (CloudCandidatePreference.defaults, [CloudCandidatePreference.key]),
       (CandidatePageSizePreference.defaults, [CandidatePageSizePreference.key]),
+      (CandidateTransitionPreference.defaults, [CandidateTransitionPreference.key]),
       (CandidatePalette.defaults, [CandidatePalette.followsDesktopKey]),
     ]
     for (defaults, keys) in local {

@@ -332,6 +332,11 @@ targets:
         buildPhase: resources
         type: folder
         optional: true
+      # 内置 octagram `.gram` 语法模型目录（默认放八股文·紧凑版 zh-hans-t-essay-bgw-compact.gram），放在 EngineResources 旁边以免破坏词库锁校验。
+      - path: ../../target/ios/grammar-models
+        buildPhase: resources
+        type: folder
+        optional: true
       - path: SharedResources/KeyboardBrand.png
         buildPhase: resources
       # 表情面板的水杉娘表情包：66 张 320px 透明 WebP 和清单，三个手机键盘共用仓库里的同一份。
@@ -397,6 +402,11 @@ targets:
         optional: true
       # 同键盘扩展：按键音包的测试经 `msime_client_key_sound_pack` 读这一份。
       - path: ../../target/ios/sound-packs
+        buildPhase: resources
+        type: folder
+        optional: true
+      # 同键盘扩展：内置八股文紧凑版语法模型目录，供测试宿主验证语法模型自动加载。
+      - path: ../../target/ios/grammar-models
         buildPhase: resources
         type: folder
         optional: true

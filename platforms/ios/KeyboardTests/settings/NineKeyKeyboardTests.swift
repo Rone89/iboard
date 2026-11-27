@@ -4584,6 +4584,15 @@ final class NineKeyKeyboardTests: XCTestCase {
 
   // MARK: - 九键展开面板
 
+  /// 按当前启用的九键样式查找数字键（默认「iOS 原生」为 `iosNativeNineKey<d>`，其余样式为 `nineKey<d>`）。
+  private func nineKeyDigitButton(_ digit: Character, in controller: KeyboardViewController) throws -> UIButton {
+    if let native = descendants(controller.view).compactMap({ $0 as? UIButton })
+      .first(where: { $0.accessibilityIdentifier == "iosNativeNineKey\(digit)" }) {
+      return native
+    }
+    return try button("nineKey\(digit)", in: controller)
+  }
+
   /// 打开一个全拼九键键盘并打出 `digits`。
   private func nineKeyController(typing digits: String) throws -> KeyboardViewController {
     InputSchemePreference.enabledSchemes = [.quanpin, .nineKey]
@@ -4594,7 +4603,7 @@ final class NineKeyKeyboardTests: XCTestCase {
     controller.viewWillAppear(false)
     controller.view.layoutIfNeeded()
     for digit in digits {
-      try button("nineKey\(digit)", in: controller).sendActions(for: .primaryActionTriggered)
+      try nineKeyDigitButton(digit, in: controller).sendActions(for: .primaryActionTriggered)
     }
     return controller
   }
@@ -4604,8 +4613,12 @@ final class NineKeyKeyboardTests: XCTestCase {
   }
 
   private func panelCandidates(in controller: KeyboardViewController) -> [String] {
-    descendants(controller.view).compactMap { $0 as? UIButton }
-      .filter { ($0.accessibilityIdentifier ?? "").hasPrefix("panelCandidate-") }
+    controller.view.layoutIfNeeded()
+    return descendants(controller.view).compactMap { $0 as? UIButton }
+      .filter { chip in
+        guard (chip.accessibilityIdentifier ?? "").hasPrefix("panelCandidate-") else { return false }
+        return sequence(first: chip as UIView, next: \.superview).allSatisfy { !$0.isHidden }
+      }
       .compactMap { chip in chip.configuration?.attributedTitle.map { String($0.characters) } }
       .map { $0.split(separator: "\n").first.map(String.init) ?? $0 }
   }
@@ -4659,22 +4672,32 @@ final class NineKeyKeyboardTests: XCTestCase {
     let typed = try preedit(in: controller)
     XCTAssertFalse(typed.contains("6464"), typed)
 
+    let topBeforeExpand = stripCandidates(in: controller).first
     try button("expandCandidates", in: controller).sendActions(for: .primaryActionTriggered)
     controller.view.layoutIfNeeded()
     let panel = try XCTUnwrap(candidatePanel(in: controller))
     let strip = try XCTUnwrap(descendants(controller.view).first { $0.accessibilityIdentifier == "candidateStrip" })
     XCTAssertGreaterThanOrEqual(panel.frame.minY, strip.convert(strip.bounds, to: controller.view).maxY,
                                 "the panel covers the keys, not the candidate strip")
-    for identifier in ["candidatePanelBack", "candidatePanelDelete", "candidatePanelClear",
+    for identifier in ["candidatePanelSpellingCycle", "candidatePanelDelete", "candidatePanelClear",
                        "candidatePanelSingleToggle"] {
       XCTAssertNoThrow(try button(identifier, in: controller))
     }
-    // 面板底色透明，被它盖住的键藏起来，候选栏不藏。
-    let key = try button("nineKey6", in: controller)
+    // 面板底色透明，被它盖住的键藏起来，候选栏不藏；选拼音放在顶部候选栏，全部候选词放在下方候选面板，左栏平时隐藏以拓宽候选网格。
+    let key = try nineKeyDigitButton("6", in: controller)
     XCTAssertTrue(sequence(first: key as UIView, next: \.superview).contains { $0.alpha == 0 })
     XCTAssertFalse(sequence(first: strip, next: \.superview).contains { $0.alpha == 0 })
     XCTAssertEqual(try button("expandCandidates", in: controller).accessibilityLabel, "收起候选")
-    XCTAssertFalse(panelCandidates(in: controller).isEmpty)
+    let topSpellingBar = try XCTUnwrap(descendants(strip).first { $0.accessibilityIdentifier == "nineKeyStripSpellingBar" })
+    XCTAssertFalse(topSpellingBar.isHidden, "选拼音横向条显示在顶部候选栏")
+    XCTAssertTrue(stripCandidates(in: controller).isEmpty, "展开后候选词全部移入候选面板，顶部候选栏不再保留候选词")
+    let leadingColumn = try XCTUnwrap(descendants(panel).first { $0.accessibilityIdentifier == "candidatePanelSpellingColumn" })
+    XCTAssertTrue(leadingColumn.isHidden, "非笔画筛选时隐藏面板左栏")
+    let expandedCandidates = panelCandidates(in: controller)
+    XCTAssertFalse(expandedCandidates.isEmpty)
+    if let topBeforeExpand {
+      XCTAssertEqual(expandedCandidates.first, topBeforeExpand, "展开前首选候选词完整呈现在候选面板首位")
+    }
     let spellings = visibleSpellings(in: controller)
     XCTAssertTrue(spellings.contains("ning"), "\(spellings)")
     // 拼音之后是下一个数字键上的大写字母，最后是数字本身，无障碍名称分得清三者。
@@ -4682,7 +4705,10 @@ final class NineKeyKeyboardTests: XCTestCase {
     XCTAssertEqual(letter.accessibilityLabel, "选择字母 M")
     XCTAssertEqual(try button("candidatePanelSpelling_6", in: controller).accessibilityLabel, "输入数字 6")
     XCTAssertEqual(try button("candidatePanelSpelling_ning", in: controller).accessibilityLabel, "选择拼音 ning")
-    XCTAssertEqual(try button("nineKeySpelling_M", in: controller).accessibilityLabel, "选择字母 M")
+    if let sidebarLetter = descendants(controller.view).compactMap({ $0 as? UIButton })
+      .first(where: { $0.accessibilityIdentifier == "nineKeySpelling_M" }) {
+      XCTAssertEqual(sidebarLetter.accessibilityLabel, "选择字母 M")
+    }
 
     try button("candidatePanelSpelling_ning", in: controller).sendActions(for: .primaryActionTriggered)
     XCTAssertTrue(candidatePanel(in: controller) === panel, "choosing a spelling keeps the panel open")
@@ -4717,9 +4743,9 @@ final class NineKeyKeyboardTests: XCTestCase {
     attachment.lifetime = .keepAlways
     add(attachment)
 
-    try button("candidatePanelBack", in: controller).sendActions(for: .primaryActionTriggered)
+    try button("expandCandidates", in: controller).sendActions(for: .primaryActionTriggered)
     XCTAssertNil(candidatePanel(in: controller))
-    XCTAssertFalse(try preedit(in: controller).isEmpty, "返回 only closes the panel")
+    XCTAssertFalse(try preedit(in: controller).isEmpty, "收起箭头 only closes the panel")
     XCTAssertFalse(sequence(first: key as UIView, next: \.superview).contains { $0.alpha == 0 })
     XCTAssertEqual(try button("expandCandidates", in: controller).accessibilityLabel, "展开全部候选")
   }
@@ -4750,8 +4776,18 @@ final class NineKeyKeyboardTests: XCTestCase {
 
     let strokeToggle = try button("candidatePanelStrokeToggle", in: controller)
     try XCTSkipIf(strokeToggle.isHidden, "this bundle carries no stroke dictionary")
+    let leadingColumn = try XCTUnwrap(descendants(controller.view).first {
+      $0.accessibilityIdentifier == "candidatePanelSpellingColumn"
+    })
+    let topSpellingBar = try XCTUnwrap(descendants(controller.view).first {
+      $0.accessibilityIdentifier == "nineKeyStripSpellingBar"
+    })
+    XCTAssertTrue(leadingColumn.isHidden)
+    XCTAssertFalse(topSpellingBar.isHidden)
     strokeToggle.sendActions(for: .primaryActionTriggered)
     XCTAssertEqual(strokeToggle.configuration?.title, "拼音")
+    XCTAssertFalse(leadingColumn.isHidden, "切入笔画筛选时展开左栏显示笔画键")
+    XCTAssertTrue(topSpellingBar.isHidden, "笔画模式下隐藏顶部横向拼音条")
     XCTAssertTrue(visibleSpellings(in: controller).isEmpty, "the left column shows strokes now")
     let prefix = try XCTUnwrap(descendants(controller.view).first {
       $0.accessibilityIdentifier == "candidatePanelStrokePrefix"
@@ -4777,10 +4813,12 @@ final class NineKeyKeyboardTests: XCTestCase {
     try button("candidatePanelStroke_h", in: controller).sendActions(for: .primaryActionTriggered)
     strokeToggle.sendActions(for: .primaryActionTriggered)
     controller.view.layoutIfNeeded()
+    XCTAssertTrue(leadingColumn.isHidden, "回到拼音模式时重新隐藏面板左栏")
+    XCTAssertFalse(topSpellingBar.isHidden, "回到拼音模式时恢复顶部横向拼音条")
     XCTAssertTrue(stripAndPanelCandidates(in: controller).contains("宁"))
     XCTAssertTrue(visibleSpellings(in: controller).contains("ning"), "\(visibleSpellings(in: controller))")
     XCTAssertTrue(stripAndPanelCandidates(in: controller).allSatisfy { $0.count == 1 })
-    try button("candidatePanelBack", in: controller).sendActions(for: .primaryActionTriggered)
+    try button("expandCandidates", in: controller).sendActions(for: .primaryActionTriggered)
     try button("expandCandidates", in: controller).sendActions(for: .primaryActionTriggered)
     controller.view.layoutIfNeeded()
     XCTAssertEqual(try button("candidatePanelSingleToggle", in: controller).configuration?.title, "单字")

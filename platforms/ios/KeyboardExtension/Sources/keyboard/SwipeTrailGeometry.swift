@@ -51,6 +51,22 @@ struct SwipeTrailGeometry {
     trim()
   }
 
+  /// 批量替换并仅在末尾裁剪一次弧长窗口，避免 120Hz 重画时逐点 `append` 引发的 O(K²) 头部搬移。
+  mutating func replace(with incoming: [CGPoint]) {
+    points.removeAll(keepingCapacity: true)
+    let minSpacingSq = Self.minSpacing * Self.minSpacing
+    for point in incoming {
+      guard point.x.isFinite, point.y.isFinite else { continue }
+      if let last = points.last {
+        let dx = point.x - last.x
+        let dy = point.y - last.y
+        guard dx * dx + dy * dy >= minSpacingSq else { continue }
+      }
+      points.append(point)
+    }
+    trim()
+  }
+
   /// 参照裁剪（0x1004845e4）：从最新点向前走、累加段长；第一个累计长度超过
   /// `windowLength` 的索引成为新起点。保留的路径因此不超过窗口；恰好等于
   /// 窗口的路径整体保留。
@@ -110,11 +126,13 @@ struct SwipeTrailGeometry {
   /// 笔尖因此保持最后一段的方向、色带在该处达到满宽——下面的圆弧在那段
   /// 满宽上叠加圆形笔头。
   func edges() -> (left: [CGPoint], right: [CGPoint]) {
-    let n = points.count
-    guard n >= 2 else { return ([], []) }
     let length = totalLength
-    guard length > 0 else { return ([], []) }
-    let width = bandWidth
+    return edges(totalLength: length, width: min(length / Self.growthLength, 1) * Self.maxWidth)
+  }
+
+  private func edges(totalLength length: CGFloat, width: CGFloat) -> (left: [CGPoint], right: [CGPoint]) {
+    let n = points.count
+    guard n >= 2, length > 0 else { return ([], []) }
     var left: [CGPoint] = []
     var right: [CGPoint] = []
     left.reserveCapacity(n)
@@ -169,18 +187,60 @@ struct SwipeTrailGeometry {
   /// 不画，这里同样。
   func path() -> CGPath {
     let n = points.count
-    guard n >= 2, totalLength > 0 else { return CGMutablePath() }
-    let (left, right) = edges()
+    guard n >= 2 else { return CGMutablePath() }
+    let length = totalLength
+    guard length > 0 else { return CGMutablePath() }
+    let width = min(length / Self.growthLength, 1) * Self.maxWidth
+    let (left, right) = edges(totalLength: length, width: width)
     let tip = points[n - 1]
     // θ 指向左边缘（中心差分法线 × W/2），θ+π 指向右边缘；圆弧在两者之间
     // 扫出圆形笔头。边缘已是满宽时弧的起止与边缘端点重合——没有连接弦。
     let theta = atan2(left[n - 1].y - tip.y, left[n - 1].x - tip.x)
     let path = CGMutablePath()
     path.addLines(between: left)
-    path.addArc(center: tip, radius: bandWidth / 2,
+    path.addArc(center: tip, radius: width / 2,
                 startAngle: theta, endAngle: theta + .pi, clockwise: true)
-    path.addLines(between: Array(right.reversed()))
+    // 直接倒序逐点写路径，避免每帧分配 `Array(right.reversed())`。
+    for point in right.reversed() {
+      path.addLine(to: point)
+    }
     path.closeSubpath()
     return path
+  }
+
+  /// 生成供抬手淡出动画插值使用的「向笔尖收束」目标路径：
+  /// 保持与 `path()` 完全相同的顶点个数与子路径拓扑（左边缘 `n` 点 + 笔尖半圆弧 + 右边缘 `n` 点），
+  /// 将每个历史采样点向笔尖末尾按 `tailRetention` 比例平滑聚拢并收细带宽，使 `CABasicAnimation(keyPath: "path")` 能无跳变地画出彗星尾迹向落点收束消散的效果。
+  func retractedPath(tailRetention: CGFloat = 0.28, widthScale: CGFloat = 0.45) -> CGPath {
+    let n = points.count
+    guard n >= 2 else { return CGMutablePath() }
+    let fullLength = totalLength
+    guard fullLength > 0 else { return CGMutablePath() }
+    let clampedRetention = min(max(tailRetention, 0.08), 1.0)
+    let tip = points[n - 1]
+    var contracted = SwipeTrailGeometry()
+    contracted.points = points.enumerated().map { index, point in
+      let progress = CGFloat(index) / CGFloat(n - 1)
+      let factor = 1.0 - clampedRetention * (1.0 - progress)
+      return CGPoint(
+        x: point.x + (tip.x - point.x) * factor,
+        y: point.y + (tip.y - point.y) * factor
+      )
+    }
+    let contractedLength = max(contracted.totalLength, Self.normalEpsilon)
+    let baseWidth = min(fullLength / Self.growthLength, 1) * Self.maxWidth
+    let width = max(baseWidth * min(max(widthScale, 0.15), 1.0), 2.0)
+    let (left, right) = contracted.edges(totalLength: contractedLength, width: width)
+    guard left.count == n, right.count == n else { return path() }
+    let theta = atan2(left[n - 1].y - tip.y, left[n - 1].x - tip.x)
+    let result = CGMutablePath()
+    result.addLines(between: left)
+    result.addArc(center: tip, radius: width / 2,
+                  startAngle: theta, endAngle: theta + .pi, clockwise: true)
+    for point in right.reversed() {
+      result.addLine(to: point)
+    }
+    result.closeSubpath()
+    return result
   }
 }

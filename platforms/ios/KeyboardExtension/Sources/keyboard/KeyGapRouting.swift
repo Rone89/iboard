@@ -72,6 +72,8 @@ final class KeyAreaStackView: UIStackView {
   var overlayKeys: [UIControl] = []
   /// 滑行输入或横滑光标进行中：新落下的手指一律命中键区自己而不是键，它们什么都不输入，挂在键区上的手势仍能结束或取消当前触摸。
   var suppressesKeyHits = false
+  /// Lokey 26 键样式下的顶排防吞点直通与组字态边缘防误触路由器；非 Lokey 样式时不起作用。
+  var lokeyTouchRouter: LokeyTouchHitRouter?
 
   override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
     let expanded = CGRect(
@@ -87,9 +89,17 @@ final class KeyAreaStackView: UIStackView {
     var hit = super.hitTest(point, with: event)
     if hit == nil, self.point(inside: point, with: event) { hit = self }
     if suppressesKeyHits, hit != nil { return self }
+    // Lokey 顶排防吞直通：顶栏底沿空白处或顶栏与首排缝隙直接透传给 Q–P，避免快打被顶栏吞掉。
+    if let router = lokeyTouchRouter, let topKey = router.passThroughTopRowKey(for: hit, at: point, in: self) {
+      return topKey
+    }
     if let hit, let receiver = yieldedReceiver(at: point, hit: hit) { return receiver }
     guard let gap = hit as? UIStackView, !isExcluded(gap) else {
-      return bounds.contains(point) ? hit : nil
+      guard bounds.contains(point) else { return nil }
+      if let router = lokeyTouchRouter, let control = Self.enclosingControl(of: hit, stoppingAt: self) {
+        return router.remapIfNeeded(hit: control, at: point, in: self)
+      }
+      return hit
     }
     var keys: [UIControl] = []
     collectKeys(in: gap, into: &keys)
@@ -118,7 +128,18 @@ final class KeyAreaStackView: UIStackView {
       !excluded.isHidden && excluded.isDescendant(of: gap)
         && KeyGapRouting.distance(from: local, to: excluded.convert(excluded.bounds, to: gap)) < keyDistance
     }
-    return closerToExcluded ? fallback : keys[index]
+    if closerToExcluded { return fallback }
+    let resolved = keys[index]
+    return lokeyTouchRouter?.remapIfNeeded(hit: resolved, at: point, in: self) ?? resolved
+  }
+
+  private static func enclosingControl(of view: UIView?, stoppingAt root: UIView) -> UIControl? {
+    var cursor = view
+    while let node = cursor, node !== root {
+      if let control = node as? UIControl { return control }
+      cursor = node.superview
+    }
+    return nil
   }
 
   /// 命中的是让出的键（或它所在行的空隙）、触摸落在它让出的那一段里，而接收的键就在同一行里可用时，返回接收的键。按布局位置判断，按下动画的缩放不算在内。

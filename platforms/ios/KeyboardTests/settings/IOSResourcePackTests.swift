@@ -60,4 +60,30 @@ final class IOSResourcePackTests: XCTestCase {
     // 音标表不随 App 分发：不能因为带着语言词库就当成已安装。
     XCTAssertFalse(IOSResourcePacks.bundled(CandidatePronunciationPreference.packID))
   }
+
+  func testWanxiangGrammarPackImportsValidFloatingGramFileAndRemovesCleanly() throws {
+    let base = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+    let root = base.appendingPathComponent("msime-wx-state-\(UUID().uuidString)", isDirectory: true)
+    let staging = base.appendingPathComponent("msime-wx-stage-\(UUID().uuidString)", isDirectory: true)
+    defer {
+      try? FileManager.default.removeItem(at: root)
+      try? FileManager.default.removeItem(at: staging)
+    }
+    try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+    let gramFile = staging.appendingPathComponent("wanxiang-lts-zh-hans.gram")
+    var bytes = Data(count: 1024)
+    let magic = Data("Rime::Grammar/".utf8)
+    bytes.replaceSubrange(0..<magic.count, with: magic)
+    try bytes.write(to: gramFile)
+
+    try IOSResourcePacks.install("grammar-model-wanxiang", stateRoot: root, files: [gramFile]) { _, _, _ in }
+    let packs = try IOSResourcePacks.list(stateRoot: root)
+    let wanxiang = try XCTUnwrap(packs.first { $0.id == "grammar-model-wanxiang" })
+    XCTAssertTrue(wanxiang.installed, "imported Wanxiang LTS pack should report installed")
+
+    XCTAssertTrue(try IOSResourcePacks.remove("grammar-model-wanxiang", stateRoot: root))
+    let afterRemove = try IOSResourcePacks.list(stateRoot: root)
+    let wanxiangAfter = try XCTUnwrap(afterRemove.first { $0.id == "grammar-model-wanxiang" })
+    XCTAssertFalse(wanxiangAfter.installed, "removed Wanxiang LTS pack should report missing")
+  }
 }

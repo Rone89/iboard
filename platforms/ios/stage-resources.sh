@@ -119,4 +119,16 @@ for directory in rerank-model rerank-model-small; do
   cp -R "$rerank_source/$directory" "$repo_root/target/ios/$directory"
 done
 echo "keystroke rerank models staged: $repo_root/target/ios/rerank-model, $repo_root/target/ios/rerank-model-small"
+# 可选的内置 octagram `.gram` 语法模型（默认放八股文·紧凑版 zh-hans-t-essay-bgw-compact.gram），放在 EngineResources 旁的 grammar-models/ 目录中：host-api 在兄弟目录查找它，作为 iOS 开箱即用的语法模型，也在选择万象 LTS 但尚未下载完时作为临时回退。目录始终存在，方便 Xcode 文件夹引用打包。
+grammar_source=${5:-$repo_root/target/grammar-models}
+grammar_destination="$repo_root/target/ios/grammar-models"
+mkdir -p "$grammar_destination"
+if compgen -G "$grammar_source/*.gram" >/dev/null; then
+  cp "$grammar_source"/*.gram "$grammar_destination/"
+fi
+if compgen -G "$grammar_destination/*.gram" >/dev/null; then
+  echo "grammar models staged: $grammar_destination"
+else
+  echo "no bundled grammar models at $grammar_destination; grammar model requires on-demand download"
+fi
 echo "iOS resources staged from the pinned dictionary release: $destination"

@@ -14,6 +14,18 @@ final class KeyboardBrandMarkButton: UIButton {
   private var renderedActive: Bool?
   private var renderedSkinID: String?
   private var skin = KeyboardTheme.current
+  var contentScaleBaseline: CGFloat = KeyboardViewController.topRowMinimumHeight {
+    didSet {
+      guard abs(contentScaleBaseline - oldValue) > 0.01 else { return }
+      renderIfNeeded(force: true)
+    }
+  }
+  var verticalOpticalOffset: CGFloat = 0 {
+    didSet {
+      guard abs(verticalOpticalOffset - oldValue) > 0.01 else { return }
+      renderIfNeeded(force: true)
+    }
+  }
 
   var isActive = false {
     didSet {
@@ -82,7 +94,7 @@ final class KeyboardBrandMarkButton: UIButton {
     let usesGlassPill = skin.isNative && SystemKeyboardTokens.drawsLiquidGlassKeyboard
 
     func glyph(scale: CGFloat) -> UIImage {
-      let rowScale = KeyboardToolbarButton.contentScale(rowHeight: size.height)
+      let rowScale = KeyboardToolbarButton.contentScale(rowHeight: size.height, baseline: contentScaleBaseline)
       let padBase = usesGlassPill ? KeyboardToolbarButton.nativeGlassPadSide : KeyboardToolbarButton.padSide
       let padSide = min(padBase * rowScale, size.width, size.height) * scale
       let symbolSide = min(Self.markSide * rowScale, size.width, size.height) * scale
@@ -92,9 +104,10 @@ final class KeyboardBrandMarkButton: UIButton {
 
       return UIGraphicsImageRenderer(size: size).image { _ in
         if isActive {
+          let padY = max(0, min(size.height - padSide, (size.height - padSide) / 2 + verticalOpticalOffset))
           let padRect = CGRect(
             x: (size.width - padSide) / 2,
-            y: (size.height - padSide) / 2,
+            y: padY,
             width: padSide,
             height: padSide
           )
@@ -113,9 +126,10 @@ final class KeyboardBrandMarkButton: UIButton {
           let fit = min(1, symbolSide / max(imageSize.width, imageSize.height, 1))
           let drawW = imageSize.width * fit
           let drawH = imageSize.height * fit
+          let drawY = max(0, min(size.height - drawH, (size.height - drawH) / 2 + verticalOpticalOffset))
           let drawRect = CGRect(
             x: (size.width - drawW) / 2,
-            y: (size.height - drawH) / 2,
+            y: drawY,
             width: drawW,
             height: drawH
           )

@@ -179,4 +179,20 @@ final class SwipeTrailGeometryTests: XCTestCase {
     XCTAssertEqual(smoothed[1], CGPoint(x: 30, y: 0))
     XCTAssertEqual(smoothed[2], CGPoint(x: 40, y: 10))
   }
+
+  func testRetractedPathContractsTailTowardTipWhilePreservingElementCount() {
+    var geometry = SwipeTrailGeometry()
+    geometry.append(CGPoint(x: 10, y: 20))
+    geometry.append(CGPoint(x: 60, y: 20))
+    geometry.append(CGPoint(x: 110, y: 20))
+
+    let full = geometry.path()
+    let retracted = geometry.retractedPath(tailRetention: 0.25, widthScale: 0.5)
+    XCTAssertFalse(retracted.isEmpty)
+
+    let fullBox = full.boundingBoxOfPath
+    let retractedBox = retracted.boundingBoxOfPath
+    XCTAssertGreaterThan(retractedBox.minX, fullBox.minX + 50, "收束路径的尾端应显著向笔尖（右侧 x=110）聚拢")
+    XCTAssertLessThan(retractedBox.height, fullBox.height, "收束路径的带宽应同步收细")
+  }
 }

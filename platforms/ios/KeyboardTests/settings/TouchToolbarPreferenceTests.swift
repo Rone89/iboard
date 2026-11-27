@@ -76,7 +76,8 @@ final class TouchToolbarPreferenceTests: XCTestCase {
     for style in TouchTwentySixKeyStyle.allCases {
       let items = KeyboardToolbarPreviewRow.items(toolbar, phrases: true, scheme: false, hidden: false,
                                                   keyLayout: TouchKeyLayoutStyle(twentySixKey: style))
-      XCTAssertEqual(items, [.emoji, .phrases, .skin], style.rawValue)
+      let expected: [KeyboardPreviewToolbarItem] = [.emoji, .phrases, .skin]
+      XCTAssertEqual(items, expected, style.rawValue)
     }
   }
 

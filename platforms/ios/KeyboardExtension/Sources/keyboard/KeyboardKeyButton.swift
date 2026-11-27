@@ -61,6 +61,8 @@ final class KeyboardKeyButton: UIButton {
   enum PressFeedback: Equatable {
     /// 按键：缩放到 .96、亮度降到 .86，亮度用叠在按键底色上的 .14 黑色画出。
     case key
+    /// Lokey 风格按键：不缩放键帽（scale = 1），按下 0ms 瞬切至 Lokey 按下态配色（浅 `#DADDE4` / 深 `white 28%`）。
+    case lokeyKey
     /// 只缩放，例如工具栏的 .92。
     case scale(CGFloat)
     /// 淡到这个不透明度，例如候选胶囊的 .6。
@@ -113,6 +115,10 @@ final class KeyboardKeyButton: UIButton {
     case .key:
       scale = pressed ? Self.keyPressScale : 1
       shade = pressed ? Self.keyPressShade : 0
+    case .lokeyKey:
+      scale = 1
+      let isDark = traitCollection.userInterfaceStyle == .dark
+      shade = pressed ? (isDark ? LokeyVisualStyle.darkPressOverlayAlpha : LokeyVisualStyle.lightPressOverlayAlpha) : 0
     case .scale(let value):
       scale = pressed ? value : 1
       shade = 0
@@ -186,6 +192,11 @@ final class KeyboardKeyButton: UIButton {
   /// 按当前键帽底色（半透明键帽与键盘底色预混后）的感知亮度选择按压叠加色：
   /// 浅色键帽保持黑色压暗，深色或深色半透明液态玻璃键帽改为白色提亮，避免 17% 白键帽按下反而变黑。
   private var pressShadeFillColor: UIColor {
+    if pressFeedback == .lokeyKey {
+      return traitCollection.userInterfaceStyle == .dark
+        ? LokeyVisualStyle.darkPressOverlayColor
+        : LokeyVisualStyle.lightPressOverlayColor
+    }
     let skin = KeyboardTheme.current
     let style = traitCollection.userInterfaceStyle
     let raw = (configuration?.background.customView as? SkinKeySurfaceView)?.fillColor
@@ -265,8 +276,26 @@ final class KeyboardKeyButton: UIButton {
     }
   }
 
+  /// 滑行途中在拐点或驻留键上锁定音节锚点时的轻量表现层微脉冲（不修改模型层 `transform`、不触发气泡弹窗）。
+  func pulseGlideAnchor() {
+    guard window != nil, !UIAccessibility.isReduceMotionEnabled else { return }
+    let pulse = CAKeyframeAnimation(keyPath: "transform.scale")
+    pulse.values = [1.0, 0.955, 1.0]
+    pulse.keyTimes = [0.0, 0.35, 1.0]
+    pulse.duration = 0.11
+    pulse.timingFunctions = [
+      CAMediaTimingFunction(name: .easeOut),
+      CAMediaTimingFunction(name: .easeInEaseOut),
+    ]
+    pulse.isRemovedOnCompletion = true
+    layer.add(pulse, forKey: "msime.glideAnchorPulse")
+  }
+
   override func didMoveToWindow() {
     super.didMoveToWindow()
+    cachedPreviewHost = nil
+    hasResolvedScrollAncestor = false
+    enclosingScrollView = nil
     if window == nil {
       if Self.activeRolloverKey === self { Self.activeRolloverKey = nil }
       committedByRollover = false
@@ -293,6 +322,8 @@ final class KeyboardKeyButton: UIButton {
   /// type their title turn it on: letters, the Microsoft Shuangpin `;` and the symbol layer. The iPad system keyboard
   /// shows none, so neither does this one there.
   var showsPressPreview = false
+  /// 启用 Lokey 按键放大气泡几何与底色（头部宽 `max(keyW * 1.54, 48)`、高 `52pt`，底座圆角与当前键帽一致）。
+  var usesLokeyPreviewStyle = false
   private weak var pressPreview: KeyPressPreviewView?
 
   /// 预览气泡代替按键标题显示的内容，例如在这个键上下滑会输入的字符；为 nil 时显示标题。
@@ -407,17 +438,28 @@ final class KeyboardKeyButton: UIButton {
     contentSize.width > boundsSize.width + 0.5 || contentSize.height > boundsSize.height + 0.5
   }
 
+  /// 候选词块上用于双语英文半行限宽的约束弱引用，避免每次刷新候选条都线性扫描约束数组。
+  weak var englishMaximumWidthConstraint: NSLayoutConstraint?
+
+  private weak var enclosingScrollView: UIScrollView?
+  private var hasResolvedScrollAncestor = false
+
   /// 按键在一个滚得动的容器里，例如九键左列的自定义符号表、九键面板的拼音栏：手指按下可能是在开始滚动，反馈仍留到松手时由动作发出，滑一下列表不振。
+  /// 首次进窗口时缓存最近的 `UIScrollView` 祖先，后续每次按键热路径 O(1) 判断，不再逐层遍历父视图链。
   var sitsInScrollableContent: Bool {
-    var node = superview
-    while let current = node {
-      if let scroll = current as? UIScrollView, scroll.isScrollEnabled,
-         Self.scrolls(contentSize: scroll.contentSize, boundsSize: scroll.bounds.size) {
-        return true
+    if !hasResolvedScrollAncestor {
+      hasResolvedScrollAncestor = true
+      var node = superview
+      while let current = node {
+        if let scroll = current as? UIScrollView {
+          enclosingScrollView = scroll
+          break
+        }
+        node = current.superview
       }
-      node = current.superview
     }
-    return false
+    guard let scroll = enclosingScrollView, scroll.isScrollEnabled else { return false }
+    return Self.scrolls(contentSize: scroll.contentSize, boundsSize: scroll.bounds.size)
   }
 
   /// 「九键滑动输入数字」（#10229）：九宫格 1–9 键的数字，为 nil 时这个键不接九键滑动。控制器建九宫格时设好；同一个键在数字层、九键双拼里也是它，那时 `nineKeySwipeMode` 返回关闭。
@@ -445,7 +487,7 @@ final class KeyboardKeyButton: UIButton {
   private var cornerHintDown: CGPoint = .zero
   /// 按下时的触摸时间戳（`UITouch.timestamp`），`cornerHintSwipesEitherWay` 用它判断这次触摸是否已经归长按。
   private var cornerHintDownTime: TimeInterval = 0
-  private var cornerHintTriggered = false
+  private(set) var cornerHintTriggered = false
   private var cornerHintHold: Timer?
 
   override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
@@ -655,11 +697,14 @@ final class KeyboardKeyButton: UIButton {
     cachedPreviewPalette = nil
   }
 
+  private weak var cachedPreviewHost: UIView?
+
   private func updatePressPreview() {
-    guard showsPressPreview,
+    guard showsPressPreview, isHighlighted, isEnabled,
+          traitCollection.userInterfaceIdiom == .phone,
           KeyboardFeedbackPreference.keyPreviewEnabled(in: Self.sharedFeedbackDefaults),
-          isHighlighted, isEnabled, traitCollection.userInterfaceIdiom == .phone,
-          let title = previewTitleOverride ?? configuration?.title, !title.isEmpty, let host = pressPreviewHost else {
+          let title = previewTitleOverride ?? configuration?.title, !title.isEmpty,
+          let host = pressPreviewHost else {
       removePressPreview()
       return
     }
@@ -672,7 +717,14 @@ final class KeyboardKeyButton: UIButton {
     let skin = KeyboardTheme.current
     let style = traitCollection.userInterfaceStyle
     let palette: (fill: UIColor, border: UIColor, text: UIColor, monospaced: Bool)
-    if let cached = Self.cachedPreviewPalette, cached.skin == skin, cached.style == style {
+    if usesLokeyPreviewStyle && skin.design == nil && (skin.isNative || skin.id == GlobalThemeCatalog.systemId) {
+      palette = (
+        LokeyVisualStyle.calloutFill.resolvedColor(with: traitCollection),
+        LokeyVisualStyle.calloutBorder.resolvedColor(with: traitCollection),
+        LokeyVisualStyle.foreground.resolvedColor(with: traitCollection),
+        skin.usesMonospacedFont
+      )
+    } else if let cached = Self.cachedPreviewPalette, cached.skin == skin, cached.style == style {
       palette = (cached.fill, cached.border, cached.text, cached.monospaced)
     } else {
       let resolvedFill = skin.calloutBackground.resolvedColor(with: traitCollection)
@@ -684,8 +736,10 @@ final class KeyboardKeyButton: UIButton {
     }
     // 取未经变换的 frame：按键可能已经缩放到一半。
     let key = superview?.convert(untransformedFrame, to: host) ?? convert(bounds, to: host)
+    let footRadius = configuration?.background.cornerRadius ?? KeyPressPreviewView.bottomRadius
     preview.show(title, key: key, wide: KeyPressPreviewView.isWide(key: bounds.width, letter: rowLetterWidth),
-                 fill: palette.fill, border: palette.border, text: palette.text, monospaced: palette.monospaced)
+                 fill: palette.fill, border: palette.border, text: palette.text, monospaced: palette.monospaced,
+                 bottomRadius: footRadius, lokey: usesLokeyPreviewStyle)
     pressPreview = preview
   }
 
@@ -720,9 +774,13 @@ final class KeyboardKeyButton: UIButton {
 
   /// The keyboard's root view: the callout reaches above the key's row, so it cannot live inside the row's stack view.
   private var pressPreviewHost: UIView? {
+    if let cachedPreviewHost { return cachedPreviewHost }
     var responder: UIResponder? = next
     while let current = responder {
-      if let controller = current as? UIViewController { return controller.view }
+      if let controller = current as? UIViewController {
+        cachedPreviewHost = controller.view
+        return controller.view
+      }
       responder = current.next
     }
     return nil
@@ -755,7 +813,7 @@ final class KeyboardKeyButton: UIButton {
     // 按钮自己的布局才能看到最终尺寸。控制器不再遍历整棵视图树重复更新阴影；
     // 按钮尺寸和圆角不变时，候选更新引发的布局也不必重建路径。
     if layer.shadowOpacity > 0 {
-      let radius = KeyboardTheme.current.cornerRadius
+      let radius = configuration?.background.cornerRadius ?? KeyboardTheme.current.cornerRadius
       if appliedShadowBounds != bounds || appliedShadowRadius != radius || layer.shadowPath == nil {
         layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
         appliedShadowBounds = bounds
@@ -797,16 +855,22 @@ final class KeyPressPreviewView: UIView {
   }
 
   /// `key` 的气泡位置，两者都在 `bounds` 的坐标系里：与按键居中对齐，在键盘左右边缘处向内收，下边缘比按键上边缘低 `overlap`。按键上方空间不够时气泡变矮：扩展的窗口止于 `bounds`，画到外面的部分会被系统裁掉。
-  static func geometry(key: CGRect, in bounds: CGRect, wide: Bool = false) -> Geometry {
-    let width = min(key.width * (wide ? wideWidthFactor : widthFactor), bounds.width)
+  static func geometry(key: CGRect, in bounds: CGRect, wide: Bool = false, lokey: Bool = false) -> Geometry {
+    let rawWidth: CGFloat = lokey
+      ? max(key.width * LokeyVisualStyle.calloutWidthFactor, LokeyVisualStyle.calloutMinimumWidth)
+      : key.width * (wide ? wideWidthFactor : widthFactor)
+    let width = min(rawWidth, bounds.width)
     let x = min(max(key.midX - width / 2, bounds.minX), bounds.maxX - width)
     let bottom = key.minY + overlap
-    let height = max(min(Self.height, bottom - bounds.minY), 0)
+    let targetHeight = lokey ? LokeyVisualStyle.calloutHeight : Self.height
+    let height = max(min(targetHeight, bottom - bounds.minY), 0)
     return Geometry(head: CGRect(x: x, y: bottom - height, width: width, height: height), key: key)
   }
 
   private let shape = CAShapeLayer()
   private let label = UILabel()
+  private var lastFontSize: CGFloat = -1
+  private var lastFontMonospaced = false
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -830,9 +894,10 @@ final class KeyPressPreviewView: UIView {
 
   var text: String? { label.text }
 
-  func show(_ title: String, key: CGRect, wide: Bool, fill: UIColor, border: UIColor, text: UIColor, monospaced: Bool) {
-    let geometry = Self.geometry(key: key, in: bounds, wide: wide)
-    let path = Self.path(for: geometry)
+  func show(_ title: String, key: CGRect, wide: Bool, fill: UIColor, border: UIColor, text: UIColor, monospaced: Bool,
+            bottomRadius: CGFloat = KeyPressPreviewView.bottomRadius, lokey: Bool = false) {
+    let geometry = Self.geometry(key: key, in: bounds, wide: wide, lokey: lokey)
+    let path = Self.path(for: geometry, bottomRadius: bottomRadius)
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     shape.frame = bounds
@@ -843,14 +908,18 @@ final class KeyPressPreviewView: UIView {
     CATransaction.commit()
     // 被窗口顶部压矮的气泡，字符仍留在气泡内。
     let size = min(Self.fontSize, geometry.head.height * 0.62)
-    label.font = monospaced ? .monospacedSystemFont(ofSize: size, weight: .regular) : .systemFont(ofSize: size, weight: .regular)
+    if size != lastFontSize || monospaced != lastFontMonospaced {
+      label.font = monospaced ? .monospacedSystemFont(ofSize: size, weight: .regular) : .systemFont(ofSize: size, weight: .regular)
+      lastFontSize = size
+      lastFontMonospaced = monospaced
+    }
     label.textColor = text
-    label.text = title
+    if label.text != title { label.text = title }
     label.frame = geometry.head.insetBy(dx: 4, dy: 2)
   }
 
   /// 绘制由「放大气泡 + 平滑颈部曲线 + 底座按键」构成的一体化轮廓。
-  static func path(for geometry: Geometry) -> CGPath {
+  static func path(for geometry: Geometry, bottomRadius: CGFloat = KeyPressPreviewView.bottomRadius) -> CGPath {
     let head = geometry.head, key = geometry.key
     guard !head.isEmpty, !key.isEmpty, key.height > 0 else {
       return UIBezierPath(roundedRect: head, cornerRadius: topRadius).cgPath

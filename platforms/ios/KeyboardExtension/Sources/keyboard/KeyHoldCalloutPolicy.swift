@@ -66,11 +66,20 @@ enum KeyHoldCalloutPolicy {
   }
 }
 
-/// 回车键语义着蓝规则：原生皮肤在未组字且宿主为普通 `.default` 换行时回归普通功能键底色，只有主动作或组字「确认」态才着动作蓝；非原生主题保留设计稿全态强调色。
+/// 回车键语义着蓝规则：原生/Lokey 皮肤在未组字且宿主为普通 `.default` 换行、或 `enablesReturnKeyAutomatically` 且输入框为空时回归非强调底色；只有可触发的主动作或组字「确认」态才着动作蓝；非原生主题保留设计稿全态强调色。
 enum ReturnKeyStylePolicy {
-  static func usesActionAccent(isNativeSkin: Bool, confirmsComposition: Bool, returnKeyType: UIReturnKeyType) -> Bool {
+  static func usesActionAccent(
+    isNativeSkin: Bool,
+    confirmsComposition: Bool,
+    returnKeyType: UIReturnKeyType,
+    enablesReturnKeyAutomatically: Bool = false,
+    hasText: Bool = true
+  ) -> Bool {
     guard isNativeSkin else { return true }
-    return confirmsComposition || returnKeyType != .default
+    if confirmsComposition { return true }
+    guard returnKeyType != .default else { return false }
+    if enablesReturnKeyAutomatically && !hasText { return false }
+    return true
   }
 }
 

@@ -5,17 +5,27 @@ import XCTest
 @MainActor
 final class KeyGapRoutingTests: XCTestCase {
   private var savedLayout: [String: Any] = [:]
+  private var savedTwentySixStyle: Any?
+  private var savedMirroredStyle = TouchKeyLayoutStyle.mirrored
   private let layoutKeys = [KeyboardLayoutPreference.keySpacingKey, KeyboardLayoutPreference.rowSpacingKey]
 
   override func setUp() {
     super.setUp()
     enableAllInputSchemes()
-    // 别的用例改过的键距会留在 App Group 里；这里按默认间距量空隙。
+    // 别的用例改过的键距会留在 App Group 里；这里按默认间距量空隙，并固定 26 键为标准样式测试通用缝隙路由（Lokey 专属路由由 LokeyLayoutTests 覆盖）。
     savedLayout = [:]
     for key in layoutKeys {
       savedLayout[key] = KeyboardLayoutPreference.defaults.object(forKey: key)
       KeyboardLayoutPreference.defaults.removeObject(forKey: key)
     }
+    savedMirroredStyle = TouchKeyLayoutStyle.mirrored
+    savedTwentySixStyle = MetasequoiaInputSessionBridge.loadSharedPreferences()?[TouchKeyLayoutStyle.twentySixKeyDocumentKey]
+    _ = MetasequoiaInputSessionBridge.updateSharedPreferences { doc in
+      doc[TouchKeyLayoutStyle.twentySixKeyDocumentKey] = TouchTwentySixKeyStyle.standard.rawValue
+    }
+    var style = TouchKeyLayoutStyle.mirrored
+    style.twentySixKey = .standard
+    TouchKeyLayoutStyle.mirrored = style
   }
 
   override func tearDown() {
@@ -23,6 +33,10 @@ final class KeyGapRoutingTests: XCTestCase {
       if let value = savedLayout[key] { KeyboardLayoutPreference.defaults.set(value, forKey: key) }
       else { KeyboardLayoutPreference.defaults.removeObject(forKey: key) }
     }
+    _ = MetasequoiaInputSessionBridge.updateSharedPreferences { doc in
+      doc[TouchKeyLayoutStyle.twentySixKeyDocumentKey] = savedTwentySixStyle
+    }
+    TouchKeyLayoutStyle.mirrored = savedMirroredStyle
     super.tearDown()
   }
 

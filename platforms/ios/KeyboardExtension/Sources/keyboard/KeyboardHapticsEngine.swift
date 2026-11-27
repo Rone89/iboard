@@ -18,6 +18,7 @@ final class KeyboardHapticsEngine {
   enum EventKind: Hashable {
     case key(KeySoundClass)
     case glideStart
+    case glideInflection
     case cursorTick
     case swipeDelete
     case undo
@@ -44,6 +45,8 @@ final class KeyboardHapticsEngine {
       return [Pulse(relativeTime: 0, intensity: 0.38, sharpness: 0.90)]
     case (.light, .glideStart):
       return [Pulse(relativeTime: 0, intensity: 0.30, sharpness: 0.75)]
+    case (.light, .glideInflection):
+      return [Pulse(relativeTime: 0, intensity: 0.20, sharpness: 0.88)]
     case (.light, .cursorTick):
       return [Pulse(relativeTime: 0, intensity: 0.24, sharpness: 0.92)]
     case (.light, .swipeDelete):
@@ -65,6 +68,8 @@ final class KeyboardHapticsEngine {
       return [Pulse(relativeTime: 0, intensity: 0.56, sharpness: 0.85)]
     case (.medium, .glideStart):
       return [Pulse(relativeTime: 0, intensity: 0.40, sharpness: 0.75)]
+    case (.medium, .glideInflection):
+      return [Pulse(relativeTime: 0, intensity: 0.27, sharpness: 0.90)]
     case (.medium, .cursorTick):
       return [Pulse(relativeTime: 0, intensity: 0.34, sharpness: 0.94)]
     case (.medium, .swipeDelete):
@@ -90,6 +95,8 @@ final class KeyboardHapticsEngine {
       return [Pulse(relativeTime: 0, intensity: 0.78, sharpness: 0.80)]
     case (.strong, .glideStart):
       return [Pulse(relativeTime: 0, intensity: 0.50, sharpness: 0.75)]
+    case (.strong, .glideInflection):
+      return [Pulse(relativeTime: 0, intensity: 0.35, sharpness: 0.92)]
     case (.strong, .cursorTick):
       return [Pulse(relativeTime: 0, intensity: 0.46, sharpness: 0.96)]
     case (.strong, .swipeDelete):
@@ -113,6 +120,7 @@ final class KeyboardHapticsEngine {
   private let supportsCoreHaptics: Bool
   private var engine: CHHapticEngine?
   private var engineRunning = false
+  private var engineStarting = false
   private var players: [CacheKey: CHHapticPatternPlayer] = [:]
   private var lastTriggerTime: TimeInterval = -.infinity
 
@@ -120,14 +128,16 @@ final class KeyboardHapticsEngine {
     self.supportsCoreHaptics = supportsCoreHaptics
   }
 
-  /// 触发一次分键型马达震动；返回 `true` 表示已由 `CoreHaptics` 成功播放，`false` 时调用方回退 `UIImpactFeedbackGenerator`。
+  /// 触发一次分键型马达震动；返回 `true` 表示已由 `CoreHaptics` 成功播放，`false` 时调用方立即回退零延迟的 `UIImpactFeedbackGenerator`。
+  /// 绝不在主线程同步调用 `CHHapticEngine.start()`：若引擎因 `isAutoShutdownEnabled` 休眠，本次直接回退系统反馈并异步拉起引擎，彻底消除 20–120ms 主线程卡顿。
   @discardableResult
   func play(strength: KeyboardHapticStrength, event: EventKind, now: TimeInterval = CACurrentMediaTime()) -> Bool {
     guard supportsCoreHaptics, strength != .system else { return false }
     guard Self.allowsTrigger(now: now, last: lastTriggerTime) else { return true }
     let pulses = Self.pulses(for: strength, event: event)
     guard !pulses.isEmpty else { return false }
-    guard ensureStarted(), let player = cachedPlayer(for: CacheKey(strength: strength, event: event), pulses: pulses) else {
+    guard engineRunning, let player = cachedPlayer(for: CacheKey(strength: strength, event: event), pulses: pulses) else {
+      startAsyncIfNeeded(prewarming: strength)
       return false
     }
     do {
@@ -137,14 +147,29 @@ final class KeyboardHapticsEngine {
     } catch {
       engineRunning = false
       players.removeAll(keepingCapacity: true)
+      startAsyncIfNeeded(prewarming: strength)
       return false
     }
   }
 
-  /// 在键盘首帧渲染完成后提前异步拉起 `CHHapticEngine` 并预编译高频按键播放器，消除首次按键时的冷启动毛刺。
+  /// 在键盘首帧渲染完成后异步拉起 `CHHapticEngine` 并预编译高频按键播放器，不阻塞弹出动画。
   func warmUp(strength: KeyboardHapticStrength) {
     guard supportsCoreHaptics, strength != .system else { return }
-    guard ensureStarted() else { return }
+    startAsyncIfNeeded(prewarming: strength)
+  }
+
+  /// 键盘收起或收到内存警告时停掉引擎并清掉缓存播放器，下次按下按需重建。
+  func stop() {
+    players.removeAll(keepingCapacity: false)
+    engineStarting = false
+    if engineRunning {
+      engine?.stop(completionHandler: nil)
+      engineRunning = false
+    }
+  }
+
+  private func prewarmHotPlayers(for strength: KeyboardHapticStrength) {
+    guard engineRunning, strength != .system else { return }
     let hotEvents: [EventKind] = [.key(.standard), .key(.space), .key(.backspace), .cursorTick]
     for event in hotEvents {
       let pulses = Self.pulses(for: strength, event: event)
@@ -154,16 +179,7 @@ final class KeyboardHapticsEngine {
     }
   }
 
-  /// 键盘收起或收到内存警告时停掉引擎并清掉缓存播放器，下次按下按需重建。
-  func stop() {
-    players.removeAll(keepingCapacity: false)
-    if engineRunning {
-      engine?.stop(completionHandler: nil)
-      engineRunning = false
-    }
-  }
-
-  private func ensureStarted() -> Bool {
+  private func startAsyncIfNeeded(prewarming strength: KeyboardHapticStrength?) {
     if engine == nil {
       do {
         let created = try CHHapticEngine()
@@ -172,31 +188,41 @@ final class KeyboardHapticsEngine {
         created.stoppedHandler = { [weak self] _ in
           Task { @MainActor [weak self] in
             self?.engineRunning = false
+            self?.engineStarting = false
             self?.players.removeAll(keepingCapacity: true)
           }
         }
         created.resetHandler = { [weak self] in
           Task { @MainActor [weak self] in
             self?.engineRunning = false
+            self?.engineStarting = false
             self?.players.removeAll(keepingCapacity: true)
           }
         }
         engine = created
       } catch {
-        return false
+        return
       }
     }
-    guard let engine else { return false }
-    if !engineRunning {
-      do {
-        try engine.start()
-        engineRunning = true
-      } catch {
-        engineRunning = false
-        return false
+    guard let engine else { return }
+    if engineRunning {
+      if let strength { prewarmHotPlayers(for: strength) }
+      return
+    }
+    guard !engineStarting else { return }
+    engineStarting = true
+    engine.start { [weak self] error in
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        self.engineStarting = false
+        if error == nil {
+          self.engineRunning = true
+          if let strength { self.prewarmHotPlayers(for: strength) }
+        } else {
+          self.engineRunning = false
+        }
       }
     }
-    return true
   }
 
   private func cachedPlayer(for key: CacheKey, pulses: [Pulse]) -> CHHapticPatternPlayer? {

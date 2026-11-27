@@ -551,9 +551,11 @@ final class TypingStatisticsTests: XCTestCase {
     XCTAssertFalse(TypingKeyHeatmap(counts: statistics.keyCounts(on: [day], calendar: calendar)).showsNineKey)
     // Ties keep id order, so Backspace comes before KeyB.
     XCTAssertEqual(heatmap.top().map(\.id), ["KeyA", "Backspace", "KeyB", "Comma", "Nine5"])
-    // 页面一次只画一块键盘，其他键按当前那块列出：标准 26 键底行没有 符，所以 符 出现在其他键里；九键热力图底行带 符，所以不在其他键里。
-    XCTAssertEqual(heatmap.others(nineKey: false).map(\.id), ["Nine5", TypingKeyID.symbol, "Digit1"])
-    XCTAssertEqual(heatmap.others(nineKey: false).map(\.label), ["九键 5", "符", "1"])
+    // 页面一次只画一块键盘，其他键按当前那块列出：默认 Lokey 26 键底行没有逗号和 符，所以两者都出现在其他键里；标准 26 键含逗号不含 符；九键热力图底行带 符，所以不在其他键里。
+    XCTAssertEqual(heatmap.others(nineKey: false).map(\.id), ["Comma", "Nine5", TypingKeyID.symbol, "Digit1"])
+    XCTAssertEqual(heatmap.others(nineKey: false).map(\.label), [",", "九键 5", "符", "1"])
+    XCTAssertEqual(heatmap.others(nineKey: false, style: TouchKeyLayoutStyle(twentySixKey: .standard)).map(\.id),
+                   ["Nine5", TypingKeyID.symbol, "Digit1"])
     XCTAssertEqual(heatmap.others(nineKey: true).map(\.id), ["KeyA", "KeyB", "Comma", "Digit1"])
     XCTAssertEqual(TypingKeyHeatmap.accessibilityLabel("KeyA", count: 123), "A，123 次")
     // 画在键盘图上的键读它的键面：分词键记在 `'` 上，读出来仍是「分词」。
@@ -661,6 +663,7 @@ final class TypingStatisticsTests: XCTestCase {
   private static let recordedID: [String: String] = [
     "shiftButton": TypingKeyID.shift, "letterDeleteKey": TypingKeyID.backspace,
     "symbolPanelKey": TypingKeyID.symbol, "layoutToggleButton": TypingKeyID.layer, "inputModeSwitchButton": TypingKeyID.globe,
+    "layerEmojiKey": TypingKeyID.emoji,
     "spaceKey": TypingKeyID.space, "bottomLanguageKey": TypingKeyID.language, "returnKey": TypingKeyID.enter,
     "quickPunctuationKey": TypingKeyID.quickPunctuation,
     "nineKeyDelete": TypingKeyID.backspace, "nineKeyMiddleKey": TypingKeyID.pinyinSeparator,

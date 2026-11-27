@@ -174,7 +174,9 @@ struct KeyboardSkinPreview: View {
   @ViewBuilder
   private var keys: some View {
     let layer = letterLayer
-    if layer.tallReturn {
+    if layer.iosNative {
+      nineKeyIOSNative
+    } else if layer.tallReturn {
       nineKeyTallReturn(layer)
     } else {
       letterBlock(layer)
@@ -225,16 +227,23 @@ struct KeyboardSkinPreview: View {
       }.frame(maxHeight: .infinity)
     } else {
       VStack(spacing: layout.rowSpacing) {
-        let keyGap: CGFloat = 5
-        let middleInset = KeyboardGeometry.phoneMiddleRowHorizontalInset(keysWidth: Self.keysWidth, keySpacing: keyGap)
-        let edge = KeyboardGeometry.phoneThirdRowEdgeLayout(keysWidth: Self.keysWidth, keySpacing: keyGap)
+        let lokey = keyLayout.twentySixKey == .lokey
+        let keyGap: CGFloat = lokey ? 6.25 : 5
+        let middleInset = lokey
+          ? LokeyLayoutMetrics.middleRowHorizontalInset(keysWidth: Self.keysWidth, keySpacing: keyGap)
+          : KeyboardGeometry.phoneMiddleRowHorizontalInset(keysWidth: Self.keysWidth, keySpacing: keyGap)
+        let edge = lokey
+          ? LokeyLayoutMetrics.thirdRowEdgeLayout(keysWidth: Self.keysWidth, keySpacing: keyGap)
+          : KeyboardGeometry.phoneThirdRowEdgeLayout(keysWidth: Self.keysWidth, keySpacing: keyGap)
         if layer.numberRow { numberRow }
-        row(Array("qwertyuiop").map(String.init), hints: letterHints ? Array("1234567890").map(String.init) : [])
-        row(Array("asdfghjkl").map(String.init)).padding(.horizontal, middleInset)
+        row(Array("qwertyuiop").map(String.init),
+            hints: (letterHints && !lokey) ? Array("1234567890").map(String.init) : [],
+            spacing: keyGap)
+        row(Array("asdfghjkl").map(String.init), spacing: keyGap).padding(.horizontal, middleInset)
         HStack(spacing: 0) {
           key("⇧", function: true).frame(width: edge.width)
           Spacer(minLength: 0).frame(width: edge.gap)
-          row(Array("zxcvbnm").map(String.init))
+          row(Array("zxcvbnm").map(String.init), spacing: keyGap)
           Spacer(minLength: 0).frame(width: edge.gap)
           key("⌫", function: true).frame(width: edge.width)
         }
@@ -298,9 +307,60 @@ struct KeyboardSkinPreview: View {
     }.frame(maxHeight: .infinity)
   }
 
+  /// 九键「iOS 原生」皮肤预览：5 等宽列 × 4 等高行，全键使用统一浅/深键面色，左下 ABC 与右下回车跨两行。
+  private var nineKeyIOSNative: some View {
+    let colGap: CGFloat = 6
+    let spacing = CGFloat(layout.rowSpacing)
+    let col = (Self.keysWidth - colGap * 4) / 5
+    let spaceWidth = col * 2 + colGap
+    return GeometryReader { proxy in
+      let rowHeight = max((proxy.size.height - spacing * 3) / 4, 0)
+      let tallHeight = rowHeight * 2 + spacing
+      HStack(alignment: .top, spacing: colGap) {
+        VStack(spacing: spacing) {
+          key("123").frame(height: rowHeight)
+          key("#@¥").frame(height: rowHeight)
+          key("ABC").frame(height: tallHeight)
+        }.frame(width: col)
+        VStack(spacing: spacing) {
+          HStack(spacing: colGap) {
+            key(",。?!").frame(width: col, height: rowHeight)
+            key("ABC").frame(width: col, height: rowHeight)
+            key("DEF").frame(width: col, height: rowHeight)
+          }
+          HStack(spacing: colGap) {
+            key("GHI").frame(width: col, height: rowHeight)
+            key("JKL").frame(width: col, height: rowHeight)
+            key("MNO").frame(width: col, height: rowHeight)
+          }
+          HStack(spacing: colGap) {
+            key("PQRS").frame(width: col, height: rowHeight)
+            key("TUV").frame(width: col, height: rowHeight)
+            key("WXYZ").frame(width: col, height: rowHeight)
+          }
+          HStack(spacing: colGap) {
+            key("选拼音").frame(width: col, height: rowHeight)
+            key("空格").frame(width: spaceWidth, height: rowHeight)
+          }
+        }.frame(width: col * 3 + colGap * 2)
+        VStack(spacing: spacing) {
+          key("⌫").frame(height: rowHeight)
+          key("^_^").frame(height: rowHeight)
+          key("↵").frame(height: tallHeight)
+        }.frame(width: col)
+      }
+    }.frame(maxHeight: .infinity)
+  }
+
+  private var usesLokeyVisualSurface: Bool {
+    !nineKey && letterGrid == nil && keyLayout.twentySixKey == .lokey
+      && skin.design == nil && (skin.isNative || skin.id == GlobalThemeCatalog.systemId)
+  }
+
   /// 一排按份额分宽的底行键：`width` 扣掉键距后按 `TouchBottomRowLayout` 的份额分给各键。
   private func bottomRow(_ keys: [TouchBottomRowLayout.Key], width: CGFloat) -> some View {
-    let spacing: CGFloat = miniatureBottomRow ? 5 : 6
+    let lokey = !nineKey && letterGrid == nil && keyLayout.twentySixKey == .lokey
+    let spacing: CGFloat = lokey ? 6.25 : (miniatureBottomRow ? 5 : 6)
     let total = keys.reduce(0) { $0 + $1.weight }
     let unit = total > 0 ? max(width - spacing * CGFloat(max(keys.count - 1, 0)), 0) / total : 0
     return HStack(spacing: spacing) {
@@ -342,16 +402,19 @@ struct KeyboardSkinPreview: View {
 
   /// 画图标的按键，底色规则同 `key`。
   private func symbolKey(_ name: String, emphasized: Bool = false, function: Bool = false) -> some View {
-    ZStack {
+    let fg = usesLokeyVisualSurface
+      ? LokeyVisualStyle.foreground
+      : (emphasized ? skin.actionForeground : skin.keyForeground)
+    return ZStack {
       keySurface(emphasized: emphasized, function: function)
       Image(systemName: name).font(.system(size: 15, weight: .medium))
-        .foregroundStyle(color(emphasized ? skin.actionForeground : skin.keyForeground))
+        .foregroundStyle(color(fg))
     }
   }
 
   /// 一行等宽按键；`hints` 每个键各有一个时，把角标提示和对应标题配对。
-  private func row(_ titles: [String], hints: [String] = []) -> some View {
-    HStack(spacing: 5) {
+  private func row(_ titles: [String], hints: [String] = [], spacing: CGFloat = 5) -> some View {
+    HStack(spacing: spacing) {
       ForEach(Array(titles.enumerated()), id: \.offset) { index, title in
         key(title, hint: index < hints.count ? hints[index] : nil)
       }
@@ -360,10 +423,13 @@ struct KeyboardSkinPreview: View {
 
   /// 一个按键。`function` 标记 shift、删除、123、中等功能键，键盘用 `functionKeyBackground`（设计稿的 `kb.spec`）填充它们，而不是字母键颜色；`emphasized` 是用操作色的回车键。
   private func key(_ title: String, emphasized: Bool = false, function: Bool = false, hint: String? = nil) -> some View {
-    Text(title).font(.system(size: nineKey ? 13 : 15, weight: .medium, design: skin.usesMonospacedFont ? .monospaced : .default))
+    let fg = usesLokeyVisualSurface
+      ? LokeyVisualStyle.foreground
+      : (emphasized ? skin.actionForeground : skin.keyForeground)
+    return Text(title).font(.system(size: nineKey ? 13 : 15, weight: .medium, design: skin.usesMonospacedFont ? .monospaced : .default))
       .lineLimit(1).minimumScaleFactor(0.7)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .foregroundStyle(color(emphasized ? skin.actionForeground : skin.keyForeground))
+      .foregroundStyle(color(fg))
       .background(keySurface(emphasized: emphasized, function: function))
       .overlay(alignment: .topTrailing) {
         if let hint {
@@ -377,11 +443,15 @@ struct KeyboardSkinPreview: View {
     if let design = skin.design {
       // 键盘设计里的功能键和字母键画法相同，正如 `functionKeyBackground` 所规定。
       SkinKeySurface(design: design, action: emphasized)
+    } else if usesLokeyVisualSurface {
+      RoundedRectangle(cornerRadius: 9, style: .continuous)
+        .fill(color(LokeyVisualStyle.keyFill))
     } else {
-    RoundedRectangle(cornerRadius: skin.cornerRadius)
-      .fill(color(emphasized ? skin.actionBackground : function ? skin.functionKeyBackground : skin.keyBackground))
-      .overlay(RoundedRectangle(cornerRadius: skin.cornerRadius).stroke(color(skin.borderColor), lineWidth: skin.borderWidth))
-      .shadow(color: skin.hasShadow ? color(skin.shadowColor) : .clear, radius: skin.shadowRadius, y: skin.shadowOffset)
+      let effectiveRadius = (keyLayout.twentySixKey == .lokey && !nineKey && letterGrid == nil) ? 9 : skin.cornerRadius
+      RoundedRectangle(cornerRadius: effectiveRadius, style: .continuous)
+        .fill(color(emphasized ? skin.actionBackground : function ? skin.functionKeyBackground : skin.keyBackground))
+        .overlay(RoundedRectangle(cornerRadius: effectiveRadius, style: .continuous).stroke(color(skin.borderColor), lineWidth: skin.borderWidth))
+        .shadow(color: skin.hasShadow ? color(skin.shadowColor) : .clear, radius: skin.shadowRadius, y: skin.shadowOffset)
     }
   }
 }

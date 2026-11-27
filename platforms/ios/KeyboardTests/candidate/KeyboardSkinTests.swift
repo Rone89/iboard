@@ -2,11 +2,33 @@ import XCTest
 import UIKit
 
 final class KeyboardSkinTests: XCTestCase {
+  private var savedStyle = TouchKeyLayoutStyle.mirrored
+  private var savedTwentySixStyleDoc: Any?
+  private var savedNineKeyStyleDoc: Any?
+
   // Claims every scheme so an assignment to InputSchemePreference.scheme is not downgraded to
   // whatever the app group was left holding. See InputSchemeTestSupport.
   override func setUp() {
     super.setUp()
     enableAllInputSchemes()
+    savedStyle = TouchKeyLayoutStyle.mirrored
+    let document = MetasequoiaInputSessionBridge.loadSharedPreferences()
+    savedTwentySixStyleDoc = document?[TouchKeyLayoutStyle.twentySixKeyDocumentKey]
+    savedNineKeyStyleDoc = document?[TouchKeyLayoutStyle.nineKeyDocumentKey]
+    _ = MetasequoiaInputSessionBridge.updateSharedPreferences { doc in
+      doc[TouchKeyLayoutStyle.twentySixKeyDocumentKey] = TouchTwentySixKeyStyle.standard.rawValue
+      doc[TouchKeyLayoutStyle.nineKeyDocumentKey] = TouchNineKeyStyle.standard.rawValue
+    }
+    TouchKeyLayoutStyle.mirrored = TouchKeyLayoutStyle(twentySixKey: .standard, nineKey: .standard)
+  }
+
+  override func tearDown() {
+    _ = MetasequoiaInputSessionBridge.updateSharedPreferences { doc in
+      doc[TouchKeyLayoutStyle.twentySixKeyDocumentKey] = savedTwentySixStyleDoc
+      doc[TouchKeyLayoutStyle.nineKeyDocumentKey] = savedNineKeyStyleDoc
+    }
+    TouchKeyLayoutStyle.mirrored = savedStyle
+    super.tearDown()
   }
 
   func testCuratedDesignsRemainReadableAndRoundTrip() throws {

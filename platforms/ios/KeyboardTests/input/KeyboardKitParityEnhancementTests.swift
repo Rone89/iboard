@@ -78,13 +78,96 @@ final class KeyboardKitParityEnhancementTests: XCTestCase {
     controller.view.layoutIfNeeded()
 
     let descendants = allSubviews(in: controller.view)
+    let toggle = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "layoutToggleButton" } as? UIButton)
+    let space = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "spaceKey" } as? UIButton)
     let quick = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "quickPunctuationKey" } as? UIButton)
     let period = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "bottomPeriodKey" } as? UIButton)
+    let enter = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "returnKey" } as? UIButton)
+    XCTAssertFalse(quick.isHidden)
     XCTAssertEqual(quick.configuration?.title, "/")
     XCTAssertNil(quick.menu)
     XCTAssertFalse(period.isHidden)
     XCTAssertEqual(period.configuration?.title, ".")
+    assertOrderedNonOverlapping([toggle, space, quick, period, enter], in: controller.view)
     controller.viewDidDisappear(false)
+  }
+
+  @MainActor
+  func testEmailContextLaysOutBottomRowWithoutCollapseOrOverlap() throws {
+    let originalHideLanguageKey = KeyboardLayoutPreference.hideLanguageKey
+    defer { KeyboardLayoutPreference.hideLanguageKey = originalHideLanguageKey }
+    KeyboardLayoutPreference.hideLanguageKey = true
+
+    let controller = KeyboardViewController()
+    controller.loadViewIfNeeded()
+    controller.view.frame = CGRect(x: 0, y: 0, width: 390, height: KeyboardViewController.defaultKeyboardHeight)
+    controller.view.layoutIfNeeded()
+
+    controller.applyInputContext(keyboardType: .emailAddress, documentIdentifier: UUID())
+    controller.view.layoutIfNeeded()
+
+    let descendants = allSubviews(in: controller.view)
+    let toggle = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "layoutToggleButton" } as? UIButton)
+    let space = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "spaceKey" } as? UIButton)
+    let quick = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "quickPunctuationKey" } as? UIButton)
+    let period = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "bottomPeriodKey" } as? UIButton)
+    let enter = try XCTUnwrap(descendants.first { $0.accessibilityIdentifier == "returnKey" } as? UIButton)
+
+    XCTAssertFalse(quick.isHidden)
+    XCTAssertEqual(quick.configuration?.title, "@")
+    XCTAssertFalse(period.isHidden)
+    XCTAssertEqual(period.configuration?.title, ".")
+    assertOrderedNonOverlapping([toggle, space, quick, period, enter], in: controller.view)
+    XCTAssertGreaterThan(space.bounds.width, 100)
+
+    // 切到 123 层时，独立 `.` 键必须隐藏且底行各键正常排布不重叠。
+    toggle.sendActions(for: .touchUpInside)
+    controller.view.layoutIfNeeded()
+    XCTAssertTrue(period.isHidden)
+    assertOrderedNonOverlapping([toggle, space, enter], in: controller.view)
+    controller.viewDidDisappear(false)
+  }
+
+  func testTouchBottomRowLayoutUrlOrEmailContextPreservesTotalWeightAndLanguageOrder() {
+    let english = TouchBottomRowLayout.englishTwentySixKey(globe: false, language: false)
+    let adjustedEnglish = TouchBottomRowLayout.withUrlOrEmailContext(english, includeContextPunctuation: true)
+    XCTAssertEqual(adjustedEnglish.map(\.slot), [.layer, .space, .comma, .period, .returnKey])
+    XCTAssertEqual(adjustedEnglish.reduce(0) { $0 + $1.weight }, 10.0, accuracy: 0.001)
+
+    for style in TouchTwentySixKeyStyle.allCases {
+      let base = TouchBottomRowLayout.twentySixKey(style, globe: false, language: true)
+      let adjusted = TouchBottomRowLayout.withUrlOrEmailContext(base, includeContextPunctuation: true)
+      XCTAssertTrue(adjusted.contains(where: { $0.slot == .comma }), "\(style)")
+      XCTAssertTrue(adjusted.contains(where: { $0.slot == .period }), "\(style)")
+      XCTAssertEqual(adjusted.reduce(0) { $0 + $1.weight }, 10.0, accuracy: 0.001, "\(style)")
+      let leftLang = TouchBottomRowLayout.languageBeforeSpace(adjusted)
+      let languageIndex = leftLang.firstIndex(where: { $0.slot == .language })
+      let spaceIndex = leftLang.firstIndex(where: { $0.slot == .space })
+      XCTAssertNotNil(spaceIndex, "\(style)")
+      XCTAssertNotNil(languageIndex, "\(style)")
+      if let languageIndex, let spaceIndex {
+        XCTAssertLessThan(languageIndex, spaceIndex, "\(style)")
+      }
+      XCTAssertEqual(leftLang.reduce(0) { $0 + $1.weight }, 10.0, accuracy: 0.001, "\(style)")
+    }
+  }
+
+  @MainActor
+  private func assertOrderedNonOverlapping(_ buttons: [UIButton], in root: UIView,
+                                           file: StaticString = #filePath, line: UInt = #line) {
+    var previousMaxX: CGFloat = -1
+    for button in buttons {
+      XCTAssertFalse(button.isHidden, "\(button.accessibilityIdentifier ?? "") 不应隐藏", file: file, line: line)
+      let frame = button.convert(button.bounds, to: root)
+      XCTAssertGreaterThan(frame.width, 20, "\(button.accessibilityIdentifier ?? "") 宽度异常: \(frame)", file: file, line: line)
+      XCTAssertGreaterThan(frame.height, 20, "\(button.accessibilityIdentifier ?? "") 高度异常: \(frame)", file: file, line: line)
+      if previousMaxX >= 0 {
+        XCTAssertGreaterThanOrEqual(frame.minX, previousMaxX - 0.5,
+                                    "\(button.accessibilityIdentifier ?? "") 与左侧按键重叠: \(frame) vs \(previousMaxX)",
+                                    file: file, line: line)
+      }
+      previousMaxX = frame.maxX
+    }
   }
 
   @MainActor

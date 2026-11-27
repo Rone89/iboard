@@ -49,7 +49,8 @@ for path in glob.glob(pp_dir + "/*.mobileprovision"):
     if device not in pl.get("ProvisionedDevices", []):
         continue
     exp = pl.get("ExpirationDate")
-    if exp and exp < datetime.datetime.now():
+    now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    if exp and exp < now_utc:
         continue
     found = (path, pl, ent)
     break

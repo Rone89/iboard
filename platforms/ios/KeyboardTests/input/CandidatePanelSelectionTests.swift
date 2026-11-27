@@ -121,6 +121,34 @@ final class CandidatePanelSelectionTests: XCTestCase {
   }
 
   @MainActor
+  func testExpandedPanelCandidatesRenderWithoutBottomContainers() throws {
+    let panel = KeyboardCandidatePanelView(
+      candidates: ["你好", "你号", "尼豪"], preedit: "nihao",
+      selectedIndex: 0, showsHeader: false,
+      display: { $0 }, onSelect: { _ in }, onClose: {})
+    let controller = UIViewController()
+    controller.view = panel
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 240))
+    window.rootViewController = controller
+    window.isHidden = false
+    defer { window.isHidden = true }
+    panel.frame = window.bounds
+    panel.layoutIfNeeded()
+
+    let first = try XCTUnwrap(candidateButtons(panel).first { $0.accessibilityIdentifier == "panelCandidate-1" })
+    let second = try XCTUnwrap(candidateButtons(panel).first { $0.accessibilityIdentifier == "panelCandidate-2" })
+    for button in [first, second] {
+      let bg = try XCTUnwrap(button.configuration?.background)
+      XCTAssertEqual(bg.backgroundColor?.cgColor.alpha ?? 0, 0, accuracy: 0.001, "候选面板候选词不应绘制底部背景容器")
+      XCTAssertEqual(bg.strokeWidth, 0, accuracy: 0.001, "候选面板候选词不应绘制外框描边")
+      XCTAssertEqual(button.layer.shadowOpacity, 0, accuracy: 0.001, "候选面板候选词不应绘制按键阴影")
+    }
+    XCTAssertTrue(first.accessibilityTraits.contains(.selected))
+    XCTAssertEqual(first.configuration?.baseForegroundColor, KeyboardTheme.current.accent)
+    XCTAssertEqual(second.configuration?.baseForegroundColor, KeyboardTheme.current.keyForeground)
+  }
+
+  @MainActor
   private func descendants(_ view: UIView) -> [UIView] {
     [view] + view.subviews.flatMap { descendants($0) }
   }

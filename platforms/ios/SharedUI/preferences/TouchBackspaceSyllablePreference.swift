@@ -6,10 +6,18 @@ import Foundation
 enum TouchBackspaceSyllablePreference {
   static let documentKey = "touch_backspace_by_syllable"
   static let appGroupKey = "backspaceBySyllable"
+  /// 仅滑行输入的内容才按音节回删（本机 App Group 开关，默认关以保持既有一致粒度）。
+  static let glideOnlyAppGroupKey = "backspaceBySyllableGlideOnly"
 
   static var isEnabled: Bool {
     get { InputSchemePreference.appGroupDefaults.bool(forKey: appGroupKey) }
     set { InputSchemePreference.appGroupDefaults.set(newValue, forKey: appGroupKey) }
+  }
+
+  /// 打开后仅当光标前待删内容来自滑行输入时才按音节回删，逐键点按的字母仍逐字母删除。
+  static var glideOnly: Bool {
+    get { InputSchemePreference.appGroupDefaults.bool(forKey: glideOnlyAppGroupKey) }
+    set { InputSchemePreference.appGroupDefaults.set(newValue, forKey: glideOnlyAppGroupKey) }
   }
 
   /// 文档里记的开关；没有记过或值不是布尔时按关，与 client-core 的缺省一致。

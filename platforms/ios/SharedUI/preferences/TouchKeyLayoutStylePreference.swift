@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// 「按键布局」里 26 键的底行样式，共享文档里是 `touch_twenty_six_key_style`（client-core `TouchTwentySixKeyStyle`），作用于手机中文 26 键字母层；英文 26 键和 iPad 全尺寸键盘不受它影响。各样式的排法见 `TouchBottomRowLayout`。
+/// 「按键布局」里 26 键的样式，共享文档里是 `touch_twenty_six_key_style`（client-core `TouchTwentySixKeyStyle`），作用于手机中文 26 键；英文 26 键和 iPad 全尺寸键盘不受它影响。各样式的排法见 `TouchBottomRowLayout`。
 enum TouchTwentySixKeyStyle: String, CaseIterable, Hashable {
   /// 仿 iOS 原生精简底行：123 | 空格 | ，（长按出。）| 中/英 | 回车（符号面板从长按 123 或更多菜单进入）。
   case standard
@@ -11,6 +11,11 @@ enum TouchTwentySixKeyStyle: String, CaseIterable, Hashable {
   case longSpace = "long_space"
   /// 123 | 😀 | 空格 | ， | 中/英 | 回车，符号面板经长按 123 打开。
   case emoji
+  /// iOS 原生 26 键（保留 rawValue `lokey` 兼容既有配置）：对称 4 键底行（123 | 中/英 | 空格 | 换行），采用 Lokey 几何比例、123 六标点与边缘防误触热区。
+  case lokey
+
+  /// 文档里没选过（缺键、`platform_default` 或不认识的写法）时 iOS 出厂画的样式。
+  static let platformDefault: TouchTwentySixKeyStyle = .lokey
 
   var title: String {
     switch self {
@@ -18,6 +23,7 @@ enum TouchTwentySixKeyStyle: String, CaseIterable, Hashable {
     case .commaPeriod: "逗号句号"
     case .longSpace: "长空格"
     case .emoji: "表情键"
+    case .lokey: "iOS 原生"
     }
   }
 }
@@ -50,6 +56,11 @@ enum TouchNineKeyStyle: String, CaseIterable, Hashable {
   case emoji
   /// 右侧大回车：符号栏下方是 符，九宫格下方是 123 |（🌐）| 空格 | 中/英，右列 ⌫、中间键之下的回车跨第三行和底行；右列原来的 ！ 接到符号栏末尾。数字层照同一框架画。排法见 `TouchBottomRowLayout.nineKeyTallReturn`。
   case tallReturn = "tall_return"
+  /// iOS 原生十键：5 等宽列 × 4 等高行，左列 123 / #@¥ / 双高 ABC，中间 3×3 九宫格配底行 选拼音 + 双宽空格，右列 ⌫ / ^_^（组字中重输） / 双高回车。
+  case iosNative = "ios_native"
+
+  /// 文档里没选过（缺键、`platform_default` 或不认识的写法）时 iOS 出厂画的样式。
+  static let platformDefault: TouchNineKeyStyle = .iosNative
 
   var title: String {
     switch self {
@@ -57,6 +68,7 @@ enum TouchNineKeyStyle: String, CaseIterable, Hashable {
     case .commaPeriod: "底栏带标点"
     case .emoji: "表情键"
     case .tallReturn: "右侧大回车"
+    case .iosNative: "iOS 原生"
     }
   }
 }
@@ -95,9 +107,9 @@ enum TouchLanguageKeySide: String, CaseIterable, Hashable {
 ///
 /// 共享文档是权威来源，键盘从 App Group 镜像读：键盘和设置页读到文档时刷新镜像（`mirror`），设置页保存时文档接受了才写镜像，与 `TouchShuangpinLayoutPreference` 和「组字时保留 Shift」的做法相同。iOS 以前没有对应的本机设置，没有旧值要迁移。
 struct TouchKeyLayoutStyle: Equatable, Hashable {
-  var twentySixKey: TouchTwentySixKeyStyle = .standard
+  var twentySixKey: TouchTwentySixKeyStyle = .platformDefault
   var fourteenKey: TouchFourteenKeyStyle = .standard
-  var nineKey: TouchNineKeyStyle = .standard
+  var nineKey: TouchNineKeyStyle = .platformDefault
   /// 在 26 键、14 键和 18 键字母层上方画一排 1 到 0；手机横屏时不画，存着的值不变。
   var numberRow = false
   /// 手机 26 键底行把 符 排到 123 左边（`TouchBottomRowLayout.symbolFirst`）；长空格和表情键样式没有 符，不受影响。
@@ -131,8 +143,8 @@ struct TouchKeyLayoutStyle: Equatable, Hashable {
   private static let digitSidebarMirrorKey = "keyboard.nineKeyDigitSidebar"
   private static let languageKeySideMirrorKey = "keyboard.style.languageKeySide"
 
-  init(twentySixKey: TouchTwentySixKeyStyle = .standard, fourteenKey: TouchFourteenKeyStyle = .standard,
-       nineKey: TouchNineKeyStyle = .standard, numberRow: Bool = false, symbolFirst: Bool = false,
+  init(twentySixKey: TouchTwentySixKeyStyle = .platformDefault, fourteenKey: TouchFourteenKeyStyle = .standard,
+       nineKey: TouchNineKeyStyle = .platformDefault, numberRow: Bool = false, symbolFirst: Bool = false,
        numberPadSpace: TouchNumberPadSpace = .platformDefault, nineKeySidebar: [String] = [], digitSidebar: [String] = [],
        languageKeySide: TouchLanguageKeySide = .right) {
     self.twentySixKey = twentySixKey
@@ -146,11 +158,11 @@ struct TouchKeyLayoutStyle: Equatable, Hashable {
     self.languageKeySide = languageKeySide
   }
 
-  /// 文档里的各项。缺键、不是字符串或不认识的写法（较新版本加的样式）一律按标准读，与 client-core 的宽松读取一致；数字行和「符」与「123」互换不是布尔值时按关；数字键盘空格位置缺键、写 `platform_default` 或不认识时按 iOS 原来的排法；符号栏的两张表逐项丢掉坏值（`NineKeySidebar.symbols(in:)`），缺键、不是数组或与 iOS 出厂表逐项相同时是出厂表（空表），与 Android `NineKeySidebarPolicy.custom` 相同；中/英键只有恰好写着字符串 `left` 时在空格左边，其余（缺键、`right`、不认识的字符串、不是字符串）都在右边。
+  /// 文档里的各项。缺键、不是字符串或不认识的写法（较新版本加的样式）26 键按 iOS 出厂的 `lokey` 读（与 `TouchTwentySixKeyStyle.platformDefault` 一致），14/18 键按标准读，9 键按 iOS 出厂的 `iosNative` 读（与 `TouchNineKeyStyle.platformDefault` 一致）；数字行和「符」与「123」互换不是布尔值时按关；数字键盘空格位置缺键、写 `platform_default` 或不认识时按 iOS 原来的排法；符号栏的两张表逐项丢掉坏值（`NineKeySidebar.symbols(in:)`），缺键、不是数组或与 iOS 出厂表逐项相同时是出厂表（空表），与 Android `NineKeySidebarPolicy.custom` 相同；中/英键只有恰好写着字符串 `left` 时在空格左边，其余（缺键、`right`、不认识的字符串、不是字符串）都在右边。
   init(in document: [String: Any]?) {
-    twentySixKey = (document?[Self.twentySixKeyDocumentKey] as? String).flatMap(TouchTwentySixKeyStyle.init(rawValue:)) ?? .standard
+    twentySixKey = (document?[Self.twentySixKeyDocumentKey] as? String).flatMap(TouchTwentySixKeyStyle.init(rawValue:)) ?? .platformDefault
     fourteenKey = (document?[Self.fourteenKeyDocumentKey] as? String).flatMap(TouchFourteenKeyStyle.init(rawValue:)) ?? .standard
-    nineKey = (document?[Self.nineKeyDocumentKey] as? String).flatMap(TouchNineKeyStyle.init(rawValue:)) ?? .standard
+    nineKey = (document?[Self.nineKeyDocumentKey] as? String).flatMap(TouchNineKeyStyle.init(rawValue:)) ?? .platformDefault
     numberRow = document?[Self.numberRowDocumentKey] as? Bool ?? false
     symbolFirst = document?[Self.symbolFirstDocumentKey] as? Bool ?? false
     numberPadSpace = (document?[Self.numberPadSpaceDocumentKey] as? String).flatMap(TouchNumberPadSpace.init(rawValue:))
@@ -166,9 +178,9 @@ struct TouchKeyLayoutStyle: Equatable, Hashable {
   static var mirrored: TouchKeyLayoutStyle {
     get {
       TouchKeyLayoutStyle(
-        twentySixKey: defaults.string(forKey: twentySixKeyMirrorKey).flatMap(TouchTwentySixKeyStyle.init(rawValue:)) ?? .standard,
+        twentySixKey: defaults.string(forKey: twentySixKeyMirrorKey).flatMap(TouchTwentySixKeyStyle.init(rawValue:)) ?? .platformDefault,
         fourteenKey: defaults.string(forKey: fourteenKeyMirrorKey).flatMap(TouchFourteenKeyStyle.init(rawValue:)) ?? .standard,
-        nineKey: defaults.string(forKey: nineKeyMirrorKey).flatMap(TouchNineKeyStyle.init(rawValue:)) ?? .standard,
+        nineKey: defaults.string(forKey: nineKeyMirrorKey).flatMap(TouchNineKeyStyle.init(rawValue:)) ?? .platformDefault,
         numberRow: defaults.object(forKey: numberRowMirrorKey) as? Bool ?? false,
         symbolFirst: defaults.object(forKey: symbolFirstMirrorKey) as? Bool ?? false,
         numberPadSpace: defaults.string(forKey: numberPadSpaceMirrorKey).flatMap(TouchNumberPadSpace.init(rawValue:))
@@ -307,8 +319,12 @@ struct TouchKeyLayoutOffering: Equatable {
   static let longSpaceNote = "符号键移到工具栏。"
   /// 26 键和 14/18 键「表情键」的说明。
   static let emojiNote = "长按 123 打开符号。"
+  /// 26 键「iOS 原生」的说明。
+  static let lokeyNote = "对称 4 键底行（123、中/英、空格、换行），长按 123 打开符号。"
   /// 9 键「右侧大回车」的说明。
   static let tallReturnNote = "回车竖占两行，符号键在左下角。"
+  /// 9 键「iOS 原生」的说明。
+  static let iosNativeNote = "5 等宽列，左下 ABC 与右下回车各占两行。"
   /// 「顶部数字行」开关的说明。
   static let numberRowSubtitle = "在 26 键、14 键和 18 键上方加一行 1 到 0；横屏时不显示。"
   /// 26 键一组里「符」与「123」互换开关的标题和说明。
@@ -338,6 +354,7 @@ struct TouchKeyLayoutOffering: Equatable {
     switch style {
     case .longSpace: longSpaceNote
     case .emoji: emojiNote
+    case .lokey: lokeyNote
     case .standard, .commaPeriod: nil
     }
   }
@@ -347,7 +364,11 @@ struct TouchKeyLayoutOffering: Equatable {
   }
 
   static func note(_ style: TouchNineKeyStyle) -> String? {
-    style == .tallReturn ? tallReturnNote : nil
+    switch style {
+    case .tallReturn: tallReturnNote
+    case .iosNative: iosNativeNote
+    case .standard, .commaPeriod, .emoji: nil
+    }
   }
 
   /// 预览里这个样式与「标准」不同、用强调色描边的键，按底行表的键位（`TouchBottomRowLayout.Slot`）认，不比较键面文字；标准样式不高亮。
@@ -357,6 +378,7 @@ struct TouchKeyLayoutOffering: Equatable {
     case .commaPeriod: [.comma, .period]
     case .longSpace: [.space]
     case .emoji: [.emoji]
+    case .lokey: [.space, .returnKey]
     }
   }
 
@@ -373,7 +395,7 @@ struct TouchKeyLayoutOffering: Equatable {
     case .standard: []
     case .commaPeriod: [.comma, .period]
     case .emoji: [.emoji]
-    case .tallReturn: [.returnKey]
+    case .tallReturn, .iosNative: [.returnKey]
     }
   }
 
@@ -450,7 +472,8 @@ enum TouchKeyLayoutKind: String, CaseIterable, Hashable {
     case .letterGrid: slots = TouchKeyLayoutOffering.highlightedSlots(style.fourteenKey)
     case .nineKey: slots = TouchKeyLayoutOffering.highlightedSlots(style.nineKey)
     }
-    return style.languageKeySide == .left ? slots.union([.language]) : slots
+    let hasLanguage = bottomRow(style).contains { $0.slot == .language }
+    return (style.languageKeySide == .left && hasLanguage) ? slots.union([.language]) : slots
   }
 
   /// 9 键预览的左侧符号栏要不要整列描强调色：字母层用的是自定义表（与出厂不同）时描，空表（出厂表）时不描；别的分段没有这一栏。
@@ -474,6 +497,8 @@ struct KeyboardPreviewLetterLayer: Equatable {
   let bottomRow: [TouchBottomRowLayout.Key]
   /// 九键「右侧大回车」：回车从右列第三格伸到底行。
   let tallReturn: Bool
+  /// 九键「iOS 原生」：5 等宽列 × 4 等高行，左下 ABC 与右下回车各占两行。
+  let iosNative: Bool
   /// 九键左侧符号栏自上而下的标点，与「按键布局」页的 9 键预览相同（`TouchKeyLayoutKind.previewSidebar`）：出厂表时右侧大回车把右列的 ！ 接到末尾；用户换了字母层的表时画那张表的一屏。
   let nineKeySidebar: [String]
   /// 九键右列在九宫格旁的几格（⌫、分词、！），右侧大回车时只剩 ⌫ 和分词。
@@ -491,6 +516,7 @@ struct KeyboardPreviewLetterLayer: Equatable {
       bottomRow = kind.bottomRow(style, language: language)
     }
     tallReturn = kind == .nineKey && style.nineKey == .tallReturn
+    iosNative = kind == .nineKey && style.nineKey == .iosNative
     nineKeySidebar = TouchKeyLayoutKind.previewSidebar(style)
     nineKeyControls = TypingKeyHeatmap.nineKeyControls(for: style.nineKey).map { $0.id == TypingKeyID.backspace ? "⌫" : $0.face }
   }
@@ -579,9 +605,31 @@ enum TouchBottomRowLayout {
   static let nineKeyReturnWeight: CGFloat = 1.6
   static let zeroWeight: CGFloat = 1.05
 
-  /// 中文 26 键字母层。标准（仿 iOS 原生）：123 | 空格 | ， | 中/英 | 回车；逗号句号在空格两侧：123 | 符 | ， | 空格 | 。 | 中/英 | 回车；长空格：123 | ， | 长空格 | 中/英 | 回车；表情键：123 | 😀 | 空格 | ， | 中/英 | 回车。
+  /// 中文 26 键字母层。标准（仿 iOS 原生）：123 | 空格 | ， | 中/英 | 回车；逗号句号在空格两侧：123 | 符 | ， | 空格 | 。 | 中/英 | 回车；长空格：123 | ， | 长空格 | 中/英 | 回车；表情键：123 | 😀 | 空格 | ， | 中/英 | 回车；iOS 原生（`lokey`）：对称 4 键 123 | 中/英 | 空格 | 换行（带地球键时左侧 123 / 🌐 / 中/英 各占 1 份，隐藏中/英时其份额并进空格）。
   static func twentySixKey(_ style: TouchTwentySixKeyStyle, globe: Bool, language: Bool = true,
                            landscape: Bool = false) -> [Key] {
+    if style == .lokey {
+      if globe {
+        return language
+          ? [
+            Key(.layer, 1.00), Key(.globe, globeWeight), Key(.language, 1.00),
+            Key(.space, 5.20), Key(.returnKey, 2.80),
+          ]
+          : [
+            Key(.layer, 1.00), Key(.globe, globeWeight),
+            Key(.space, 6.20), Key(.returnKey, 2.80),
+          ]
+      }
+      return language
+        ? [
+          Key(.layer, 1.17), Key(.language, 1.17),
+          Key(.space, 5.15), Key(.returnKey, 2.51),
+        ]
+        : [
+          Key(.layer, 1.17),
+          Key(.space, 6.32), Key(.returnKey, 2.51),
+        ]
+    }
     let layer = landscape ? standardTwentySixKeyLandscapeLayerWeight : standardTwentySixKeyLayerWeight
     let space = landscape ? standardTwentySixKeyLandscapeSpaceWeight : standardTwentySixKeySpaceWeight
     let returnWeight = landscape ? standardTwentySixKeyLandscapeReturnWeight : standardTwentySixKeyReturnWeight
@@ -597,6 +645,8 @@ enum TouchBottomRowLayout {
       keys += [Key(.comma, punctuationWeight), Key(.space, space)]
     case .emoji:
       keys += [Key(.emoji, symbolsWeight), Key(.space, space - symbolsWeight), Key(.comma, punctuationWeight)]
+    case .lokey:
+      break
     }
     return finish(keys, language: language, returnWeight: returnWeight)
   }
@@ -610,6 +660,32 @@ enum TouchBottomRowLayout {
     if globe { keys.append(Key(.globe, globeWeight)) }
     keys.append(Key(.space, space))
     return finish(keys, language: language, returnWeight: returnWeight)
+  }
+
+  /// 网址或邮箱输入框下的手机 26 键底行微调：把缺失的上下文标点（`/` 或 `@`）与独立 `.` 键正式纳入样式表，并从空格让出对应份额。
+  /// 所有显示的键都留在 `styledRow` 内参与排序与宽度约束，避免表外按键在 `UIStackView` 中失去宽度约束并把其余按键挤成 0 宽。
+  static func withUrlOrEmailContext(_ keys: [Key], includeContextPunctuation: Bool) -> [Key] {
+    guard let spaceIndex = keys.firstIndex(where: { $0.slot == .space }) else { return keys }
+    let needsComma = includeContextPunctuation && !keys.contains(where: { $0.slot == .comma })
+    let needsPeriod = !keys.contains(where: { $0.slot == .period })
+    guard needsComma || needsPeriod else { return keys }
+
+    var result = keys
+    var spaceWeight = result[spaceIndex].weight
+    var insertIndex = spaceIndex + 1
+    if needsComma, spaceWeight - punctuationWeight >= 1.5 {
+      result.insert(Key(.comma, punctuationWeight), at: insertIndex)
+      spaceWeight -= punctuationWeight
+      insertIndex += 1
+    } else if let commaIndex = result.firstIndex(where: { $0.slot == .comma }), commaIndex > spaceIndex {
+      insertIndex = commaIndex + 1
+    }
+    if needsPeriod, spaceWeight - punctuationWeight >= 1.5 {
+      result.insert(Key(.period, punctuationWeight), at: insertIndex)
+      spaceWeight -= punctuationWeight
+    }
+    result[spaceIndex] = Key(.space, spaceWeight)
+    return result
   }
 
   /// 14 键与 18 键字母层。标准：123 | ， | 空格 | 。 | 中/英 | 回车；长空格：。的份额给空格；表情键：123 | 😀 | 空格 | ， | 中/英 | 回车，😀 用原来 ， 的份额，， 用原来 。 的份额。
@@ -627,9 +703,9 @@ enum TouchBottomRowLayout {
     return finish(keys, language: language, returnWeight: returnWeight)
   }
 
-  /// 九键字母层（拼音九键、九键双拼、笔画）。标准：符 | 123 | 空格 | 中/英 | 回车，九键双拼在空格后多一个 0；底栏带标点：， 和 。 各从空格让出 1 份；表情键：😀 从空格让出 1.05 份；右侧大回车见 `nineKeyTallReturn`。除右侧大回车外数字层不用这张表。
+  /// 九键字母层（拼音九键、九键双拼、笔画）。标准：符 | 123 | 空格 | 中/英 | 回车，九键双拼在空格后多一个 0；底栏带标点：， 和 。 各从空格让出 1 份；表情键：😀 从空格让出 1.05 份；右侧大回车见 `nineKeyTallReturn`；iOS 原生在拼音九键下使用独立的 5 等宽列对称视图，九键双拼/笔画及底行表回退到右侧大回车份额以保持整行总份额一致。除右侧大回车外数字层不用这张表。
   static func nineKey(_ style: TouchNineKeyStyle, globe: Bool, zero: Bool = false, language: Bool = true) -> [Key] {
-    if style == .tallReturn { return nineKeyTallReturn(globe: globe, zero: zero, language: language) }
+    if style == .tallReturn || style == .iosNative { return nineKeyTallReturn(globe: globe, zero: zero, language: language) }
     var keys = [Key(.symbols, nineKeySymbolsWeight), Key(.layer, nineKeyLayerWeight)]
     if globe { keys.append(Key(.globe, globeWeight)) }
     switch style {
@@ -640,7 +716,7 @@ enum TouchBottomRowLayout {
                Key(.period, nineKeyPunctuationWeight)]
     case .emoji:
       keys += [Key(.emoji, nineKeySymbolsWeight), Key(.space, nineKeySpaceWeight - nineKeySymbolsWeight)]
-    case .tallReturn:
+    case .tallReturn, .iosNative:
       break
     }
     if zero { keys.append(Key(.zero, zeroWeight)) }
