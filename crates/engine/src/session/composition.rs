@@ -312,6 +312,10 @@ impl InputSession {
 
     /// input_session_composition.cpp:714-748, with the selected row's scheme deciding the native-wubi branch.
     pub(super) fn selection_completes_composition(&self, selected: &WordItem) -> bool {
+        // 滑行候选池里的每一条都对应整笔（或连滑整段）结果，选中即直接完成组字，无需借 `corrected_from` 占位。
+        if self.glide_candidates.is_some() {
+            return true;
+        }
         if let Some(consumed) = self.literal_candidate_consumed(selected) {
             return consumed == self.raw_with_cases().len();
         }

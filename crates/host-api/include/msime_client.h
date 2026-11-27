@@ -1003,6 +1003,8 @@ char *msime_client_fix_candidate_position(uint64_t session, uint64_t generation,
 char *msime_client_clear_candidate_position(uint64_t session, uint64_t generation, size_t index);
 /* 从 View.nine_key_spellings 里选一项，generation 拒绝过期的界面。全拼下把这个拼写锁进数字；注音下只钉住目标音节的读音（不上屏），nine_key_spellings 随后换成下一个有歧义的音节。 */
 char *msime_client_choose_nine_key_spelling(uint64_t session, uint64_t generation, size_t index);
+/* 原地浏览 View.nine_key_spellings 的一项（用于九键展开栏「选拼音」循环切换）：刷新候选与读音但保持当前排 nine_key_spellings 不推进跳段，再次浏览或退格可无损换选。 */
+char *msime_client_browse_nine_key_spelling(uint64_t session, uint64_t generation, size_t index);
 /* 全拼九键组字时筛选候选，作用到这次组字结束：single_character 只留单字；strokes 是 length 字节的笔顺前缀（h 横、s 竖、p 撇、n 点、z 折，<=64），只留首字笔顺以它开头的候选，length 为 0 时不按笔画筛选（strokes 可为 NULL）。当前状态见 View.nine_key_single_character 和 View.nine_key_strokes。没有九键组字或 strokes 含其他字节时 handled=false；笔画字典不可用时 handled=true 并带 diagnostic LANGUAGE_DICTIONARY_UNAVAILABLE，筛选不变。
  * View.nine_key_spellings 在全拼九键下的含义：先是完整音节；再是下一个数字键上能起头一个音节的字母，大写（M N O），选它限定下一个音节的首字母；最后是这个数字本身（6），只在没有锁定的音节时出现，选它直接上屏这个数字。数字全部锁定后它是最后一次锁定时的选项，选其中一项就换掉那次锁定。这时退格先撤销最后一次锁定，其余情况退格删数字。
  * 14 键下含义相同，只是没有最后那一项「原样上屏」：完整音节，再是下一键上能起头一个音节的大写字母（Q W）。preedit 是组码字母（bugao），不是拼音，读音行用 View.nine_key_reading。 */

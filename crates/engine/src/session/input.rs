@@ -58,6 +58,14 @@ pub(super) struct CreatingWordProgress {
     pub can_store: bool,
 }
 
+/// 26 键最近一次选词上屏产生的自动学习快照，供秒删时回滚权重与个人二元/三元转移。
+#[derive(Debug, Clone, Default)]
+pub(super) struct LastSessionLearning {
+    pub committed_word: String,
+    pub weight_rollback: Option<(crate::types::PersonalDictionaryKind, String, String, i64)>,
+    pub personal_transitions: Vec<crate::lattice::personal::PersonalTransition>,
+}
+
 pub(super) struct InputSession {
     pub paths: RuntimePaths,
     pub journal_path: PathBuf,
@@ -137,6 +145,10 @@ pub(super) struct InputSession {
     pub glide_selection_pending: bool,
     /// 只在当前会话保留最近一次滑行选词的语言倾向，不写个人词库。
     pub glide_prefers_english: Option<bool>,
+    /// 单手拇指滑行键心偏移在线自适应校准器（持久化到 `user_data/glide_calibration.json`）。
+    pub glide_calibrator: crate::pinyin::glide::GlideKeyCalibrator,
+    /// 最近一笔待确认的纯中文单笔滑行轨迹，用于用户明确选词上屏后反算各键真实落点残差。
+    pub pending_glide_calibration: Option<super::glide::PendingGlideCalibration>,
     /// Caret-prefix decoding (overlays.md §7.6).
     pub prefix_active: bool,
     pub prefix_query_input: String,
@@ -155,6 +167,8 @@ pub(super) struct InputSession {
     pub date_time_menu_page: Option<Vec<WordItem>>,
     /// 触屏宿主为下一次 `character` 送来的按下点（`Session::set_key_touch`），只在 `dispatch_character` 把这一键交给方案之前用掉；其余路径一律丢掉。
     pub pending_touch: Option<KeyTouch>,
+    /// 最近一次选词上屏产生的自动学习记录，用于秒删防误学。
+    pub last_learning: Option<LastSessionLearning>,
 }
 
 impl InputSession {
@@ -266,6 +280,10 @@ impl InputSession {
             glide_candidates: None,
             glide_selection_pending: false,
             glide_prefers_english: None,
+            glide_calibrator: crate::pinyin::glide::GlideKeyCalibrator::load(
+                &paths.user("glide_calibration.json"),
+            ),
+            pending_glide_calibration: None,
             prefix_active: false,
             prefix_query_input: String::new(),
             prefix_candidates: Vec::new(),
@@ -276,6 +294,7 @@ impl InputSession {
             canonical_phrase_engine: None,
             conversion: None,
             pending_touch: None,
+            last_learning: None,
             journal_path: journal,
             paths,
         };
@@ -1759,6 +1778,7 @@ impl InputSession {
     pub fn reset_composition(&mut self) {
         self.glide_candidates = None;
         self.glide_selection_pending = false;
+        self.pending_glide_calibration = None;
         self.date_time_menu_page = None;
         self.helpcode_entry = None;
         self.caret = None;
@@ -1794,6 +1814,23 @@ impl InputSession {
             }
         }
     }
+
+    /// 退出会话前将尚未落盘的滑行拇指校准更新持久化。
+    pub(super) fn flush_glide_calibration(&mut self) {
+        if self.learning_enabled && self.glide_calibrator.is_dirty() {
+            let path = self.paths.user("glide_calibration.json");
+            self.glide_calibrator.save(&path);
+        }
+    }
+}
+
+impl Drop for InputSession {
+    fn drop(&mut self) {
+        self.flush_glide_calibration();
+    }
+}
+
+impl InputSession {
 
     /// Resets the chain and recomputes when the list was personally reranked.
     pub fn reset_commit_context(&mut self) {

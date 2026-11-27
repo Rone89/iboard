@@ -71,7 +71,7 @@ pub(super) fn append(
             letters,
             display,
             weight.max(16) / 16,
-            CandidateSource::Generated,
+            CandidateSource::EnglishDictionary,
             "",
         );
         rows.push((letters.to_owned(), row, cost));

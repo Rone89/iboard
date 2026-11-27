@@ -57,13 +57,14 @@ use super::series::{
     append_unique_words, defer_pooled_sentences, fold_reading, has_corrected_cut,
     lead_literal_abbreviation_phrases, mark_autocorrect_candidates, merge_alternative_rows,
     merge_alternative_segmentations, merge_series_by_coverage, resolve_series_query,
-    series_cache_key, SeriesResolution, ALTERNATIVE_SEGMENTATION_CANDIDATE_LIMIT,
-    AUTOCORRECT_CUT_KBEST, LONGER_PHRASE_EXTRA_SYLLABLES, LONGER_PHRASE_LIMIT,
-    MAX_SYLLABLES_FOR_MULTIPLE_SEGMENTATIONS,
+    resolve_series_query_with_touches, series_cache_key, SeriesResolution,
+    ALTERNATIVE_SEGMENTATION_CANDIDATE_LIMIT, AUTOCORRECT_CUT_KBEST, LONGER_PHRASE_EXTRA_SYLLABLES,
+    LONGER_PHRASE_LIMIT, MAX_SYLLABLES_FOR_MULTIPLE_SEGMENTATIONS,
 };
 use crate::touch::{KeyGeometry, KeyTouch, TouchTuning};
 use super::typo_edges::{
     collect_priced_quanpin_typo_edges, collect_typo_edges, priced_quanpin_variants,
+    touch_supports_correction,
 };
 
 #[cfg(test)]
@@ -71,6 +72,7 @@ mod marking_buffer_tests;
 
 mod page_copy;
 mod path_page;
+mod short_words;
 
 use path_page::PathPage;
 
@@ -285,6 +287,8 @@ pub struct QuanpinDictionary {
     touch_input: String,
     key_geometry: Option<Arc<KeyGeometry>>,
     touch_tuning: TouchTuning,
+    /// 按起手字母（`a..=z`）懒加载的 26 键滑行词典直评缓存，词库重置时随缓存一起清空。
+    glide_lexicon_cache: RefCell<[Option<Vec<crate::pinyin::glide::GlideLexiconEntry>>; 26]>,
     touch_signature: Option<String>,
 }
 
@@ -348,6 +352,7 @@ impl QuanpinDictionary {
             key_touches: Vec::new(),
             touch_input: String::new(),
             key_geometry: None,
+            glide_lexicon_cache: RefCell::new(std::array::from_fn(|_| None)),
             touch_tuning: TouchTuning::default(),
             touch_signature: None,
         };
@@ -738,13 +743,150 @@ impl QuanpinDictionary {
         self.database.han_char_exists(han)
     }
 
-    /// `keys`（以 `'` 连接的完整音节）各自最好那一行的权重；没有行的键不出现。滑行输入用它给一笔可能拼出的串排序。
+    /// 按给定的一组起手字母（小写 ASCII `b'a'..=b'z'`）借用对应的滑行高频词表；未缓存的字母按需从词库懒加载一次。
+    pub fn with_glide_lexicon_for_initials(
+        &self,
+        initials: &[u8],
+        mut f: impl FnMut(&[crate::pinyin::glide::GlideLexiconEntry]),
+    ) {
+        let mut cache = self.glide_lexicon_cache.borrow_mut();
+        for &initial in initials {
+            if !initial.is_ascii_lowercase() {
+                continue;
+            }
+            let slot = usize::from(initial - b'a');
+            let entries = cache[slot]
+                .get_or_insert_with(|| self.database.top_glide_lexicon_for_initial(initial));
+            if !entries.is_empty() {
+                f(entries);
+            }
+        }
+    }
+
+    /// `keys`（以 `'` 连接的完整音节）各自最好那一行的权重；没有行的键不出现。
+    #[allow(dead_code)]
     pub fn best_weights(&self, keys: &[String]) -> HashMap<String, i64> {
+        self.best_weights_with_context(keys, None)
+    }
+
+    /// 同 [`Self::best_weights`]，并额外拼入连滑中的当前未上屏前缀词 `extra_context`（如已滑 `我`、正滑 `们/想`）：
+    /// 结合静态出货二元语法表（`sentence_tables.bigram`，零冷启动即可生效）与个人词频/个人二元转移给予温和倍数增益，提升共线/歧义滑行的首选命中率。
+    pub fn best_weights_with_context(
+        &self,
+        keys: &[String],
+        extra_context: Option<&str>,
+    ) -> HashMap<String, i64> {
+        let personal = self.personal.model();
+        let has_personal = !personal.is_empty();
+        let extra = extra_context.unwrap_or("").trim();
+        let has_context = !self.rescoring_context.is_empty() || !extra.is_empty();
+        if !has_personal && !has_context {
+            return self
+                .database
+                .query_exact_keys_per_key(keys, 1)
+                .into_iter()
+                .filter_map(|(key, rows)| rows.first().map(|row| (key, row.weight)))
+                .collect();
+        }
+        // 组合已上屏上文与当前组字前缀词，取末尾至多 6 字作为语境窗口。
+        let mut combined_context = String::new();
+        if !self.rescoring_context.is_empty() {
+            combined_context.push_str(&self.rescoring_context);
+        }
+        if !extra.is_empty() {
+            combined_context.push_str(extra);
+        }
+        let chars: Vec<char> = combined_context.chars().collect();
+        // 静态二元表尝试末 2 字与末 1 字前缀词（如「今天」「天气」「我」）。
+        let mut static_prefixes: Vec<String> = Vec::with_capacity(2);
+        for tail_len in [2usize, 1] {
+            if chars.len() >= tail_len {
+                static_prefixes.push(chars[chars.len() - tail_len..].iter().collect());
+            }
+        }
+        // 个人二元模型尝试末 3/2/1 字，命中即停。
+        let context_window = if !has_personal || chars.is_empty() {
+            None
+        } else {
+            (1..=chars.len().min(3)).rev().find_map(|tail_len| {
+                let suffix: String = chars[chars.len() - tail_len..].iter().collect();
+                let ctx = personal.context(None, Some(&suffix));
+                (ctx.context_total > 0).then_some(ctx)
+            })
+        };
+        let gram_db = self
+            .collocation_db
+            .as_deref()
+            .filter(|_| {
+                !combined_context.is_empty() && self.sentence_association.collocation_weight > 0.0
+            });
+        let gram_config = crate::lattice::octagram::GramConfig::default();
+        // 语境或个人模型存在时每键取前 3 个同音词，避免高贴合上文的次选同音词（如「时间/事件/实践」）被首行遮挡。
         self.database
-            .query_exact_keys_per_key(keys, 1)
+            .query_exact_keys_per_key(keys, 3)
             .into_iter()
-            .filter_map(|(key, rows)| rows.first().map(|row| (key, row.weight)))
+            .filter_map(|(key, rows)| {
+                let mut best_weight = 0.0f64;
+                for row in rows {
+                    let mut weight = row.weight.max(1) as f64;
+                    if !static_prefixes.is_empty() {
+                        let mut best_pmi = 0.0f32;
+                        for prefix in &static_prefixes {
+                            let pmi = self.sentence_tables.bigram_score(prefix, &row.value);
+                            if pmi > best_pmi {
+                                best_pmi = pmi;
+                            }
+                        }
+                        if best_pmi > 0.0 {
+                            // 温和的静态二元语境倍数（封顶约 5×，约抵 1.1 几何代价），打破歧义平局但不压倒明确笔画。
+                            let bigram_factor = (f64::from(best_pmi) * 0.45).min(1.6).exp();
+                            weight *= bigram_factor;
+                        }
+                    }
+                    if let Some(gram) = gram_db {
+                        let gram_score =
+                            gram.query(&combined_context, &row.value, false, &gram_config);
+                        let gram_gain =
+                            (gram_score - gram_config.non_collocation_penalty).max(0.0);
+                        if gram_gain > 0.0 {
+                            // `.gram` 语法模型搭配命中加成（封顶约 7.4×，约抵 0.85 几何代价），在九键高歧义路径间按语境择优。
+                            let gram_factor = (gram_gain * 0.35).min(2.0).exp();
+                            weight *= gram_factor;
+                        }
+                    }
+                    if has_personal {
+                        let count = personal.word_count(&row.value);
+                        if count > 0 {
+                            let personal_factor = (1.0 + f64::from(count).ln_1p() * 0.75).min(4.0);
+                            weight *= personal_factor;
+                        }
+                        if let Some(ctx) = context_window.as_ref() {
+                            let prob = personal.probability(ctx, &row.value);
+                            if prob > 0.0 {
+                                let context_factor = (1.0 + prob * 6.0).min(3.0);
+                                weight *= context_factor;
+                            }
+                        }
+                    }
+                    if weight > best_weight {
+                        best_weight = weight;
+                    }
+                }
+                (best_weight > 0.0).then_some((key, best_weight.min(i64::MAX as f64) as i64))
+            })
             .collect()
+    }
+
+    /// 批量按精确拼音键取前 `per_key` 条词典记录（供九键滑行合并相近次优读音候选）。
+    pub fn exact_rows_for_keys(
+        &self,
+        keys: &[String],
+        per_key: usize,
+    ) -> HashMap<String, Vec<DictRow>> {
+        if keys.is_empty() || per_key == 0 {
+            return HashMap::new();
+        }
+        self.database.query_exact_keys_per_key(keys, per_key)
     }
 
     /// 整句改字的候选：读音恰为 `span`（完整音节）的词条，按权重从高到低，至多 `limit` 条。
@@ -934,6 +1076,9 @@ impl QuanpinDictionary {
         self.fuzzy_cache.clear();
         self.typo_span_cache.clear();
         self.clear_row_caches();
+        for slot in self.glide_lexicon_cache.borrow_mut().iter_mut() {
+            *slot = None;
+        }
     }
 
     fn clear_row_caches(&mut self) {
@@ -1007,13 +1152,38 @@ impl QuanpinDictionary {
                 self.personal_scored_keys.clear();
             }
         }
+        let has_active_touches = !self.key_touches.is_empty()
+            && raw == self.touch_input
+            && self.key_geometry.is_some();
         let mut segments = None;
-        let segmentation_cache = &mut self.segmentation_cache;
-        let association = self.sentence_association.clone();
-        let has_rerankers = !self.rerankers.is_empty() || self.sentence_scorer.0.is_some();
-        let context = &self.rescoring_context;
-        let pinyin_segmentation = &mut self.pinyin_segmentation;
-        let (resolution_hash, (resolution, marking_alternatives, slot)) =
+        let (resolution_hash, (resolution, marking_alternatives, slot)) = if has_active_touches {
+            let resolved_segments =
+                resolve_cached_segments(&mut self.segmentation_cache, raw, segmentation);
+            let resolution = resolve_series_query_with_touches(
+                raw,
+                &resolved_segments,
+                types,
+                &self.key_touches,
+                self.key_geometry.as_deref().expect("checked above"),
+                &self.touch_tuning,
+            );
+            self.pinyin_segmentation
+                .clone_from(&resolution.segmentation);
+            let alternatives = resolution
+                .alternative_corrected_cuts
+                .iter()
+                .chain(&resolution.costlier_corrected_cuts)
+                .map(|cut| join_segments(cut))
+                .collect();
+            let slot = self.series_slot(&resolution.cache_key);
+            segments = Some(resolved_segments);
+            (0, (Some(resolution), alternatives, slot))
+        } else {
+            let segmentation_cache = &mut self.segmentation_cache;
+            let association = self.sentence_association.clone();
+            let has_rerankers = !self.rerankers.is_empty() || self.sentence_scorer.0.is_some();
+            let context = &self.rescoring_context;
+            let pinyin_segmentation = &mut self.pinyin_segmentation;
             project_cached_resolution_with(
                 &mut self.resolution_cache,
                 raw,
@@ -1046,7 +1216,8 @@ impl QuanpinDictionary {
                     };
                     (owned, alternatives, slot)
                 },
-            );
+            )
+        };
         self.alternative_segmentations = marking_alternatives;
         self.drop_personal_scored_results();
         if self.series_cache.contains(&slot) {
@@ -1122,6 +1293,9 @@ impl QuanpinDictionary {
                     &alternatives,
                     result,
                 );
+            }
+            if has_active_touches {
+                self.merge_short_touch_words(&mut result, raw, &segments);
             }
         }
         let (cached, projected) = match cold {
@@ -1624,6 +1798,25 @@ impl QuanpinDictionary {
                 at += 1;
             }
         }
+        let touch_supported = touched.is_some_and(|(touches, geometry)| {
+            let variants = priced_variants.get_or_insert_with(|| {
+                priced_quanpin_variants(
+                    segments,
+                    touches,
+                    geometry,
+                    &touch_tuning,
+                    profile,
+                    types,
+                )
+            });
+            typo.score >= typo.literal_score - touch_tuning.show_margin
+                && touch_supports_correction(
+                    variants,
+                    &touch_tuning,
+                    segments,
+                    typo.key.as_str(),
+                )
+        });
         let mut sentence = WordItem::new(
             typed,
             typo.sentence,
@@ -1632,6 +1825,7 @@ impl QuanpinDictionary {
             typo.key,
         );
         sentence.sentence_association = true;
+        sentence.touch_supported = touch_supported;
         sentence.sentence_words = typo.words;
         sentence.corrected_from = fold_reading(raw).into();
         result.insert(at, sentence);

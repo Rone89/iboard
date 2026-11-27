@@ -335,6 +335,47 @@ impl PinyinDatabase {
         rows
     }
 
+    /// 按起手字母加载 1–4 音节高频全拼键用于 26 键滑行词典直评缓存；每张分表按 `MAX(weight)` 降序取前若干条并去重，缺表静默跳过。
+    pub fn top_glide_lexicon_for_initial(
+        &self,
+        initial: u8,
+    ) -> Vec<crate::pinyin::glide::GlideLexiconEntry> {
+        let Some(connection) = &self.connection else {
+            return Vec::new();
+        };
+        if !initial.is_ascii_lowercase() || matches!(initial, b'i' | b'u' | b'v') {
+            return Vec::new();
+        }
+        let ch = char::from(initial);
+        // 1 音节覆盖全表（<=64），2–4 音节覆盖日常高频词（约 2900 条/首字母），单次懒加载 ~12ms，常驻内存极小。
+        const TABLE_LIMITS: [(usize, i64); 4] = [(1, 64), (2, 1_400), (3, 1_000), (4, 500)];
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut entries = Vec::new();
+        for (syllables, limit) in TABLE_LIMITS {
+            let table = format!("tbl_{syllables}_{ch}");
+            let sql = format!(
+                "SELECT key FROM {table} GROUP BY key ORDER BY MAX(weight) DESC LIMIT ?1"
+            );
+            let Ok(mut stmt) = connection.prepare_cached(&sql) else {
+                continue;
+            };
+            let Ok(mut rows) = stmt.query([limit]) else {
+                continue;
+            };
+            while let Ok(Some(row)) = rows.next() {
+                let Ok(key) = row.get::<_, String>(0) else {
+                    continue;
+                };
+                if let Some(entry) = crate::pinyin::glide::GlideLexiconEntry::from_key(&key) {
+                    if seen.insert(entry.letters.as_ref().to_owned()) {
+                        entries.push(entry);
+                    }
+                }
+            }
+        }
+        entries
+    }
+
     /// Up to `per_key_limit` rows per complete key; keys without rows are absent (QQ:1356-1396).
     pub fn query_exact_keys_per_key(
         &self,

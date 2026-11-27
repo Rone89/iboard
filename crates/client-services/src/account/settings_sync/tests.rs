@@ -1417,7 +1417,7 @@ fn touch_key_styles_and_number_row_sync_by_their_wire_names() {
     let defaults = export_android_settings(&Preferences::default(), None).unwrap();
     assert_eq!(
         defaults[TWENTY_SIX_KEY_STYLE],
-        AccountPreferenceValue::String("standard".into())
+        AccountPreferenceValue::String("platform_default".into())
     );
     assert_eq!(
         defaults[FOURTEEN_KEY_STYLE],
@@ -1425,7 +1425,7 @@ fn touch_key_styles_and_number_row_sync_by_their_wire_names() {
     );
     assert_eq!(
         defaults[NINE_KEY_STYLE],
-        AccountPreferenceValue::String("standard".into())
+        AccountPreferenceValue::String("platform_default".into())
     );
     assert_eq!(defaults[NUMBER_ROW], AccountPreferenceValue::Boolean(false));
 
@@ -1449,6 +1449,11 @@ fn touch_key_styles_and_number_row_sync_by_their_wire_names() {
             TouchTwentySixKeyStyle::Standard,
             TouchFourteenKeyStyle::Standard,
             TouchNineKeyStyle::TallReturn,
+        ),
+        (
+            TouchTwentySixKeyStyle::Lokey,
+            TouchFourteenKeyStyle::Standard,
+            TouchNineKeyStyle::IosNative,
         ),
     ] {
         let local = Preferences {

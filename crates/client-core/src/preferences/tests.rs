@@ -246,13 +246,16 @@ fn touch_key_styles_and_number_row_default_to_todays_keyboards_and_are_not_writt
     let defaults = Preferences::default();
     assert_eq!(
         defaults.touch_twenty_six_key_style,
-        TouchTwentySixKeyStyle::Standard
+        TouchTwentySixKeyStyle::PlatformDefault
     );
     assert_eq!(
         defaults.touch_fourteen_key_style,
         TouchFourteenKeyStyle::Standard
     );
-    assert_eq!(defaults.touch_nine_key_style, TouchNineKeyStyle::Standard);
+    assert_eq!(
+        defaults.touch_nine_key_style,
+        TouchNineKeyStyle::PlatformDefault
+    );
     assert!(!defaults.touch_number_row);
     let written = serde_json::to_value(&defaults).unwrap();
     for key in [
@@ -272,13 +275,16 @@ fn touch_key_styles_and_number_row_default_to_todays_keyboards_and_are_not_writt
     let loaded = store.load().unwrap().preferences;
     assert_eq!(
         loaded.touch_twenty_six_key_style,
-        TouchTwentySixKeyStyle::Standard
+        TouchTwentySixKeyStyle::PlatformDefault
     );
     assert_eq!(
         loaded.touch_fourteen_key_style,
         TouchFourteenKeyStyle::Standard
     );
-    assert_eq!(loaded.touch_nine_key_style, TouchNineKeyStyle::Standard);
+    assert_eq!(
+        loaded.touch_nine_key_style,
+        TouchNineKeyStyle::PlatformDefault
+    );
     assert!(!loaded.touch_number_row);
     assert_eq!(fs::read(store.path()).unwrap(), legacy);
 }
@@ -308,6 +314,11 @@ fn touch_key_styles_and_number_row_round_trip_through_the_store() {
             TouchTwentySixKeyStyle::Standard,
             TouchFourteenKeyStyle::Standard,
             TouchNineKeyStyle::TallReturn,
+        ),
+        (
+            TouchTwentySixKeyStyle::Lokey,
+            TouchFourteenKeyStyle::Standard,
+            TouchNineKeyStyle::IosNative,
         ),
     ] {
         let configured = Preferences {
@@ -366,10 +377,12 @@ fn touch_backspace_by_syllable_defaults_off_and_round_trips_through_the_store() 
 #[test]
 fn touch_key_style_wire_strings_are_pinned_and_unknown_strings_read_as_standard() {
     for (style, wire) in [
+        (TouchTwentySixKeyStyle::PlatformDefault, "platform_default"),
         (TouchTwentySixKeyStyle::Standard, "standard"),
         (TouchTwentySixKeyStyle::CommaPeriod, "comma_period"),
         (TouchTwentySixKeyStyle::LongSpace, "long_space"),
         (TouchTwentySixKeyStyle::Emoji, "emoji"),
+        (TouchTwentySixKeyStyle::Lokey, "lokey"),
     ] {
         assert_eq!(serde_json::to_value(style).unwrap(), wire);
         assert_eq!(style.as_str(), wire);
@@ -393,10 +406,12 @@ fn touch_key_style_wire_strings_are_pinned_and_unknown_strings_read_as_standard(
         );
     }
     for (style, wire) in [
+        (TouchNineKeyStyle::PlatformDefault, "platform_default"),
         (TouchNineKeyStyle::Standard, "standard"),
         (TouchNineKeyStyle::CommaPeriod, "comma_period"),
         (TouchNineKeyStyle::Emoji, "emoji"),
         (TouchNineKeyStyle::TallReturn, "tall_return"),
+        (TouchNineKeyStyle::IosNative, "ios_native"),
     ] {
         assert_eq!(serde_json::to_value(style).unwrap(), wire);
         assert_eq!(style.as_str(), wire);
@@ -11307,7 +11322,7 @@ fn android_layout_migration_moves_the_nine_key_swipe_only_over_off_or_a_missing_
         assert!(!saved.preferences.touch_number_row);
         assert_eq!(
             saved.preferences.touch_twenty_six_key_style,
-            TouchTwentySixKeyStyle::Standard
+            TouchTwentySixKeyStyle::PlatformDefault
         );
         // 再迁一次不增加修订号，文件不变。
         let before = fs::read(store.path()).unwrap();

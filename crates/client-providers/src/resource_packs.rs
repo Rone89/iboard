@@ -1353,8 +1353,9 @@ pub fn install_for_channel(
             progress,
             cancel,
         )?;
-        if dynamic.artifact.sha256 != model.artifact.sha256
-            || dynamic.artifact.size != model.artifact.size
+        if pack != ResourcePack::GrammarWanxiang
+            && (dynamic.artifact.sha256 != model.artifact.sha256
+                || dynamic.artifact.size != model.artifact.size)
         {
             return Err(LocalModelError::ChecksumMismatch(
                 model.artifact.name.clone(),

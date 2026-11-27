@@ -855,6 +855,23 @@ pub extern "C" fn msime_client_choose_nine_key_spelling(
     )
 }
 
+/// Browse one spelling from View.nine_key_spellings in-place without advancing to the remaining digits.
+#[no_mangle]
+pub extern "C" fn msime_client_browse_nine_key_spelling(
+    handle: u64,
+    generation: u64,
+    index: usize,
+) -> *mut c_char {
+    dispatch(
+        handle,
+        Action::BrowseNineKeySpelling(NineKeySpellingId {
+            session: handle,
+            generation,
+            index,
+        }),
+    )
+}
+
 /// 九宫格候选的单字与笔画筛选，见头文件。`strokes` 是 `length` 字节的 ASCII 笔顺前缀，`length` 为 0 时可以是空指针。
 ///
 /// # Safety
@@ -909,13 +926,49 @@ pub unsafe extern "C" fn msime_client_glide(
     }
     // SAFETY：由调用方契约保证。
     let bytes = unsafe { std::slice::from_raw_parts(request, length) };
-    match glide_action(bytes) {
-        Ok(action) => dispatch(handle, action),
+    match parse_glide_request(bytes) {
+        Ok(ParsedGlideRequest::Commit(action)) => dispatch(handle, action),
+        Ok(ParsedGlideRequest::Preview {
+            keyboard,
+            points,
+            readings,
+        }) => response(|| {
+            with_session(handle, |session| {
+                let preview = session
+                    .runtime
+                    .preview_glide(&keyboard, &points, &readings)
+                    .map_err(|e| e.to_string())?;
+                if let Some((reading, words)) = preview {
+                    let candidates: Vec<serde_json::Value> = words
+                        .into_iter()
+                        .map(|text| serde_json::json!({ "text": text }))
+                        .collect();
+                    Ok(serde_json::json!({
+                        "handled": true,
+                        "view": {
+                            "preedit": reading,
+                            "candidates": candidates,
+                        }
+                    }))
+                } else {
+                    Ok(serde_json::json!({ "handled": false }))
+                }
+            })
+        }),
         Err(error) => response(|| Err(error)),
     }
 }
 
-fn glide_action(bytes: &[u8]) -> Result<Action, String> {
+enum ParsedGlideRequest {
+    Commit(Action),
+    Preview {
+        keyboard: Box<GlideKeyboard>,
+        points: Vec<GlidePoint>,
+        readings: Vec<String>,
+    },
+}
+
+fn parse_glide_request(bytes: &[u8]) -> Result<ParsedGlideRequest, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
     struct GlideRequest {
@@ -925,6 +978,10 @@ fn glide_action(bytes: &[u8]) -> Result<Action, String> {
         points: Vec<Vec<f32>>,
         #[serde(default)]
         bilingual: bool,
+        #[serde(default)]
+        readings: Vec<String>,
+        #[serde(default)]
+        preview: bool,
     }
     let request: GlideRequest =
         serde_json::from_slice(bytes).map_err(|_| "invalid glide request")?;
@@ -962,11 +1019,28 @@ fn glide_action(bytes: &[u8]) -> Result<Action, String> {
             _ => Err("invalid glide stroke".to_owned()),
         })
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(Action::Glide {
+    if request.readings.len() > 16
+        || request.readings.iter().any(|reading| {
+            reading.is_empty()
+                || reading.len() > 30
+                || !reading.bytes().all(|b| b.is_ascii_lowercase())
+        })
+    {
+        return Err("invalid glide readings".to_owned());
+    }
+    if request.preview {
+        return Ok(ParsedGlideRequest::Preview {
+            keyboard: Box::new(keyboard),
+            points,
+            readings: request.readings,
+        });
+    }
+    Ok(ParsedGlideRequest::Commit(Action::Glide {
         keyboard: Box::new(keyboard),
         points,
         bilingual: request.bilingual,
-    })
+        readings: request.readings,
+    }))
 }
 
 /// Copy every cached Engine candidate only when a host opens an expanded panel.
@@ -1056,6 +1130,60 @@ pub unsafe extern "C" fn msime_client_english_completions(
             )
             .map_err(|error| error.to_string())?;
             Ok(json!({"completions": words}))
+        })
+    })
+}
+
+/// 宿主同步光标前文到运行时与引擎的重排上下文（仅在空闲态生效，不落盘、不打日志）。
+///
+/// # Safety
+/// `text` must point to `length` readable UTF-8 bytes when `length > 0`.
+#[no_mangle]
+pub unsafe extern "C" fn msime_client_set_surrounding_context(
+    handle: u64,
+    text: *const u8,
+    length: usize,
+) -> *mut c_char {
+    response(|| {
+        if length > 4096 || (length > 0 && text.is_null()) {
+            return Err("invalid surrounding context buffer".into());
+        }
+        let context = if length == 0 {
+            ""
+        } else {
+            let bytes = unsafe { std::slice::from_raw_parts(text, length) };
+            std::str::from_utf8(bytes).map_err(|_| "invalid surrounding context utf8")?
+        };
+        with_session(handle, |session| {
+            session.runtime.set_surrounding_context(context);
+            Ok(json!({ "updated": true }))
+        })
+    })
+}
+
+/// 撤销刚上屏候选的自动学习（权重调频、九键最近选择槽位、个人二元/三元计数）。
+///
+/// # Safety
+/// `text` must point to `length` readable UTF-8 bytes when `length > 0`.
+#[no_mangle]
+pub unsafe extern "C" fn msime_client_undo_last_learning(
+    handle: u64,
+    text: *const u8,
+    length: usize,
+) -> *mut c_char {
+    response(|| {
+        if length > 512 || (length > 0 && text.is_null()) {
+            return Err("invalid undo learning buffer".into());
+        }
+        let expected = if length == 0 {
+            ""
+        } else {
+            let bytes = unsafe { std::slice::from_raw_parts(text, length) };
+            std::str::from_utf8(bytes).map_err(|_| "invalid undo learning utf8")?
+        };
+        with_session(handle, |session| {
+            let undone = session.runtime.undo_last_learning(expected);
+            Ok(json!({ "undone": undone }))
         })
     })
 }

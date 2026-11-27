@@ -207,6 +207,13 @@ impl SentenceNgramTables {
         &self.offensive
     }
 
+    /// 查询静态中文二元语法表的 PMI 对数比（`ln(P(next | previous) / P(next))`）；未加载或未命中时返回 `0.0`。
+    pub(crate) fn bigram_score(&self, previous: &str, next: &str) -> f32 {
+        self.bigram
+            .as_deref()
+            .map_or(0.0, |table| table.bigram(previous, next))
+    }
+
     pub(crate) fn options<'a>(&self, sentence_alternatives: bool) -> LatticeOptions<'a> {
         LatticeOptions {
             nbest: SENTENCE_PATHS,

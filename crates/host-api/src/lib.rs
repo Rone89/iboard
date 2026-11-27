@@ -520,13 +520,40 @@ fn punctuation_lock_code(lock: msime_client_core::preferences::PunctuationLock) 
     }
 }
 
+/// 在随包资源目录（`EngineResources`）旁的兄弟目录 `grammar-models/` 中查找内置 `.gram` 模型，
+/// 与 `language-dictionaries/`、`rerank-model/` 沿用同一套兄弟目录约定（不放入资源目录内部以免破坏词库锁校验）。
+fn bundled_grammar_model(resources: Option<&Path>, artifact_name: &str) -> Option<PathBuf> {
+    let candidate = resources?
+        .parent()?
+        .join("grammar-models")
+        .join(artifact_name);
+    candidate.is_file().then_some(candidate)
+}
+
+/// 解析单个语法模型资源包的磁盘路径：优先取 `state_root/resource-packs/` 下已下载安装的版本，
+/// 其次回退到安装包随附的 `grammar-models/` 兄弟目录。
+fn resolve_grammar_pack_file(
+    pack: ResourcePack,
+    state_root: Option<&Path>,
+    bundled_resources: Option<&Path>,
+) -> Option<PathBuf> {
+    let artifact = pack.set().artifacts.first()?;
+    if let Some(installed) =
+        state_root.and_then(|root| resource_packs::installed_file(root, pack, &artifact.name))
+    {
+        return Some(installed);
+    }
+    bundled_grammar_model(bundled_resources, &artifact.name)
+}
+
 /// The Engine's sentence association switches. Neither model switch reaches it: the desktop one gates the runtime's settled reranker (`Runtime::set_settled_rerank_enabled`), the only place that model runs, and the keyboard one (整句联想「增强」) mounts the runtime's per-keystroke reranker (`keyboard_reranker_enabled`), so the Engine's own keyboard-model rerank stays off.
 fn engine_sentence_association(
     preferences: &msime_client_core::preferences::SentenceAssociationPreferences,
     state_root: Option<&std::path::Path>,
+    bundled_resources: Option<&std::path::Path>,
 ) -> msime_engine::SentenceAssociationOptions {
-    // 选中的语法模型装好后才有文件路径；选中但没装（或包装在别处的 state_root
-    // 下没发布）时留空，引擎逐字节退回无模型基线。
+    // 选中的语法模型优先取已下载资源包，其次取安装包兄弟目录 `grammar-models/`；
+    // 若用户选了万象 LTS 但尚未下载完，自动临时回退到内置的八股文紧凑版（如存在），安装完成后焦点刷新自动切换。
     let pack = match preferences.grammar_model {
         msime_client_core::preferences::GrammarModel::None => None,
         msime_client_core::preferences::GrammarModel::Wanxiang => {
@@ -542,13 +569,17 @@ fn engine_sentence_association(
             Some(ResourcePack::GrammarBaishuang)
         }
     };
-    let collocation_model = state_root
-        .zip(pack)
-        .and_then(|(root, pack)| {
-            pack.set()
-                .artifacts
-                .first()
-                .and_then(|artifact| resource_packs::installed_file(root, pack, &artifact.name))
+    let collocation_model = pack
+        .and_then(|pack| {
+            resolve_grammar_pack_file(pack, state_root, bundled_resources).or_else(|| {
+                (pack == ResourcePack::GrammarWanxiang).then(|| {
+                    resolve_grammar_pack_file(
+                        ResourcePack::GrammarBaguwenCompact,
+                        state_root,
+                        bundled_resources,
+                    )
+                })?
+            })
         })
         .unwrap_or_default();
     msime_engine::SentenceAssociationOptions {
@@ -556,8 +587,8 @@ fn engine_sentence_association(
         // 引擎自己那层键盘模型（九键跨切分重排、全拼和双拼词库内重排）不跟「增强」打开：在 runtime 的逐键重排之外它几乎不加分，却让按键延迟和内存再涨一截，取舍见 .agents/notes/implemented/feature/2026-10-29-enhanced-runtime-reranker-only.md。它留给直接构造 `EngineOptions` 的评测和实验（`convert_eval`）。
         neural_keyboard: false,
         show_next_on_duplicate: preferences.show_next_on_duplicate,
+        collocation_rerank: !collocation_model.as_os_str().is_empty(),
         collocation_model,
-        collocation_rerank: pack.is_some(),
         // 搭配调参系数逐字段透传；偏好层已把非法值回退到出厂值。
         collocation_weight: preferences.sentence_collocation_weight,
         collocation_grammar: msime_engine::octagram::GramConfig {
@@ -975,9 +1006,15 @@ impl HostSession {
             &preferences.plugins,
         );
         plugin_tables.fill(&self.plugin_tables, plugin_root, &mut options);
+        let bundled_resources = options
+            .helpcode_fallback_resources
+            .as_deref()
+            .map(Path::new)
+            .or_else(|| Some(Path::new(&options.resources)));
         options.sentence_association = engine_sentence_association(
             &preferences.sentence_association,
             self.state_root.as_deref(),
+            bundled_resources,
         );
         // 引擎按宿主的每页候选数决定全长组要不要并入补全词；和下面交给 runtime 的值同源。
         let page_size = host_page_size(
@@ -1238,15 +1275,24 @@ impl HostSession {
             downloaded.as_ref(),
             Path::new(&self.options.resources),
         ));
-        let grammar_model =
-            engine_sentence_association(&self.applied.sentence_association, state_root)
-                .collocation_model;
+        let bundled_resources = self
+            .options
+            .helpcode_fallback_resources
+            .as_deref()
+            .map(Path::new)
+            .or_else(|| Some(Path::new(&self.options.resources)));
+        let sentence_association = engine_sentence_association(
+            &self.applied.sentence_association,
+            state_root,
+            bundled_resources,
+        );
         if cantonese == self.options.cantonese_dictionary
             && zhuyin == self.options.zhuyin_dictionary
             && stroke == self.options.stroke_dictionary
             && japanese == self.options.japanese_dictionary
             && wubi == self.options.wubi_dictionary
-            && grammar_model == self.options.sentence_association.collocation_model
+            && sentence_association.collocation_model
+                == self.options.sentence_association.collocation_model
         {
             return;
         }
@@ -1255,6 +1301,7 @@ impl HostSession {
         self.options.stroke_dictionary = stroke;
         self.options.japanese_dictionary = japanese;
         self.options.wubi_dictionary = wubi;
+        self.options.sentence_association = sentence_association;
         self.resources_pending = true;
     }
 
@@ -2494,6 +2541,14 @@ impl HostOptions {
             || Path::new(&self.resources)
                 .join("msime-japanese.dat")
                 .is_file();
+        let sentence_association = engine_sentence_association(
+            &self.preferences.sentence_association,
+            absolute_state_root(self.preferences_directory.as_deref()).as_deref(),
+            helpcode_fallback_resources
+                .as_deref()
+                .map(Path::new)
+                .or_else(|| Some(Path::new(&self.resources))),
+        );
         let mut options = EngineOptions {
             resources: self.resources,
             user_data: self.user_data,
@@ -2572,10 +2627,7 @@ impl HostOptions {
                 .as_deref()
                 .and_then(Path::to_str)
                 .map(str::to_owned),
-            sentence_association: engine_sentence_association(
-                &self.preferences.sentence_association,
-                absolute_state_root(self.preferences_directory.as_deref()).as_deref(),
-            ),
+            sentence_association,
             rescoring_context: String::new(),
             sentence_alternatives: true,
             vietnamese_input_method: vietnamese_input_method_code(self.preferences.vietnamese),
@@ -4282,5 +4334,88 @@ fn layout_key_grid_for(
             zhuyin_nine_key.then_some(KeyGrid::NineKey)
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod grammar_model_resolution_tests {
+    use super::*;
+    use msime_client_core::preferences::{GrammarModel, SentenceAssociationPreferences};
+
+    #[test]
+    fn bundled_compact_grammar_resolves_and_serves_as_wanxiang_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        let bundle_resources = dir.path().join("bundle/EngineResources");
+        let bundled_grammar_dir = dir.path().join("bundle/grammar-models");
+        let state_root = dir.path().join("state");
+        std::fs::create_dir_all(&bundle_resources).unwrap();
+        std::fs::create_dir_all(&bundled_grammar_dir).unwrap();
+        std::fs::create_dir_all(&state_root).unwrap();
+
+        let compact_path = bundled_grammar_dir.join("zh-hans-t-essay-bgw-compact.gram");
+        std::fs::write(&compact_path, b"compact-gram").unwrap();
+
+        let mut prefs = SentenceAssociationPreferences::default();
+        prefs.grammar_model = GrammarModel::BaguwenCompact;
+        let compact_opts = engine_sentence_association(
+            &prefs,
+            Some(&state_root),
+            Some(&bundle_resources),
+        );
+        assert!(compact_opts.collocation_rerank);
+        assert_eq!(compact_opts.collocation_model, compact_path);
+
+        // Selecting Wanxiang before downloading falls back to bundled compact grammar.
+        prefs.grammar_model = GrammarModel::Wanxiang;
+        let fallback_opts = engine_sentence_association(
+            &prefs,
+            Some(&state_root),
+            Some(&bundle_resources),
+        );
+        assert!(fallback_opts.collocation_rerank);
+        assert_eq!(fallback_opts.collocation_model, compact_path);
+
+        // Once Wanxiang pack is installed under state_root, it takes priority.
+        let wx_pack = ResourcePack::GrammarWanxiang;
+        let wx_artifact = &wx_pack.set().artifacts[0].name;
+        let wx_dir = resource_packs::root(&state_root).join(wx_pack.id());
+        std::fs::create_dir_all(&wx_dir).unwrap();
+        let wx_manifest = serde_json::json!({
+            "pack": wx_pack.id(),
+            "source_commit": "test",
+            "artifacts": [{
+                "name": wx_artifact,
+                "url": wx_pack.set().artifacts[0].url,
+                "sha256": "a".repeat(64),
+                "size": 1024
+            }]
+        });
+        std::fs::write(
+            wx_dir.join("msime-model.json"),
+            serde_json::to_vec(&wx_manifest).unwrap(),
+        )
+        .unwrap();
+        let wx_path = wx_dir.join(wx_artifact);
+        let mut gram_bytes = vec![0u8; 1024];
+        gram_bytes[..14].copy_from_slice(b"Rime::Grammar/");
+        std::fs::write(&wx_path, &gram_bytes).unwrap();
+
+        let wx_opts = engine_sentence_association(
+            &prefs,
+            Some(&state_root),
+            Some(&bundle_resources),
+        );
+        assert!(wx_opts.collocation_rerank);
+        assert_eq!(wx_opts.collocation_model, wx_path);
+
+        // Explicitly disabled stays off even when bundled compact grammar exists.
+        prefs.grammar_model = GrammarModel::None;
+        let none_opts = engine_sentence_association(
+            &prefs,
+            Some(&state_root),
+            Some(&bundle_resources),
+        );
+        assert!(!none_opts.collocation_rerank);
+        assert!(none_opts.collocation_model.as_os_str().is_empty());
     }
 }

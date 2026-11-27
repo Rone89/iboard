@@ -511,6 +511,7 @@ fn row_answers_key(scheme: u8, row: OrderRow<'_>) -> bool {
     row.answers_key
         && !CATALOG_SOURCES.contains(&row.source)
         && !AI_SEAT_SOURCES.contains(&row.source)
+        && row.source != ENGLISH_SOURCE
         && row.source != MIXED_JAPANESE_SOURCE
         && (corrections_may_lead(scheme) || !row.corrected)
 }
@@ -803,7 +804,10 @@ fn pick_contest<'a, R: OrderRowSource<'a> + ?Sized>(
             best = slot;
         }
     }
-    (best != 0 && scores[best] - scores[0] > margin).then(|| contested[best])
+    let beats_leader = best != 0
+        && (scores[best] - scores[0] > margin
+            || (scores[best] > scores[0] && differs_only_in_third_person(texts[best], texts[0])));
+    beats_leader.then(|| contested[best])
 }
 
 fn fill_static_rerank_inputs<'a, R, F>(
@@ -1039,6 +1043,38 @@ mod tests {
         assert!(!super::differs_only_in_third_person("他说谢谢", "她说射射"));
         assert!(!super::differs_only_in_third_person("他说", "他说了"));
         assert!(!super::differs_only_in_third_person("他们", "你们"));
+    }
+
+    #[test]
+    fn contest_allows_third_person_pronoun_flip_below_margin() {
+        struct SlightPronounPreference;
+        impl CandidateScorer for SlightPronounPreference {
+            fn context_length(&self) -> usize {
+                64
+            }
+            fn log_probabilities(&mut self, _context: &str, candidates: &[&str]) -> Vec<f32> {
+                candidates
+                    .iter()
+                    .map(|text| match *text {
+                        "他" => -2.0,
+                        "她" => -1.7, // 仅高 0.3 nat，低于默认 1.0 margin
+                        "它" => -2.5,
+                        _ => -5.0,
+                    })
+                    .collect()
+            }
+        }
+        let texts = ["他".to_owned(), "她".to_owned(), "它".to_owned()];
+        let sources = [DICTIONARY_SOURCES[0]; 3];
+        let answers = [true; 3];
+        let corrected = [false; 3];
+        let contests = [CONTEST_RUNNER_UP, CONTEST_RUNNER_UP, CONTEST_RUNNER_UP];
+        let contested =
+            ParallelOrderRows::new(&texts, &sources, &answers, &corrected).with_contests(&contests);
+        assert_eq!(
+            rerank_pick(&mut SlightPronounPreference, "我妈妈说", 0, false, &contested),
+            Some(1)
+        );
     }
 
     use super::*;

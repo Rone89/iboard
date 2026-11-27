@@ -8,7 +8,7 @@ pub(crate) use priority_slot::{
 };
 
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -56,9 +56,51 @@ fn column_text_ref<'a>(row: &'a rusqlite::Row<'_>, index: usize) -> rusqlite::Re
     })
 }
 
+/// 单个起手字母的英文滑行缓存上限（与原 `query_prefix(..., 4096)` 一致，避免把整份英文词库常驻键盘扩展内存）。
+const GLIDE_BUCKET_LIMIT: usize = 4_096;
+
+/// 紧凑英文滑行词条：字符串全部驻留在所属桶的连续 arena 内，零逐词堆分配。
+#[derive(Clone, Copy)]
+pub(crate) struct EnglishGlideEntry {
+    word_off: u32,
+    word_len: u8,
+    display_off: u32,
+    display_len: u8,
+    pub(crate) weight: i64,
+    pub(crate) letter_mask: u32,
+    pub(crate) last: u8,
+}
+
+/// 按起手字母懒加载的高频英文滑行桶；条目按 `(word, weight DESC)` 排序，使同一拼写的不同大小写词形相邻，便于滑行解码只对每个唯一拼写运行一次几何 DP。
+pub(crate) struct EnglishGlideBucket {
+    arena: String,
+    entries: Vec<EnglishGlideEntry>,
+}
+
+impl EnglishGlideBucket {
+    #[inline]
+    pub(crate) fn entries(&self) -> &[EnglishGlideEntry] {
+        &self.entries
+    }
+
+    #[inline]
+    pub(crate) fn word(&self, entry: &EnglishGlideEntry) -> &str {
+        let start = entry.word_off as usize;
+        &self.arena[start..start + usize::from(entry.word_len)]
+    }
+
+    #[inline]
+    pub(crate) fn display(&self, entry: &EnglishGlideEntry) -> &str {
+        let start = entry.display_off as usize;
+        &self.arena[start..start + usize::from(entry.display_len)]
+    }
+}
+
 pub struct EnglishDictionary {
     connection: Option<Connection>,
     correction_cache: RefCell<correction::CorrectionCache>,
+    glide_cache: RefCell<[Option<EnglishGlideBucket>; 26]>,
+    the_weight_cache: Cell<Option<Option<i64>>>,
     translations: CustomTranslations,
     gloss_cache: Option<PathBuf>,
     /// The learned-gloss store, opened on the first lookup that reaches it and retried while the file does not exist yet: nothing may have been learned when the dictionary opens (english_dictionary.cpp:363-386).
@@ -91,6 +133,8 @@ impl EnglishDictionary {
         Self {
             connection: open_prefix_connection(database),
             correction_cache: RefCell::default(),
+            glide_cache: RefCell::new(std::array::from_fn(|_| None)),
+            the_weight_cache: Cell::new(None),
             translations,
             gloss_cache,
             gloss_cache_connection: RefCell::new(None),
@@ -121,6 +165,140 @@ impl EnglishDictionary {
                 Ok(WordItem::new(word, column_text(row, 0)?, column_i64(row, 1)?, CandidateSource::EnglishDictionary, ""))
             })
             .ok()
+    }
+
+    /// 缓存英文常见词基准权重的千分之一作为中英混滑频度下限，避免每笔重复查 `the`。
+    pub(crate) fn glide_weight_floor(&self) -> i64 {
+        if self.connection.is_none() {
+            return 1;
+        }
+        let cached = match self.the_weight_cache.get() {
+            Some(value) => value,
+            None => {
+                let value = self.query_exact("the").map(|row| row.weight);
+                self.the_weight_cache.set(Some(value));
+                value
+            }
+        };
+        cached.map_or(1, |weight| (weight / 1_000).max(1))
+    }
+
+    /// 按一组起手字母（小写 ASCII `b'a'..=b'z'`）借用紧凑英文滑行词表；未缓存的字母按需从 SQLite 懒加载一次。
+    pub(crate) fn with_glide_entries_for_initials(
+        &self,
+        initials: &[u8],
+        mut f: impl FnMut(&EnglishGlideBucket),
+    ) {
+        if self.connection.is_none() {
+            return;
+        }
+        let mut cache = self.glide_cache.borrow_mut();
+        for &initial in initials {
+            if !initial.is_ascii_lowercase() {
+                continue;
+            }
+            let slot = usize::from(initial - b'a');
+            if cache[slot].is_none() {
+                if let Some(bucket) = self.load_glide_bucket(initial) {
+                    cache[slot] = Some(bucket);
+                }
+            }
+            if let Some(bucket) = cache[slot].as_ref() {
+                if !bucket.entries.is_empty() {
+                    f(bucket);
+                }
+            }
+        }
+    }
+
+    fn load_glide_bucket(&self, initial: u8) -> Option<EnglishGlideBucket> {
+        let connection = self.connection.as_ref()?;
+        let prefix_buf = [initial];
+        let prefix = std::str::from_utf8(&prefix_buf).ok()?;
+        let upper_bound = prefix_upper_bound(prefix);
+        let mut statement = connection
+            .prepare_cached(&prefix_sql(sql_limit(GLIDE_BUCKET_LIMIT)))
+            .ok()?;
+        let mut rows = statement.query([prefix, upper_bound.as_str()]).ok()?;
+        let mut raw: Vec<(String, String, i64, u32, u8)> = Vec::new();
+        loop {
+            match rows.next() {
+                Ok(Some(row)) => {
+                    let is_null = |index| matches!(row.get_ref(index), Ok(ValueRef::Null));
+                    if is_null(0) || is_null(1) {
+                        continue;
+                    }
+                    let word = column_text_ref(row, 0).ok()?;
+                    let bytes = word.as_bytes();
+                    if !(2..=crate::pinyin::glide::MAX_GLIDE_LETTERS).contains(&bytes.len())
+                        || !bytes.iter().all(u8::is_ascii_lowercase)
+                    {
+                        continue;
+                    }
+                    let display = column_text_ref(row, 1).ok()?;
+                    if display.is_empty() || display.len() > usize::from(u8::MAX) {
+                        continue;
+                    }
+                    let weight = column_i64(row, 2).ok()?;
+                    let mut mask = 0u32;
+                    for &b in bytes {
+                        mask |= 1u32 << (b - b'a');
+                    }
+                    let last = bytes[bytes.len() - 1] - b'a';
+                    raw.push((word.into_owned(), display.into_owned(), weight, mask, last));
+                }
+                Ok(None) => break,
+                Err(_) => return None,
+            }
+        }
+        // 按拼写分组、同拼写内按权重降序排列，使大小写词形相邻并复用单次几何 DP 评分。
+        raw.sort_unstable_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| b.2.cmp(&a.2))
+                .then_with(|| a.1.cmp(&b.1))
+        });
+        let mut arena = String::with_capacity(raw.len() * 8);
+        let mut entries = Vec::with_capacity(raw.len());
+        let mut prev_word_range: Option<(u32, u8)> = None;
+        for (word, display, weight, letter_mask, last) in raw {
+            let (word_off, word_len) = match prev_word_range {
+                Some((off, len))
+                    if &arena[off as usize..off as usize + usize::from(len)] == word.as_str() =>
+                {
+                    (off, len)
+                }
+                _ => {
+                    let Ok(off) = u32::try_from(arena.len()) else {
+                        break;
+                    };
+                    arena.push_str(&word);
+                    let len = word.len() as u8;
+                    prev_word_range = Some((off, len));
+                    (off, len)
+                }
+            };
+            let (display_off, display_len) = if display == word {
+                (word_off, word_len)
+            } else {
+                let Ok(off) = u32::try_from(arena.len()) else {
+                    break;
+                };
+                arena.push_str(&display);
+                (off, display.len() as u8)
+            };
+            entries.push(EnglishGlideEntry {
+                word_off,
+                word_len,
+                display_off,
+                display_len,
+                weight,
+                letter_mask,
+                last,
+            });
+        }
+        arena.shrink_to_fit();
+        entries.shrink_to_fit();
+        Some(EnglishGlideBucket { arena, entries })
     }
 
     /// 向已有候选缓冲写入结果；热查询复用候选行和其中的字符串容量。

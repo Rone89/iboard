@@ -33,6 +33,7 @@ pub mod language_dictionary;
 mod lattice;
 mod local;
 pub mod logging;
+mod mixed_cn_en;
 pub mod multilingual;
 mod nine_key;
 mod nine_key_shuangpin;

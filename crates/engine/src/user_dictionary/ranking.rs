@@ -504,6 +504,32 @@ pub fn adjust_candidate_ranking(request: &RankingRequest<'_>) -> Result<bool> {
     Ok(true)
 }
 
+/// 恢复单条刚被调频改动的候选权重（用于上屏后秒删回滚误学）。
+pub fn restore_candidate_weight(
+    main_db: &Path,
+    user_db: &Path,
+    kind: PersonalDictionaryKind,
+    entry_key: &str,
+    value: &str,
+    previous_weight: i64,
+) -> Result<()> {
+    let journal = open_journal(user_db)?;
+    let transaction = Transaction::new_unchecked(&journal, TransactionBehavior::Immediate)?;
+    let mut main = open_dictionary_for_writing(main_db)?;
+    let main_transaction = main.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    update_ranked_weight(
+        &main_transaction,
+        &transaction,
+        kind,
+        entry_key,
+        value,
+        previous_weight,
+    )?;
+    transaction.commit()?;
+    main_transaction.commit()?;
+    Ok(())
+}
+
 /// J:929-1101；`ordered` 可混有临时英文模式的生成行，`kind` 不参与英文排序。
 pub fn adjust_english_candidate_ranking(request: &RankingRequest<'_>) -> Result<()> {
     check_request(request)?;

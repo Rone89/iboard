@@ -44,8 +44,11 @@ impl InputSession {
         }
         let mut rows = ranking::interleave(full, ranking::combinations(&previous, next, &combined));
         for row in &mut rows {
-            row.source = CandidateSource::Generated;
-            row.corrected_from = combined.clone().into();
+            if ranking::contains_english(&row.word) {
+                row.source = CandidateSource::EnglishDictionary;
+            } else if !row.source.is_dictionary() {
+                row.source = CandidateSource::Generated;
+            }
         }
         self.glide_candidates = (!rows.is_empty()).then_some((combined, rows));
         self.glide_selection_pending = true;

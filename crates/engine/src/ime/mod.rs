@@ -741,9 +741,23 @@ impl ImeSession {
         })
     }
 
-    /// 全拼词典里每个键（以 `'` 连接的完整音节）最好那一行的权重，供滑行输入使用。
-    pub fn quanpin_best_weights(&self, keys: &[String]) -> HashMap<String, i64> {
-        self.registry.quanpin_best_weights(keys)
+    /// 全拼词典里每个键（以 `'` 连接的完整音节）最好那一行的权重，并叠加当前未上屏组字前缀词参与二元语境重排。
+    pub fn quanpin_best_weights_with_context(
+        &self,
+        keys: &[String],
+        extra_context: Option<&str>,
+    ) -> HashMap<String, i64> {
+        self.registry
+            .quanpin_best_weights_with_context(keys, extra_context)
+    }
+
+    /// 按起手字母借用全拼滑行高频词表缓存（供 26 键滑行词典直评通道使用）。
+    pub fn with_quanpin_glide_lexicon(
+        &self,
+        initials: &[u8],
+        f: impl FnMut(&[crate::pinyin::glide::GlideLexiconEntry]),
+    ) {
+        self.registry.with_quanpin_glide_lexicon(initials, f);
     }
 
     /// Candidates for a raw prefix through a scratch scheme of the current type, leaving the live composition alone (caret-prefix decoding, overlays.md §7.6).
@@ -1022,6 +1036,7 @@ impl ImeSession {
 
     pub fn set_rescoring_context(&mut self, context: &str) {
         context.clone_into(&mut self.rescoring_context);
+        self.registry.set_rescoring_context(context);
     }
 
     /// Routed by the producing row's scheme in mixed wubi (overlays.md §3.3). The provider layer only reads: the session writes pins, removals and frequency learning into user_dictionary, keyed by the selected row's scheme, and learned phrases through its own canonical-pinyin `QuanpinEngine`; `reset_cache` then makes the providers see them.

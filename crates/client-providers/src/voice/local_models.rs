@@ -1043,8 +1043,8 @@ impl HttpFetcher {
                 }
             }))
             .connect_timeout(Duration::from_secs(30))
-            // In the blocking client this bounds each read rather than the whole transfer, so a stalled connection fails without capping a slow but steady download.
-            .timeout(Duration::from_secs(60))
+            .tcp_keepalive(Duration::from_secs(30))
+            // 不设整次传输 `.timeout(...)`：reqwest 0.12 blocking 的 `.timeout` 限制的是整个响应体耗时，373 MB 语法模型超过 60 秒会被误杀；由建连超时与 TCP keepalive 兜底断链。
             .user_agent(concat!("msime/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|error| LocalModelError::Network(error.to_string()))?;

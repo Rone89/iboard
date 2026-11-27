@@ -340,11 +340,35 @@ impl ProviderRegistry {
         table.cloned().unwrap_or_default()
     }
 
-    /// 全拼词典里每个键最好那一行的权重，供滑行输入使用；会话没有全拼 provider 时为空。
-    pub fn quanpin_best_weights(&self, keys: &[String]) -> HashMap<String, i64> {
+    /// 全拼词典里每个键最好那一行的权重，并允许叠加当前未上屏组字前缀词作为滑行语境；会话没有全拼 provider 时为空。
+    pub fn quanpin_best_weights_with_context(
+        &self,
+        keys: &[String],
+        extra_context: Option<&str>,
+    ) -> HashMap<String, i64> {
         self.quanpin
             .as_ref()
-            .map_or_else(HashMap::new, |quanpin| quanpin.best_weights(keys))
+            .map_or_else(HashMap::new, |quanpin| {
+                quanpin.best_weights_with_context(keys, extra_context)
+            })
+    }
+
+    /// 按起手字母借用全拼滑行高频词表缓存。
+    pub fn with_quanpin_glide_lexicon(
+        &self,
+        initials: &[u8],
+        f: impl FnMut(&[crate::pinyin::glide::GlideLexiconEntry]),
+    ) {
+        if let Some(quanpin) = self.quanpin.as_ref() {
+            quanpin.with_glide_lexicon_for_initials(initials, f);
+        }
+    }
+
+    /// 将最新上屏语境立即同步到全拼词典，避免首笔滑行查询 `quanpin_best_weights` 时读到旧语境。
+    pub fn set_rescoring_context(&mut self, context: &str) {
+        if let Some(quanpin) = self.quanpin.as_mut() {
+            quanpin.set_rescoring_context(context);
+        }
     }
 
     /// 为候选展示查询完整五笔编码；反查结果与候选一一对应，查不到时保留空字符串。没有构造五笔 provider 的会话（方案集合里没有五笔）一律是空字符串。

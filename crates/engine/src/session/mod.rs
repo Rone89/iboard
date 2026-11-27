@@ -219,15 +219,55 @@ impl Session {
         self.input.engine.set_touch_tuning(tuning);
     }
 
+    /// 只读实时滑行预览：不改动正在进行的组字、预测或学习状态，返回当前轨迹最可能的读音与顶栏候选。
+    pub fn preview_glide(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> Option<(String, Vec<String>)> {
+        if self.key_grid == Some(KeyGrid::NineKey)
+            && crate::nine_key::is_nine_key_geometry(keyboard)
+        {
+            if self.input.local_mode != LocalInputMode::None || self.input.dedicated_english {
+                return None;
+            }
+            return self.nine_key.preview_glide(keyboard, points);
+        }
+        if self.nine_key.active() {
+            return None;
+        }
+        self.input.preview_glide(keyboard, points, readings)
+    }
+
     /// 滑过字母键的一笔：它最可能拼出的全拼字母写到光标处，与已有组字之间用 `'` 隔开。不是全拼、在本地模式或专用英文里、九键数字正在组字，以及没有串跟得上这一笔时，不处理。
     pub fn glide(&mut self, keyboard: &GlideKeyboard, points: &[GlidePoint]) -> KeyResult {
+        self.glide_with_readings(keyboard, points, &[])
+    }
+
+    /// 滑过字母键的一笔，支持宿主附带外部解码器（如 GlideBeam）预解出的读音假设，统一复用会话的 `'` 续滑分隔、个人词频重排与次优读音候选合并。
+    pub fn glide_with_readings(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> KeyResult {
         self.candidates_may_change();
         self.prediction.clear();
         self.input.pending_touch = None;
+        if self.key_grid == Some(KeyGrid::NineKey)
+            && crate::nine_key::is_nine_key_geometry(keyboard)
+        {
+            if self.input.local_mode != LocalInputMode::None || self.input.dedicated_english {
+                return KeyResult::unhandled();
+            }
+            let result = self.nine_key.glide(keyboard, points);
+            return self.after_nine_key(result);
+        }
         if self.nine_key.active() {
             return KeyResult::unhandled();
         }
-        self.input.glide(keyboard, points)
+        self.input.glide(keyboard, points, readings)
     }
 
     /// 一笔同时提供全拼与英文的完整候选；只在全拼字母层使用，不改变会话模式。
@@ -236,13 +276,32 @@ impl Session {
         keyboard: &GlideKeyboard,
         points: &[GlidePoint],
     ) -> KeyResult {
+        self.bilingual_glide_with_readings(keyboard, points, &[])
+    }
+
+    /// 支持附带外部读音假设的中英混合滑行。
+    pub fn bilingual_glide_with_readings(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> KeyResult {
         self.candidates_may_change();
         self.prediction.clear();
         self.input.pending_touch = None;
-        if self.key_grid.is_some() {
+        if self.key_grid == Some(KeyGrid::NineKey)
+            && crate::nine_key::is_nine_key_geometry(keyboard)
+        {
+            if self.input.local_mode != LocalInputMode::None || self.input.dedicated_english {
+                return KeyResult::unhandled();
+            }
+            let result = self.nine_key.glide(keyboard, points);
+            return self.after_nine_key(result);
+        }
+        if self.nine_key.active() {
             return KeyResult::unhandled();
         }
-        self.input.bilingual_glide(keyboard, points)
+        self.input.bilingual_glide(keyboard, points, readings)
     }
 
     /// 混合滑行的未确认组字只接受明确选词，不由宿主边界隐式上屏。
@@ -349,6 +408,17 @@ impl Session {
             return self.input.choose_zhuyin_spelling(index);
         }
         let result = self.nine_key.choose_spelling(index);
+        self.after_nine_key(result)
+    }
+
+    /// 九宫格原地浏览切换当前排候选拼音（不提前锁定跳段，保留原列表供继续循环）。
+    pub fn browse_nine_key_spelling(&mut self, index: usize) -> KeyResult {
+        self.candidates_may_change();
+        self.input.pending_touch = None;
+        if !self.nine_key.active() {
+            return KeyResult::unhandled();
+        }
+        let result = self.nine_key.browse_spelling(index);
         self.after_nine_key(result)
     }
 
@@ -814,6 +884,19 @@ impl Session {
     pub fn set_rescoring_context(&mut self, context: &str) {
         self.input.set_rescoring_context(context);
         self.nine_key.set_rescoring_context(context);
+    }
+
+    /// 撤销最近一次选词上屏产生的自动学习（调频权重、九键最近选择槽位、个人二元/三元计数）。
+    pub fn undo_last_learning(&mut self, expected_text: &str) -> bool {
+        if self.nine_key.undo_last_learning(expected_text) {
+            self.candidates_may_change();
+            return true;
+        }
+        if self.input.undo_last_learning(expected_text) {
+            self.candidates_may_change();
+            return true;
+        }
+        false
     }
 
     /// 首页行数只决定词库要不要并入补全词。`Runtime` 建立、换引擎和宿主改每页候选数（`Runtime::set_page_size`）时都调它，因此引擎的首屏门槛和分页始终同源，不必等下一次因别的偏好变化重建引擎。

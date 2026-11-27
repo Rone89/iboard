@@ -4,10 +4,13 @@ use std::collections::HashSet;
 use std::fmt::Write;
 
 use crate::pinyin::autocorrect::{
-    autocorrect_cut_kbest, looks_like_syllable_with_jianpin_tail, AutocorrectCut,
+    autocorrect_cut_kbest, looks_like_syllable_with_jianpin_tail, AutocorrectCut, NEIGHBOR_WEIGHT,
+    TRANSPOSITION_WEIGHT,
 };
 use crate::pinyin::segment::join_segments;
 use crate::pinyin::syllables::{has_only_complete_pinyin_segments, is_intact, is_prefix};
+use crate::pinyin::typos::NEIGHBOR_COST;
+use crate::touch::{KeyGeometry, KeyTouch, TouchTuning};
 use crate::types::{autocorrect_type, CandidateSource, WordItem};
 
 /// How many ranked correction cuts feed the query pipeline: the primary cut becomes the query key and the rest ride along as alternative segmentations. Dropped-initial keys such as `uan` have 10-15 equally weighted deletion targets (cuan/duan/guan/...), and k = 3 cut the list by table order before reaching the right reading (quan'li for uanli); k = 9 lifted R@1/R@3 on the deletion and mixed eval sets with no p95 change (QD:90-97).
@@ -46,6 +49,30 @@ pub fn resolve_series_query(
     segments: &[String],
     autocorrect_types: u32,
 ) -> SeriesResolution {
+    resolve_series_query_inner(raw, segments, autocorrect_types, None)
+}
+
+/// 带 26 键亚像素触点坐标的纠错切分解算：当按键落点偏向某个邻键时，用空间距离罚分对候选 `AutocorrectCut` 重排，
+/// 避免仅按静态 ASCII 表序把 `shsng`（落点偏 `e` 想打 `sheng`）或 `womsn`（落点偏 `e` 想打 `wo'men`）误判为 `shang` / `wo'man`。
+pub fn resolve_series_query_with_touches(
+    raw: &str,
+    segments: &[String],
+    autocorrect_types: u32,
+    touches: &[Option<KeyTouch>],
+    geometry: &KeyGeometry,
+    tuning: &TouchTuning,
+) -> SeriesResolution {
+    let touch_ctx = (touches.len() == raw.len() && touches.iter().any(Option::is_some))
+        .then_some((touches, geometry, tuning));
+    resolve_series_query_inner(raw, segments, autocorrect_types, touch_ctx)
+}
+
+fn resolve_series_query_inner(
+    raw: &str,
+    segments: &[String],
+    autocorrect_types: u32,
+    touch_ctx: Option<(&[Option<KeyTouch>], &KeyGeometry, &TouchTuning)>,
+) -> SeriesResolution {
     let mut result = SeriesResolution::default();
     // Guard order matters: the jianpin-shape predicate runs before the search so a guarded input never pays for it. Both guards say "the user did not mistype". The base segmentation is deliberately not part of the gate: the search works on the raw letters, and an empty base cut (a dropped initial such as uanli for quan'li) is often exactly the input that needs correcting.
     let eligible = autocorrect_types != 0
@@ -53,8 +80,11 @@ pub fn resolve_series_query(
         && !has_only_complete_pinyin_segments(segments)
         && !looks_like_syllable_with_jianpin_tail(raw);
     if eligible {
-        let cuts = autocorrect_cut_kbest(raw, autocorrect_types, AUTOCORRECT_CUT_KBEST);
+        let mut cuts = autocorrect_cut_kbest(raw, autocorrect_types, AUTOCORRECT_CUT_KBEST);
         if !cuts.is_empty() {
+            if let Some((touches, geometry, tuning)) = touch_ctx {
+                rerank_cuts_by_touches(&mut cuts, touches, geometry, tuning);
+            }
             result.corrected_input = true;
             populate_from_cuts(&mut result, cuts, "");
         } else {
@@ -92,6 +122,81 @@ pub fn resolve_series_query(
         result.corrected_input,
     );
     result
+}
+
+/// 根据每个纠错音节在真实键位几何上的触点空间罚分重排 `AutocorrectCut`：
+/// - 单字节邻键替换若对应位置有触点，按 `KeyGeometry::penalty` 计算各向异性空间罚分；
+/// - 当手指落点明显踩在目标邻键交界处（`penalty <= tuning.lead_penalty`）时，将该邻键边的权重提升至第一梯队（`TRANSPOSITION_WEIGHT`），使其能与同边数的其他读法同台竞争；
+/// - 同 `(edge_count, weight)` 梯队内按累计空间罚分升序稳定排序，让手指真正偏向的邻键音节成为主切分 `resolution.corrected`。
+fn rerank_cuts_by_touches(
+    cuts: &mut [AutocorrectCut],
+    touches: &[Option<KeyTouch>],
+    geometry: &KeyGeometry,
+    tuning: &TouchTuning,
+) {
+    if cuts.len() < 2 {
+        return;
+    }
+    let mut scored: Vec<(usize, i32, f64)> = Vec::with_capacity(cuts.len());
+    for (idx, cut) in cuts.iter_mut().enumerate() {
+        let mut weight_delta = 0i32;
+        let mut spatial_total = 0.0f64;
+        for segment in &cut.segments {
+            if !segment.corrected {
+                continue;
+            }
+            let raw_bytes = segment.raw_text.as_bytes();
+            let syl_bytes = segment.syllable.as_bytes();
+            if raw_bytes.len() == syl_bytes.len() {
+                let mut diff_pos = None;
+                let mut diff_count = 0usize;
+                for i in 0..raw_bytes.len() {
+                    if raw_bytes[i] != syl_bytes[i] {
+                        diff_pos = Some(i);
+                        diff_count += 1;
+                    }
+                }
+                if diff_count == 1 {
+                    let pos = diff_pos.unwrap();
+                    let global_idx = segment.start + pos;
+                    if let Some(touch) = touches.get(global_idx).copied().flatten() {
+                        let pen = if geometry.adjacent(raw_bytes[pos], touch, syl_bytes[pos]) {
+                            geometry
+                                .penalty(raw_bytes[pos], touch, syl_bytes[pos], tuning)
+                                .unwrap_or(NEIGHBOR_COST)
+                        } else {
+                            tuning.max_penalty
+                        };
+                        spatial_total += pen;
+                        if pen <= tuning.lead_penalty {
+                            weight_delta -= NEIGHBOR_WEIGHT - TRANSPOSITION_WEIGHT;
+                        }
+                        continue;
+                    }
+                }
+            }
+            spatial_total += NEIGHBOR_COST;
+        }
+        let min_weight = TRANSPOSITION_WEIGHT.saturating_mul(cut.edge_count as i32);
+        cut.weight = (cut.weight + weight_delta).max(min_weight);
+        scored.push((idx, cut.weight, spatial_total));
+    }
+
+    let mut indexed: Vec<(f64, AutocorrectCut)> = scored
+        .into_iter()
+        .zip(cuts.iter_mut())
+        .map(|((_, _, spatial), cut)| (spatial, std::mem::take(cut)))
+        .collect();
+    indexed.sort_by(|(pen_a, cut_a), (pen_b, cut_b)| {
+        cut_a
+            .edge_count
+            .cmp(&cut_b.edge_count)
+            .then_with(|| cut_a.weight.cmp(&cut_b.weight))
+            .then_with(|| pen_a.total_cmp(pen_b))
+    });
+    for (slot, (_, cut)) in cuts.iter_mut().zip(indexed) {
+        *slot = cut;
+    }
 }
 
 /// The primary cut defines the cost tier; same-cost readings compete with it on frequency, costlier ones stay behind it.

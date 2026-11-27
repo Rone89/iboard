@@ -407,3 +407,451 @@ fn decoding_a_long_stroke_reuses_beam_storage() {
         "glide beam allocations: {allocations}"
     );
 }
+
+#[test]
+fn resting_on_end_key_does_not_double_the_final_letter() {
+    // 在 `hao`、`wo`、`de` 的尾键上停留 200ms（模拟抬手前自然减速/稍作停顿），不能把尾字母重复拼成 `haoo`、`woo`、`dee`。
+    for word in ["hao", "wo", "de"] {
+        let points = stroke(word, 0.12, &[word.len() - 1]);
+        let result = ranked(&points);
+        assert_eq!(
+            result.first().map(String::as_str),
+            Some(word),
+            "{word} with end-key rest: {result:?}"
+        );
+    }
+}
+
+#[test]
+fn liftoff_hook_tail_is_trimmed_without_affecting_clean_strokes() {
+    let kb = keyboard();
+    let mut points = stroke("nihao", 0.0, &[]);
+    for (index, point) in points.iter_mut().enumerate() {
+        point.time_ms = Some((index as u32) * 10);
+    }
+    let last = *points.last().expect("non-empty stroke");
+    let prev = points[points.len() - 2];
+    let dx = last.x - prev.x;
+    let dy = last.y - prev.y;
+    let len = (dx * dx + dy * dy).sqrt().max(1.0);
+    // 在最后 10ms 构造一个反向短回勾（0.3 个键宽）模拟拇指离屏抖动。
+    let hook = GlidePoint {
+        x: last.x - (dx / len) * kb.key_width * 0.3,
+        y: last.y - (dy / len) * kb.key_width * 0.3,
+        time_ms: Some(last.time_ms.unwrap() + 10),
+    };
+    let mut hooked = points.clone();
+    hooked.push(hook);
+    let normalize = |pts: &[GlidePoint]| -> Vec<GlidePoint> {
+        pts.iter()
+            .map(|p| GlidePoint {
+                x: p.x / kb.key_width,
+                y: p.y / kb.key_height,
+                time_ms: p.time_ms,
+            })
+            .collect()
+    };
+    let normalized_hooked = normalize(&hooked);
+    let normalized_clean = normalize(&points);
+    assert_eq!(trim_liftoff_hook(&normalized_hooked).len(), normalized_clean.len());
+    assert_eq!(trim_liftoff_hook(&normalized_clean).len(), normalized_clean.len());
+
+    let result = decoded(&hooked);
+    assert_eq!(result.first().map(String::as_str), Some("nihao"));
+}
+
+#[test]
+fn english_matcher_prunes_mismatched_words_with_zero_heap_allocations() {
+    let kb = keyboard();
+    let points = stroke("hello", 0.0, &[]);
+    let matcher = GlideMatcher::new(&kb, &points).expect("matcher");
+    let (matched, allocs_hit) =
+        crate::ime::personal_rerank::allocations::count(|| matcher.score("hello"));
+    assert!(matched.is_some());
+    assert_eq!(allocs_hit, 0, "matching word should allocate zero heap memory");
+
+    let (missed, allocs_miss) =
+        crate::ime::personal_rerank::allocations::count(|| matcher.score("happy"));
+    assert!(missed.is_none());
+    assert_eq!(allocs_miss, 0, "pruned word should allocate zero heap memory");
+}
+
+#[test]
+fn boundary_consonant_repeat_decodes_diannao_and_zhongguo_in_one_pass() {
+    for word in ["diannao", "zhongguo"] {
+        let result = decoded(&stroke(word, 0.0, &[]));
+        assert!(
+            result.contains(&word.to_owned()),
+            "{word} should survive beam with single-pass boundary repeat: {result:?}"
+        );
+    }
+}
+
+#[test]
+fn ranking_compositional_dp_prefers_known_phrase_pieces_over_scattered_syllables() {
+    let hypotheses = vec![
+        GlideHypothesis {
+            letters: "chifanle".into(),
+            cost: 3.0,
+        },
+        GlideHypothesis {
+            letters: "cidanle".into(),
+            cost: 2.6,
+        },
+    ];
+    let ranked = rank_by_dictionary(hypotheses, |_| {
+        HashMap::from([
+            ("chi'fan".to_owned(), 400_000),
+            ("chi".to_owned(), 5_000_000),
+            ("fan".to_owned(), 3_000_000),
+            ("le".to_owned(), 25_000_000),
+            ("ci".to_owned(), 4_000_000),
+            ("dan".to_owned(), 3_000_000),
+        ])
+    });
+    assert_eq!(
+        ranked[0].letters, "chifanle",
+        "chi'fan + le 组合短语应击败零散三音节 ci'dan'le: {ranked:?}"
+    );
+}
+
+#[test]
+fn lexicon_matcher_recovers_curved_multisyllable_words_with_bitmask_filter() {
+    let kb = keyboard();
+    let entries: Vec<GlideLexiconEntry> = [
+        "xian'zai",
+        "mei'guan'xi",
+        "bu'hao'yi'si",
+        "dian'hua",
+        "zhong'guo",
+        "bu'zhi'dao",
+    ]
+    .into_iter()
+    .filter_map(GlideLexiconEntry::from_key)
+    .collect();
+    for word in ["xianzai", "meiguanxi", "buhaoyisi", "dianhua"] {
+        let pts = human_curved_stroke(word, 0.45, 0.20, 0.15);
+        let matcher = GlideMatcher::new(&kb, &pts).expect("matcher");
+        let hits = matcher.score_lexicon(&entries, 8);
+        assert!(
+            hits.iter().any(|h| h.letters == word),
+            "{word} should be recovered directly by lexicon matcher: {hits:?}"
+        );
+    }
+
+    // 模拟单手拇指缩手滑长词（整体向键盘中心收缩 22%，边缘键 `a`/`i` 落在严格邻域外），SHARK2 形状+方向双通道应仍能召回整词。
+    let center_x = 4.5 * KEY_WIDTH;
+    let center_y = 1.5 * KEY_HEIGHT;
+    let shrunk_entries: Vec<GlideLexiconEntry> = [
+        "kai'xin",
+        "dian'nao",
+        "bu'hao'yi'si",
+        "wan'shang'hao",
+        "he'wo",
+        "mo'ren",
+    ]
+    .into_iter()
+    .filter_map(GlideLexiconEntry::from_key)
+    .collect();
+    for word in ["kaixin", "diannao", "buhaoyisi"] {
+        let shrunk: Vec<GlidePoint> = stroke(word, 0.05, &[])
+            .into_iter()
+            .map(|p| GlidePoint {
+                x: center_x + (p.x - center_x) * 0.78,
+                y: center_y + (p.y - center_y) * 0.85,
+                time_ms: p.time_ms,
+            })
+            .collect();
+        let matcher = GlideMatcher::new(&kb, &shrunk).expect("matcher");
+        let hits = matcher.score_lexicon(&shrunk_entries, 8);
+        assert_eq!(
+            hits.first().map(|h| h.letters.as_str()),
+            Some(word),
+            "缩手整词 {word} 应由 SHARK2 形状通道排到首位: {hits:?}"
+        );
+    }
+}
+
+/// 模拟真实人手拇指滑行：首尾落点带轻微偏移，中间拐角按 `corner_cut` 做 Chaikin 圆角切弯，并叠加平滑抖动。
+fn human_curved_stroke(
+    word: &str,
+    corner_cut: f32,
+    jitter_amp: f32,
+    endpoint_offset: f32,
+) -> Vec<GlidePoint> {
+    let kb = keyboard();
+    let letters = word.as_bytes();
+    let mut jitter = Jitter(word.len() as u32 * 31337 + 911);
+    let mut anchors: Vec<(f32, f32)> = letters
+        .iter()
+        .enumerate()
+        .map(|(i, &b)| {
+            let (cx, cy) = center(&kb, b);
+            let scale = if i == 0 || i + 1 == letters.len() {
+                endpoint_offset
+            } else {
+                jitter_amp
+            };
+            (
+                cx + jitter.next(scale) * KEY_WIDTH,
+                cy + jitter.next(scale) * KEY_HEIGHT,
+            )
+        })
+        .collect();
+    if anchors.len() >= 3 && corner_cut > 0.0 {
+        // 两轮可控圆角切弯：保持首尾锚点不动，中间拐点向相邻线段内切。
+        let t = (corner_cut * 0.5).clamp(0.0, 0.35);
+        let mut next = Vec::with_capacity(anchors.len() * 2);
+        next.push(anchors[0]);
+        for i in 0..anchors.len() - 1 {
+            let a = anchors[i];
+            let b = anchors[i + 1];
+            if i > 0 {
+                next.push((a.0 * (1.0 - t) + b.0 * t, a.1 * (1.0 - t) + b.1 * t));
+            }
+            if i + 2 < anchors.len() {
+                next.push((a.0 * t + b.0 * (1.0 - t), a.1 * t + b.1 * (1.0 - t)));
+            }
+        }
+        next.push(*anchors.last().unwrap());
+        anchors = next;
+    }
+    let mut points = Vec::new();
+    let mut time = 0u32;
+    for pair in anchors.windows(2) {
+        let (ax, ay) = pair[0];
+        let (bx, by) = pair[1];
+        let dist = ((bx - ax).powi(2) + (by - ay).powi(2)).sqrt();
+        let steps = (dist / 14.0).ceil().max(1.0) as usize;
+        for step in 0..steps {
+            let f = step as f32 / steps as f32;
+            points.push(GlidePoint {
+                x: ax + (bx - ax) * f,
+                y: ay + (by - ay) * f,
+                time_ms: Some(time),
+            });
+            time += 8;
+        }
+    }
+    let &(lx, ly) = anchors.last().unwrap();
+    points.push(GlidePoint {
+        x: lx,
+        y: ly,
+        time_ms: Some(time),
+    });
+    points
+}
+
+#[test]
+#[ignore]
+fn benchmark_shipped_dictionary_real_human_glides() {
+    let db_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ios/EngineResources/msime-pinyin.db");
+    let db = crate::dictionary::pinyin::PinyinDatabase::open(&db_path);
+    assert!(db.is_open(), "shipped msime-pinyin.db should open");
+    let lookup = |keys: &[String]| -> HashMap<String, i64> {
+        db.query_exact_keys_per_key(keys, 1)
+            .into_iter()
+            .filter_map(|(k, rows)| rows.first().map(|r| (k, r.weight)))
+            .collect()
+    };
+    let mut lex_cache: [Option<Vec<GlideLexiconEntry>>; 26] = std::array::from_fn(|_| None);
+    let words = [
+        // 常见单音节与双音节词
+        "wo", "ni", "de", "shi", "bu", "you", "zhe", "le", "hao", "men",
+        "nihao", "women", "shenme", "zenme", "zhidao", "keyi", "xianzai", "wanshang",
+        "mingtian", "jintian", "zuotian", "pengyou", "shijian", "gongzuo", "dianhua",
+        "weixin", "shouji", "diannao", "xihuan", "kaixin", "xiexie", "zhongguo",
+        "shihou", "laishuo", "keneng", "geren", "yijing", "yinwei", "suoyi", "ruguo",
+        // 三四音节常用词与日常组合短语（含非整词短语）
+        "meiguanxi", "buhaoyisi", "weishenme", "zenmeyang", "duibuqi", "buzhidao",
+        "woqu", "zaima", "chifanle", "henhao", "haode", "shide", "bushi", "woshuo",
+        "nishuo", "zaoshanghao", "wanshanghao", "meiwenti", "yidianer", "kexi",
+    ];
+    let kb = keyboard();
+    for (label, cut, jit, end_off) in [
+        ("clean", 0.0f32, 0.0f32, 0.0f32),
+        ("human-medium", 0.45, 0.25, 0.20),
+        ("human-sloppy", 0.65, 0.35, 0.30),
+    ] {
+        for use_lexicon in [false, true] {
+            let mut top1 = 0usize;
+            let mut top3 = 0usize;
+            let mut in_pool = 0usize;
+            let mut misses = Vec::new();
+            let started = std::time::Instant::now();
+            for &word in &words {
+                let pts = human_curved_stroke(word, cut, jit, end_off);
+                let matcher = GlideMatcher::new(&kb, &pts).expect("matcher");
+                let mut hyps = matcher.decode_quanpin(48);
+                if use_lexicon {
+                    for initial in matcher.lexicon_starting_letters() {
+                        let slot = usize::from(initial - b'a');
+                        let entries = lex_cache[slot]
+                            .get_or_insert_with(|| db.top_glide_lexicon_for_initial(initial));
+                        for hit in matcher.score_lexicon(entries, 48) {
+                            if let Some(existing) = hyps.iter_mut().find(|h| h.letters == hit.letters) {
+                                existing.cost = existing.cost.min(hit.cost);
+                            } else {
+                                hyps.push(hit);
+                            }
+                        }
+                    }
+                    hyps.sort_by(|a, b| a.cost.total_cmp(&b.cost).then_with(|| a.letters.cmp(&b.letters)));
+                    hyps.truncate(96);
+                }
+                if hyps.iter().any(|h| h.letters == word) {
+                    in_pool += 1;
+                }
+                let ranked = rank_by_dictionary(hyps, &lookup);
+                let pos = ranked.iter().position(|h| h.letters == word);
+                if pos == Some(0) {
+                    top1 += 1;
+                }
+                if pos.is_some_and(|p| p < 3) {
+                    top3 += 1;
+                } else {
+                    let got: Vec<&str> = ranked.iter().take(3).map(|h| h.letters.as_str()).collect();
+                    misses.push(format!("{word}->{got:?}"));
+                }
+            }
+            let elapsed = started.elapsed();
+            let mode = if use_lexicon { "beam+lex" } else { "beam-only" };
+            eprintln!(
+                "[{label} | {mode}] total={} top1={top1} ({:.1}%) top3={top3} ({:.1}%) recall={in_pool} ({:.1}%) avg={:.2}ms",
+                words.len(),
+                top1 as f64 * 100.0 / words.len() as f64,
+                top3 as f64 * 100.0 / words.len() as f64,
+                in_pool as f64 * 100.0 / words.len() as f64,
+                elapsed.as_secs_f64() * 1000.0 / words.len() as f64,
+            );
+            if use_lexicon && !misses.is_empty() {
+                eprintln!("  misses: {}", misses.join(", "));
+            }
+        }
+    }
+}
+
+#[test]
+fn glide_calibrator_adapts_systematic_thumb_bias_clamps_outliers_and_persists() {
+    let kb = keyboard();
+    let raw_centers = kb.normalized_centers();
+    let mut calibrator = GlideKeyCalibrator::default();
+
+    // 模拟单手拇指系统性右偏 +0.28 键宽、上偏 -0.10 键高
+    let shift_x = KEY_WIDTH * 0.28;
+    let shift_y = -KEY_HEIGHT * 0.10;
+    for word in ["nihao", "women", "shenme", "nihao"] {
+        let mut pts = stroke(word, 0.0, &[]);
+        for p in &mut pts {
+            p.x += shift_x;
+            p.y += shift_y;
+        }
+        let matcher = GlideMatcher::new(&kb, &pts).expect("matcher");
+        let aligned = matcher.align_letters(word).expect("aligned");
+        assert!(calibrator.observe_alignment(&aligned, &raw_centers));
+    }
+    assert_eq!(calibrator.total_observations(), 4);
+
+    let adapted = calibrator.apply(&kb);
+    let idx_n = usize::from(b'n' - b'a');
+    let (ax, ay) = center(&adapted, b'n');
+    let (bx, by) = center(&kb, b'n');
+    let dx_n = (ax - bx) / kb.key_width;
+    let dy_n = (ay - by) / kb.key_height;
+    assert!(
+        dx_n > 0.05 && dx_n <= 0.35,
+        "expected calibrated x shift toward +0.28, got {dx_n}"
+    );
+    assert!(
+        dy_n < -0.02 && dy_n >= -0.35,
+        "expected calibrated y shift toward -0.10, got {dy_n}"
+    );
+
+    // 极端离群样本（偏 2 格）应被拒收，且多次大偏移也受 ±0.35 键宽硬上限约束
+    let wild = vec![(idx_n, raw_centers[idx_n].0 + 2.0, raw_centers[idx_n].1)];
+    assert!(!calibrator.observe_alignment(&wild, &raw_centers));
+    for _ in 0..30 {
+        let big = vec![(idx_n, raw_centers[idx_n].0 + 0.70, raw_centers[idx_n].1)];
+        let _ = calibrator.observe_alignment(&big, &raw_centers);
+    }
+    let clamped = calibrator.apply(&kb);
+    let (cx, _) = center(&clamped, b'n');
+    let clamped_dx = (cx - bx) / kb.key_width;
+    assert!(
+        clamped_dx <= 0.351,
+        "calibration offset must stay clamped <= 0.35, got {clamped_dx}"
+    );
+
+    // 落盘与重加载往返一致
+    let path = std::env::temp_dir().join(format!(
+        "msime-glide-cal-test-{}.json",
+        std::process::id()
+    ));
+    calibrator.save(&path);
+    let reloaded = GlideKeyCalibrator::load(&path);
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(reloaded.total_observations(), calibrator.total_observations());
+    let reloaded_kb = reloaded.apply(&kb);
+    let (rx, _) = center(&reloaded_kb, b'n');
+    assert!((rx - cx).abs() < 1e-3);
+}
+
+#[test]
+fn rank_by_dictionary_with_prefix_bridges_multi_stroke_phrases() {
+    let hyps = vec![
+        GlideHypothesis {
+            letters: "ren".to_owned(),
+            cost: 4.0,
+        },
+        GlideHypothesis {
+            letters: "men".to_owned(),
+            cost: 4.0,
+        },
+    ];
+    let lookup = |keys: &[String]| -> HashMap<String, i64> {
+        let mut map = HashMap::new();
+        for key in keys {
+            match key.as_str() {
+                "ren" => {
+                    map.insert(key.clone(), 900_000);
+                }
+                "men" => {
+                    map.insert(key.clone(), 300_000);
+                }
+                "wo'men" => {
+                    map.insert(key.clone(), 3_000_000);
+                }
+                _ => {}
+            }
+        }
+        map
+    };
+
+    // 无前缀时高频单字 `ren` 领先；有前缀 `wo` 时跨笔整词 `wo'men` 将 `men` 拉到首位
+    let standalone = rank_by_dictionary_with_prefix(hyps.clone(), None, lookup);
+    assert_eq!(standalone[0].letters, "ren");
+
+    let bridged = rank_by_dictionary_with_prefix(hyps, Some("wo"), lookup);
+    assert_eq!(bridged[0].letters, "men");
+}
+
+#[test]
+fn rounded_template_and_banded_dtw_recover_corner_cut_long_words() {
+    let kb = keyboard();
+    let entries = vec![
+        GlideLexiconEntry::from_key("mei'guan'xi").unwrap(),
+        GlideLexiconEntry::from_key("xian'zai").unwrap(),
+        GlideLexiconEntry::from_key("bu'hao'yi'si").unwrap(),
+    ];
+    for word in ["meiguanxi", "xianzai", "buhaoyisi"] {
+        let pts = human_curved_stroke(word, 0.65, 0.35, 0.30);
+        let matcher = GlideMatcher::new(&kb, &pts).expect("matcher");
+        let hits = matcher.score_lexicon(&entries, 8);
+        assert_eq!(
+            hits.first().map(|h| h.letters.as_str()),
+            Some(word),
+            "corner-cut long word `{word}` should lead lexicon hits, got {hits:?}"
+        );
+    }
+}

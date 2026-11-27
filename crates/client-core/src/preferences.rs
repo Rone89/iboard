@@ -205,14 +205,16 @@ impl TouchWubiLayout {
     }
 }
 
-/// 中文 26 键字母层（全拼、26 键双拼、五笔 26 键、粤拼等）底行的排法；英文 26 键、iPad 全尺寸键盘和鸿蒙 2in1 的整排键盘不受它影响。桌面宿主原样保留、不使用。
+/// 中文 26 键字母层（全拼、26 键双拼、五笔 26 键、粤拼等）的布局样式；英文 26 键、iPad 全尺寸键盘和鸿蒙 2in1 的整排键盘不受它影响。桌面宿主原样保留、不使用。
 ///
-/// 读文档时不认识的值按默认读，不是字符串照样报错，与 [`CandidateTranslationScope`] 一致。
+/// 各端出厂排法不同，所以默认值是 [`Self::PlatformDefault`]：iOS 出厂按 [`Self::Lokey`]（界面名「iOS 原生」，对称 4 键底行 `123 | 中/英 | 空格 | 换行`、Lokey 几何分档、123 六标点与边缘防误触）画，Android 与鸿蒙照原有 [`Self::Standard`] 底行画；显式选了任意样式（含 `standard`）都会落盘并同步。读文档时不认识的值按默认读，不是字符串照样报错，与 [`CandidateTranslationScope`] 一致。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TouchTwentySixKeyStyle {
-    /// 仿 iOS 原生精简底行：123 | 空格 | ，（长按出。）| 中/英 | 回车。
+    /// 各端出厂样式，不写进文档（iOS 为 `lokey`，Android / 鸿蒙为 `standard`）。
     #[default]
+    PlatformDefault,
+    /// 仿 iOS 原生精简底行：123 | 空格 | ，（长按出。）| 中/英 | 回车。
     Standard,
     /// 空格两侧各一个标点：123 | 符 | ， | 空格 | 。 | 中/英 | 回车。
     CommaPeriod,
@@ -220,26 +222,32 @@ pub enum TouchTwentySixKeyStyle {
     LongSpace,
     /// 表情键：123 | 😀 | 空格 | ， | 中/英 | 回车，符号经长按 123 进入。
     Emoji,
+    /// iOS 原生 26 键（线上键名保留 `lokey` 兼容历史配置）：对称 4 键底行（123 | 中/英 | 空格 | 换行），采用 Lokey 几何比例、123 六标点与边缘防误触热区。较旧的版本不认识这个值，按默认读。
+    Lokey,
 }
 
 impl TouchTwentySixKeyStyle {
     /// 文档和同步键里的写法。
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::PlatformDefault => "platform_default",
             Self::Standard => "standard",
             Self::CommaPeriod => "comma_period",
             Self::LongSpace => "long_space",
             Self::Emoji => "emoji",
+            Self::Lokey => "lokey",
         }
     }
 
-    /// 严格解析：只认四种写法，其他值为 `None`。偏好文档走宽松的反序列化。
+    /// 严格解析：只认已知写法，其他值为 `None`。偏好文档走宽松的反序列化。
     pub fn parse(value: &str) -> Option<Self> {
         match value {
+            "platform_default" => Some(Self::PlatformDefault),
             "standard" => Some(Self::Standard),
             "comma_period" => Some(Self::CommaPeriod),
             "long_space" => Some(Self::LongSpace),
             "emoji" => Some(Self::Emoji),
+            "lokey" => Some(Self::Lokey),
             _ => None,
         }
     }
@@ -307,12 +315,16 @@ impl<'de> Deserialize<'de> for TouchFourteenKeyStyle {
 
 /// 九键字母层（拼音九键、九键双拼、笔画共用这一框架）底行的排法；除 [`Self::TallReturn`] 外，左侧符号栏和右侧功能列不变。桌面宿主原样保留、不使用。
 ///
-/// 读文档时不认识的值按默认读，不是字符串照样报错，与 [`CandidateTranslationScope`] 一致。
+/// 手机触屏九键字母层（拼音九键、九键双拼、笔画）的样式；除右侧大回车与 iOS 原生样式外，左侧符号栏和右侧功能列不变。桌面宿主原样保留、不使用。
+///
+/// 各端出厂排法不同，所以默认值是 [`Self::PlatformDefault`]：iOS 出厂按 [`Self::IosNative`]（5 等宽列 × 4 等高行原生十键）画，Android 与鸿蒙照原有 [`Self::Standard`] 底行画；显式选了任意样式（含 `standard`）都会落盘并同步。读文档时不认识的值按默认读，不是字符串照样报错，与 [`CandidateTranslationScope`] 一致。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TouchNineKeyStyle {
-    /// 现有底行：符 | 123 | 空格 | 中/英 | 回车。
+    /// 各端出厂样式，不写进文档（iOS 为 `ios_native`，Android / 鸿蒙为 `standard`）。
     #[default]
+    PlatformDefault,
+    /// 现有底行：符 | 123 | 空格 | 中/英 | 回车。
     Standard,
     /// 空格两侧各一个标点：符 | 123 | ， | 空格 | 。 | 中/英 | 回车。
     CommaPeriod,
@@ -320,26 +332,32 @@ pub enum TouchNineKeyStyle {
     Emoji,
     /// 右侧大回车：左列是跨三行的符号栏，栏下方底行放 符（与符号栏同宽）；中间是 3×3 九宫格，格下方底行 123 | 🌐 | 空格 | 中/英 恰好与九宫格同宽，空格占剩余宽度；右列（与现有右列同宽）自上而下是 ⌫、重输，回车跨第三行和底行（两倍高、中间无缝）。现有右列的 ！ 键去掉，只在这个样式里把 ！ 接在符号栏默认字母符号表的末尾，自定义的符号栏列表原样使用。九键数字层照同一框架：符 留在符号栏下方，123 的位置放切换键，空格的位置放 0（空格放哪按各端现有数字层规则），回车仍是两倍高。中/英 与回车不在同一行，不让出回车的点击区。较旧的版本不认识这个值，按现有底行读。
     TallReturn,
+    /// iOS 原生十键：5 等宽列 × 4 等高行，左列为 123 / #@¥ / 双高 ABC，中间 3 列为 3×3 九宫格与底行 选拼音 + 双宽空格，右列为 ⌫ / ^_^（组字中重输） / 双高回车。较旧的版本不认识这个值，按现有底行读。
+    IosNative,
 }
 
 impl TouchNineKeyStyle {
     /// 文档和同步键里的写法。
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::PlatformDefault => "platform_default",
             Self::Standard => "standard",
             Self::CommaPeriod => "comma_period",
             Self::Emoji => "emoji",
             Self::TallReturn => "tall_return",
+            Self::IosNative => "ios_native",
         }
     }
 
-    /// 严格解析：只认四种写法，其他值为 `None`。偏好文档走宽松的反序列化。
+    /// 严格解析：只认已知写法，其他值为 `None`。偏好文档走宽松的反序列化。
     pub fn parse(value: &str) -> Option<Self> {
         match value {
+            "platform_default" => Some(Self::PlatformDefault),
             "standard" => Some(Self::Standard),
             "comma_period" => Some(Self::CommaPeriod),
             "emoji" => Some(Self::Emoji),
             "tall_return" => Some(Self::TallReturn),
+            "ios_native" => Some(Self::IosNative),
             _ => None,
         }
     }
@@ -6248,7 +6266,11 @@ impl PreferencesStore {
         };
         let mut preferences = current.preferences.clone();
         let style = document.pointer("/preferences/touch_twenty_six_key_style");
-        if long_space && style.is_none_or(|value| value.as_str() == Some("standard")) {
+        if long_space
+            && style.is_none_or(|value| {
+                matches!(value.as_str(), Some("standard" | "platform_default"))
+            })
+        {
             preferences.touch_twenty_six_key_style = TouchTwentySixKeyStyle::LongSpace;
         }
         if number_row

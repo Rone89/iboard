@@ -588,6 +588,11 @@ impl Session {
         self.inner.set_rescoring_context(context);
     }
 
+    /// Roll back automatic learning from the immediately preceding commit when deleted right away.
+    pub fn undo_last_learning(&mut self, expected_text: &str) -> bool {
+        self.inner.undo_last_learning(expected_text)
+    }
+
     /// Live update of the first page size without a rebuild; it only moves the longer-phrase gate.
     pub fn set_first_page_rows(&mut self, rows: usize) {
         self.inner.set_first_page_rows(FirstPageRows::new(rows));
@@ -715,6 +720,16 @@ impl Session {
         Ok(result_for(self.inner.grid_key(letter)))
     }
 
+    /// 只读实时滑行预览，见 [`crate::Session::preview_glide`]。
+    pub fn preview_glide(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> Result<Option<(String, Vec<String>)>> {
+        Ok(self.inner.preview_glide(keyboard, points, readings))
+    }
+
     /// 滑行的一笔，见 [`crate::Session::glide`]。
     pub fn glide(
         &mut self,
@@ -722,6 +737,18 @@ impl Session {
         points: &[GlidePoint],
     ) -> Result<EngineResult> {
         Ok(result_for(self.inner.glide(keyboard, points)))
+    }
+
+    /// 带外部读音假设的滑行一笔，见 [`crate::Session::glide_with_readings`]。
+    pub fn glide_with_readings(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> Result<EngineResult> {
+        Ok(result_for(
+            self.inner.glide_with_readings(keyboard, points, readings),
+        ))
     }
 
     /// 可选的中英混合滑行；共享内核持有候选与选词状态。
@@ -733,6 +760,19 @@ impl Session {
         Ok(result_for(self.inner.bilingual_glide(keyboard, points)))
     }
 
+    /// 带外部读音假设的中英混合滑行。
+    pub fn bilingual_glide_with_readings(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> Result<EngineResult> {
+        Ok(result_for(
+            self.inner
+                .bilingual_glide_with_readings(keyboard, points, readings),
+        ))
+    }
+
     /// 宿主编排不能替混合滑行选择默认候选。
     pub fn requires_candidate_selection(&self) -> bool {
         self.inner.requires_candidate_selection()
@@ -741,6 +781,11 @@ impl Session {
     /// Out of range is unhandled.
     pub fn choose_nine_key_spelling(&mut self, index: usize) -> Result<EngineResult> {
         Ok(result_for(self.inner.choose_nine_key_spelling(index)))
+    }
+
+    /// 原地浏览当前排九键候选拼音，不推进到剩余数字。
+    pub fn browse_nine_key_spelling(&mut self, index: usize) -> Result<EngineResult> {
+        Ok(result_for(self.inner.browse_nine_key_spelling(index)))
     }
 
     /// 见 [`crate::Session::grid_helpcode`]。

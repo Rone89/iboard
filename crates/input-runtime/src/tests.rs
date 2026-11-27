@@ -10842,6 +10842,16 @@ fn the_reranker_leaves_a_leading_english_word_in_place() {
             "leader source {leader}"
         );
     }
+    let texts: Vec<String> = ["何咯", "和"].map(str::to_owned).to_vec();
+    for (second, expected) in [(0, Some(1)), (4, None)] {
+        let sources = vec![LATTICE_SOURCE, second];
+        let rows = ParallelOrderRows::new(&texts, &sources, &answers[..2], &corrected[..2]);
+        assert_eq!(
+            rerank_pick(&mut reranker, "", 0, true, &rows),
+            expected,
+            "second source {second}"
+        );
+    }
 }
 
 /// 日文混输行领先时句子模型不重排；它在别的位置时模型也不拿它比较、不把它提到首位。

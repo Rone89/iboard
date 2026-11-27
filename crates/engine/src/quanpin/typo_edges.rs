@@ -411,6 +411,33 @@ pub(crate) fn collect_priced_quanpin_typo_edges(
     })
 }
 
+/// 纠错整句改动过的每个音节，在对应按键落点下改过去的罚分都不超过 `TouchTuning::show_penalty`：
+/// 说明手指落点本身支持这次邻键改正，运行时（`ordering::runner_up_order_with`）应保留其前排座位而不当作次选读法沉底。
+pub(crate) fn touch_supports_correction(
+    variants: &[Vec<PricedTypo<'static>>],
+    tuning: &TouchTuning,
+    segments: &[String],
+    corrected_key: &str,
+) -> bool {
+    let corrected: Vec<&str> = corrected_key.split('\'').collect();
+    if corrected.len() != segments.len() || variants.len() != segments.len() {
+        return false;
+    }
+    corrected
+        .iter()
+        .zip(segments)
+        .zip(variants)
+        .all(|((corrected, literal), variants)| {
+            let corrected = normalized_syllable(corrected);
+            if corrected == normalized_syllable(literal) {
+                return true;
+            }
+            variants.iter().any(|variant| {
+                variant.syllable == corrected && variant.penalty <= tuning.show_penalty
+            })
+        })
+}
+
 /// 全拼和双拼带触点时的规划与查词。`variants_at(i)` 给出第 i 个音节已经按纠错开关筛过、按罚分计过价的变体。与 [`collect_span_typo_edges`] 不同，所有位置的所有变体按罚分全局升序排，罚分相同时弱位置优先，所以 96 个键的预算不会被前一两个位置的便宜类型吃光；跨度、去重、查词和缓存相同。
 pub(crate) fn collect_priced_span_typo_edges<'t>(
     database: &PinyinDatabase,
@@ -773,5 +800,72 @@ mod tests {
         assert!(hao_leaned < 14.0, "偏靠 h 的落点罚分应显著下降，实际 {hao_leaned}");
         assert!(hao_centered > 20.0, "按在键心的落点罚分应高于桌面基线，实际 {hao_centered}");
         assert!(hao_leaned + 10.0 < hao_centered);
+        assert!(
+            touch_supports_correction(&leaned, &tuning, &segments, "ni'hao"),
+            "边缘偏 h 的落点应支持 ni'hao 纠错"
+        );
+        assert!(
+            !touch_supports_correction(&centered, &tuning, &segments, "ni'hao"),
+            "键心明确点击 g 不应支持 ni'hao 纠错"
+        );
+    }
+
+    #[test]
+    fn resolve_series_query_with_touches_reranks_broken_syllable_cuts_by_touch_direction() {
+        use crate::quanpin::series::resolve_series_query_with_touches;
+
+        let rows: [&[u8]; 3] = [b"qwertyuiop", b"asdfghjkl", b"zxcvbnm"];
+        let mut keys = [[0.0f32; 4]; 26];
+        for (r, row) in rows.iter().enumerate() {
+            let indent = match r {
+                0 => 0.0,
+                1 => 0.5,
+                _ => 1.5,
+            };
+            for (c, &byte) in row.iter().enumerate() {
+                keys[(byte - b'a') as usize] = [(c as f32 + indent) * 36.0, r as f32 * 48.0, 30.0, 40.0];
+            }
+        }
+        let geometry = KeyGeometry::new(1, &keys, None, &[]).unwrap();
+        let tuning = TouchTuning::default();
+        let types = autocorrect_type::NEIGHBOR | autocorrect_type::TRANSPOSITION;
+        let s_rect = keys[(b's' - b'a') as usize];
+
+        // `shsng` 中第 3 键 `s` 落点偏上靠 `e` 时主切分应选 `sheng`；落点偏左靠 `a` 时主切分应选 `shang`。
+        let s_toward_e = geometry.touch(b's', s_rect[0] + 6.0, s_rect[1] - 18.0);
+        let s_toward_a = geometry.touch(b's', s_rect[0] - 14.0, s_rect[1]);
+        let shsng_segments = vec!["sh".to_owned(), "s".to_owned(), "n".to_owned(), "g".to_owned()];
+
+        let res_e = resolve_series_query_with_touches(
+            "shsng",
+            &shsng_segments,
+            types,
+            &[None, None, s_toward_e, None, None],
+            &geometry,
+            &tuning,
+        );
+        assert_eq!(res_e.corrected, vec!["sheng".to_owned()]);
+
+        let res_a = resolve_series_query_with_touches(
+            "shsng",
+            &shsng_segments,
+            types,
+            &[None, None, s_toward_a, None, None],
+            &geometry,
+            &tuning,
+        );
+        assert_eq!(res_a.corrected, vec!["shang".to_owned()]);
+
+        // `womsn`（想打 `wo'men`「我们」却误触 `e` 下方的 `s`）落点偏 `e` 时主切分应为 `wo'men`。
+        let womsn_segments = vec!["wo".to_owned(), "m".to_owned(), "s".to_owned(), "n".to_owned()];
+        let womsn_e = resolve_series_query_with_touches(
+            "womsn",
+            &womsn_segments,
+            types,
+            &[None, None, None, s_toward_e, None],
+            &geometry,
+            &tuning,
+        );
+        assert_eq!(womsn_e.corrected, vec!["wo".to_owned(), "men".to_owned()]);
     }
 }

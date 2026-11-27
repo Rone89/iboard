@@ -176,8 +176,28 @@ impl QuanpinEngine {
         self.dictionary.knows_han_char(han)
     }
 
-    pub fn best_weights(&self, keys: &[String]) -> HashMap<String, i64> {
-        self.dictionary.best_weights(keys)
+    /// 全拼词典里每个键最好那一行的权重，并叠加当前未上屏组字前缀词参与静态/个人二元语境加权。
+    pub fn best_weights_with_context(
+        &self,
+        keys: &[String],
+        extra_context: Option<&str>,
+    ) -> HashMap<String, i64> {
+        self.dictionary
+            .best_weights_with_context(keys, extra_context)
+    }
+
+    /// 按起手字母借用滑行高频词表缓存（首次按需懒加载）。
+    pub fn with_glide_lexicon_for_initials(
+        &self,
+        initials: &[u8],
+        f: impl FnMut(&[crate::pinyin::glide::GlideLexiconEntry]),
+    ) {
+        self.dictionary.with_glide_lexicon_for_initials(initials, f);
+    }
+
+    /// 同步上屏语境给内部词典，确保上屏后首笔滑行的 `best_weights` 也能立即吃到个人二元上下文加权。
+    pub fn set_rescoring_context(&mut self, context: &str) {
+        self.dictionary.set_rescoring_context(context);
     }
 
     pub fn create_word_from_canonical_pinyin(&mut self, pinyin: &str, word: &str) -> Result<()> {

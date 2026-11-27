@@ -45,6 +45,8 @@ pub enum Action {
     FixCandidatePosition(CandidateId, u8),
     ClearCandidatePosition(CandidateId),
     ChooseNineKeySpelling(NineKeySpellingId),
+    /// 九键展开候选栏「选拼音」原地循环浏览：临时切换到该拼写并保持当前排 `nine_key_spellings` 不推进跳段。
+    BrowseNineKeySpelling(NineKeySpellingId),
     /// 14 键的一键，`a`–`z` 里这一组的任一字母（宿主约定送首字母）。不在 14 键下时不处理。
     GridKey(u8),
     /// 十四／十八键网格辅助码：放下分隔符、追加整组或确定字母、清除（`msime_engine::Session::grid_helpcode`）。放下分隔符后 [`Action::GridKey`] 一律不处理，字母键改送 `GridHelpcodeOp::Group`（十八键双拼的横滑送 `Exact`）；整串解释仍走 [`Action::ChooseNineKeySpelling`]。
@@ -54,11 +56,12 @@ pub enum Action {
         single_character: bool,
         strokes: String,
     },
-    /// 滑过字母键的一笔，用宿主自己的坐标。
+    /// 滑过字母键的一笔，用宿主自己的坐标；可选携带外部滑行解码器（如 GlideBeam）预解出的读音列表。
     Glide {
         keyboard: Box<GlideKeyboard>,
         points: Vec<GlidePoint>,
         bilingual: bool,
+        readings: Vec<String>,
     },
     SelectHighlighted,
     Finish,
@@ -1898,6 +1901,16 @@ impl<E: InputEngine> Runtime<E> {
         })
     }
 
+    /// 只读滑行实时预览：解码轨迹并查询前排中文候选，不触碰当前组字与候选缓存。
+    pub fn preview_glide(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> Result<Option<(String, Vec<String>)>, RuntimeError> {
+        self.engine.preview_glide(keyboard, points, readings)
+    }
+
     /// Copy the complete candidate generation for an explicitly opened panel.
     ///
     /// The engine holds candidates back behind the initial answer and only releases them when asked
@@ -2578,6 +2591,45 @@ impl<E: InputEngine> Runtime<E> {
         }
     }
 
+    /// 宿主在空闲态同步光标前文（例如 iOS `documentContextBeforeInput`），让逐键重排器、
+    /// `.gram` 语法模型与代词裁决在续写、插字、退格重打时都能看到真实前文。组字中途不覆盖。
+    pub fn set_surrounding_context(&mut self, before: &str) {
+        if !self.is_idle() {
+            return;
+        }
+        let trimmed = if before.len() > 1024 {
+            let mut cut = before.len() - 1024;
+            while cut < before.len() && !before.is_char_boundary(cut) {
+                cut += 1;
+            }
+            &before[cut..]
+        } else {
+            before
+        };
+        if trimmed == self.ai_context {
+            return;
+        }
+        self.ai_context.clear();
+        self.ai_context.push_str(trimmed);
+        self.engine.set_rescoring_context(&self.ai_context);
+        if !self.ai_context.is_empty() {
+            if let Some(reranker) = self.reranker.as_mut() {
+                reranker.context_changed(&self.ai_context);
+            }
+        }
+    }
+
+    /// 撤销刚上屏词的自动学习（防误选后秒删污染词序），并同步剥离 `ai_context` 尾部该词。
+    pub fn undo_last_learning(&mut self, expected_text: &str) -> bool {
+        let undone = self.engine.undo_last_learning(expected_text);
+        if !expected_text.is_empty() && self.ai_context.ends_with(expected_text) {
+            let new_len = self.ai_context.len() - expected_text.len();
+            self.ai_context.truncate(new_len);
+            self.engine.set_rescoring_context(&self.ai_context);
+        }
+        undone
+    }
+
     /// 回退暂存词段：普通退格在拼写末尾剩零或一个字符时恢复最近一次选词；
     /// `backspace_reverts_selection` 关闭时直接交给引擎删除拼写，删空后由现有收尾逻辑上屏已选文字。
     /// 分段退格在光标前没有拼写时丢掉最近词段，不恢复读音，不受此开关影响。
@@ -3155,11 +3207,11 @@ impl<E: InputEngine> Runtime<E> {
             } else {
                 rows
             };
-            // 整池只比较 26 键上引擎多解的读法；键位网格（九宫格、14 键）照九条比较，见 `rerank_pick_within`。
+            // 26 键按打分器完整整句池比较；九宫格 / 14 键在挂着整句池打分器时最多扩展到 12 条，兼顾多义切分覆盖与逐键延迟。
             let pool = if snapshot.key_grid.is_none() {
                 reranker.sentence_pool()
             } else {
-                0
+                reranker.sentence_pool().min(12)
             };
             rerank_pick_within(
                 reranker.as_mut(),
@@ -3811,7 +3863,7 @@ impl<E: InputEngine> Runtime<E> {
                 return Err(RuntimeError::StaleCandidate);
             }
         }
-        if let Action::ChooseNineKeySpelling(id) = &action {
+        if let Action::ChooseNineKeySpelling(id) | Action::BrowseNineKeySpelling(id) = &action {
             if id.session != self.session
                 || id.generation != self.generation
                 // 九键和 14 键共用这一列拼写。
@@ -4200,6 +4252,7 @@ impl<E: InputEngine> Runtime<E> {
                 .engine
                 .clear_candidate_position(self.engine_index(id.index)),
             Action::ChooseNineKeySpelling(id) => self.engine.choose_nine_key_spelling(id.index),
+            Action::BrowseNineKeySpelling(id) => self.engine.browse_nine_key_spelling(id.index),
             Action::GridKey(letter) => self.engine.grid_key(letter),
             Action::GridHelpcode(op) => self.engine.grid_helpcode(op),
             Action::SetNineKeyFilter {
@@ -4210,11 +4263,13 @@ impl<E: InputEngine> Runtime<E> {
                 ref keyboard,
                 ref points,
                 bilingual,
+                ref readings,
             } => {
                 if bilingual {
-                    self.engine.bilingual_glide(keyboard, points)
+                    self.engine
+                        .bilingual_glide_with_readings(keyboard, points, readings)
                 } else {
-                    self.engine.glide(keyboard, points)
+                    self.engine.glide_with_readings(keyboard, points, readings)
                 }
             }
             // A scheme that spells with Space lists it among its spelling symbols (Zhuyin's first tone, or opening its list with no syllable pending), and then the Space command is that key rather than a pick of the highlighted row.

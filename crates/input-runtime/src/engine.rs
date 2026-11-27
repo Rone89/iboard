@@ -43,6 +43,10 @@ pub trait InputEngine {
     fn reset_context(&mut self) {}
     /// The committed text the Engine's neural sentence models condition on, pushed by the runtime whenever the text it keeps changes. Engines without such models ignore it.
     fn set_rescoring_context(&mut self, _context: &str) {}
+    /// Roll back automatic learning from the immediately preceding commit when deleted right away.
+    fn undo_last_learning(&mut self, _expected_text: &str) -> bool {
+        false
+    }
     /// 首页放得下几行，runtime 建立、换引擎和改每页候选数时都把自己的分页下发给它；没有按切分查词库的引擎忽略它。
     fn set_first_page_rows(&mut self, _rows: usize) {}
     /// Moves the caret prefix decoding answers for; `None` returns to the end of the composition. Engines without
@@ -178,6 +182,11 @@ pub trait InputEngine {
             "Nine-key spelling selection is unsupported".into(),
         ))
     }
+    fn browse_nine_key_spelling(&mut self, _index: usize) -> Result<EngineResult, RuntimeError> {
+        Err(RuntimeError::Engine(
+            "Nine-key spelling browsing is unsupported".into(),
+        ))
+    }
     /// 十四／十八键网格辅助码的分隔符、确定字母和清除；没有网格辅助码的引擎不处理。
     fn grid_helpcode(&mut self, _op: GridHelpcodeOp) -> Result<EngineResult, RuntimeError> {
         Ok(EngineResult {
@@ -214,6 +223,26 @@ pub trait InputEngine {
         })
     }
 
+    /// 带外部读音假设的中英混合滑行；默认适配器忽略外部读音并转交 `bilingual_glide`。
+    fn bilingual_glide_with_readings(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        _readings: &[String],
+    ) -> Result<EngineResult, RuntimeError> {
+        self.bilingual_glide(keyboard, points)
+    }
+
+    /// 只读实时滑行预览：不修改会话状态，返回当前轨迹最可能的读音与前排候选。
+    fn preview_glide(
+        &mut self,
+        _keyboard: &GlideKeyboard,
+        _points: &[GlidePoint],
+        _readings: &[String],
+    ) -> Result<Option<(String, Vec<String>)>, RuntimeError> {
+        Ok(None)
+    }
+
     /// 滑行的一笔；没有滑行输入的引擎不处理。
     fn glide(
         &mut self,
@@ -226,6 +255,16 @@ pub trait InputEngine {
             commit: String::new(),
             diagnostic: String::new(),
         })
+    }
+
+    /// 带外部读音假设的滑行一笔；默认适配器忽略外部读音并转交 `glide`。
+    fn glide_with_readings(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        _readings: &[String],
+    ) -> Result<EngineResult, RuntimeError> {
+        self.glide(keyboard, points)
     }
     fn snapshot(&self) -> Result<EngineSnapshot, RuntimeError>;
     /// 后续按键能继续当前五笔混输拼音时保留组字；没有混输的引擎沿用顶字。
@@ -358,6 +397,9 @@ impl InputEngine for Session {
     fn set_rescoring_context(&mut self, context: &str) {
         Session::set_rescoring_context(self, context);
     }
+    fn undo_last_learning(&mut self, expected_text: &str) -> bool {
+        Session::undo_last_learning(self, expected_text)
+    }
     fn set_first_page_rows(&mut self, rows: usize) {
         Session::set_first_page_rows(self, rows);
     }
@@ -476,6 +518,10 @@ impl InputEngine for Session {
         Session::choose_nine_key_spelling(self, index)
             .map_err(|e| RuntimeError::Engine(e.to_string()))
     }
+    fn browse_nine_key_spelling(&mut self, index: usize) -> Result<EngineResult, RuntimeError> {
+        Session::browse_nine_key_spelling(self, index)
+            .map_err(|e| RuntimeError::Engine(e.to_string()))
+    }
     fn grid_helpcode(&mut self, op: GridHelpcodeOp) -> Result<EngineResult, RuntimeError> {
         Session::grid_helpcode(self, op).map_err(|e| RuntimeError::Engine(e.to_string()))
     }
@@ -487,6 +533,16 @@ impl InputEngine for Session {
         Session::set_nine_key_filter(self, single_character, strokes)
             .map_err(|e| RuntimeError::Engine(e.to_string()))
     }
+    fn preview_glide(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> Result<Option<(String, Vec<String>)>, RuntimeError> {
+        Session::preview_glide(self, keyboard, points, readings)
+            .map_err(|e| RuntimeError::Engine(e.to_string()))
+    }
+
     fn glide(
         &mut self,
         keyboard: &GlideKeyboard,
@@ -495,12 +551,32 @@ impl InputEngine for Session {
         Session::glide(self, keyboard, points).map_err(|e| RuntimeError::Engine(e.to_string()))
     }
 
+    fn glide_with_readings(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> Result<EngineResult, RuntimeError> {
+        Session::glide_with_readings(self, keyboard, points, readings)
+            .map_err(|e| RuntimeError::Engine(e.to_string()))
+    }
+
     fn bilingual_glide(
         &mut self,
         keyboard: &GlideKeyboard,
         points: &[GlidePoint],
     ) -> Result<EngineResult, RuntimeError> {
         Session::bilingual_glide(self, keyboard, points)
+            .map_err(|e| RuntimeError::Engine(e.to_string()))
+    }
+
+    fn bilingual_glide_with_readings(
+        &mut self,
+        keyboard: &GlideKeyboard,
+        points: &[GlidePoint],
+        readings: &[String],
+    ) -> Result<EngineResult, RuntimeError> {
+        Session::bilingual_glide_with_readings(self, keyboard, points, readings)
             .map_err(|e| RuntimeError::Engine(e.to_string()))
     }
     fn requires_candidate_selection(&self) -> bool {

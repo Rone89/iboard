@@ -3688,6 +3688,40 @@ fn a_bilingual_glide_request_preserves_default_requests_and_rejects_invalid_flag
     read(msime_client_destroy(handle));
 }
 
+#[test]
+fn preview_glide_returns_candidates_without_mutating_active_composition() {
+    let dir = tempfile::tempdir().unwrap();
+    let handle = test_host_with_pinyin_fixture(dir.path(), chinese_preferences());
+    read(msime_client_focus(handle, true));
+
+    // 先建立一段活跃组字 `ni`。
+    for letter in b"ni" {
+        let typed = read(msime_client_character(handle, *letter, false));
+        assert_eq!(typed["ok"], true, "{typed}");
+    }
+
+    // 在 `ni` 组字保持活跃期间发起 `"preview": true` 滑行预览，不能改写或清空原有组字。
+    let mut request: Value = serde_json::from_str(&glide_request("nihao")).unwrap();
+    request["preview"] = json!(true);
+    let encoded = request.to_string();
+    let preview = read(unsafe { msime_client_glide(handle, encoded.as_ptr(), encoded.len()) });
+    assert_eq!(preview["ok"], true, "{preview}");
+    assert_eq!(preview["value"]["handled"], true, "{preview}");
+    assert_eq!(preview["value"]["view"]["preedit"], "ni'hao", "{preview}");
+    assert!(
+        preview["value"]["view"]["candidates"]
+            .as_array()
+            .is_some_and(|rows| rows.iter().any(|row| row["text"] == "本地")),
+        "{preview}"
+    );
+
+    // 紧接着续打 `h` 应追加到原本完好保留的 `ni` 后面成为 `nih`，证明预览零副作用。
+    let after = read(msime_client_character(handle, b'h', false));
+    assert_eq!(after["ok"], true, "{after}");
+    assert_eq!(after["value"]["view"]["editing_text"], "nih", "{after}");
+    read(msime_client_destroy(handle));
+}
+
 /// 26 个字母键排成一行，键宽 10、键高 10，`id` 是代次。
 fn touch_geometry_json(id: u32) -> String {
     let keys: Vec<Value> = (0..26)
@@ -9058,7 +9092,7 @@ fn enhanced_mounts_the_runtime_reranker_without_the_engine_layer() {
     assert!(!keyboard_reranker_enabled(&association, Edition::full()));
     association.neural_keyboard = true;
     assert!(keyboard_reranker_enabled(&association, Edition::full()));
-    assert!(!engine_sentence_association(&association, None).neural_keyboard);
+    assert!(!engine_sentence_association(&association, None, None).neural_keyboard);
     // 不带键盘模型的版本（五笔版）不挂。
     let wubi = Edition::by_id("wubi").unwrap();
     assert!(!wubi.features.neural_keyboard);
@@ -24975,8 +25009,11 @@ fn grammar_pack_install_and_remove_mark_the_session_for_rebuild() {
         session.applied.sentence_association.grammar_model =
             msime_client_core::preferences::GrammarModel::BaguwenCompact;
         session.state_root = Some(dir.path().to_path_buf());
-        session.options.sentence_association =
-            engine_sentence_association(&session.applied.sentence_association, Some(dir.path()));
+        session.options.sentence_association = engine_sentence_association(
+            &session.applied.sentence_association,
+            Some(dir.path()),
+            None,
+        );
         session.resources_pending = false;
         let pack = ResourcePack::GrammarBaguwenCompact;
         let root = resource_packs::root(dir.path()).join(pack.id());
@@ -25007,6 +25044,7 @@ fn sentence_collocation_tuning_reaches_engine_options() {
     let defaults = engine_sentence_association(
         &msime_client_core::preferences::SentenceAssociationPreferences::default(),
         None,
+        None,
     );
     assert_eq!(defaults.collocation_weight, 1.0);
     assert_eq!(
@@ -25024,7 +25062,7 @@ fn sentence_collocation_tuning_reaches_engine_options() {
         sentence_collocation_rear_penalty: -25.0,
         ..Default::default()
     };
-    let options = engine_sentence_association(&preferences, None);
+    let options = engine_sentence_association(&preferences, None, None);
     assert_eq!(options.collocation_weight, 0.0);
     assert_eq!(
         options.collocation_grammar,

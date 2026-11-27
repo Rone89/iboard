@@ -345,6 +345,25 @@ impl PersonalNgramStore {
         self.flush_locked(&mut writer)
     }
 
+    /// 撤销刚写入的一批个人二元/三元转移（例如用户刚误选上屏后立刻退格秒删）：
+    /// 先刷盘合并待写队列，再在日志里扣减对应计数（扣到 0 及以下删行）并同步扣减内存模型。
+    pub fn unrecord(&self, transitions: &[PersonalTransition]) -> Result<()> {
+        if transitions.is_empty() {
+            return Ok(());
+        }
+        let mut writer = lock(&self.writer);
+        self.flush_locked(&mut writer)?;
+        if writer.connection.is_none() {
+            self.open_connection(&mut writer)?;
+        }
+        if let Some(connection) = writer.connection.as_ref() {
+            unwrite_transitions(connection, transitions)?;
+        }
+        drop(writer);
+        self.forget_removed(transitions);
+        Ok(())
+    }
+
     /// Take the rows `delete_personal_ngram_word` removed out of the in-memory model without a reload (NS:319-342).
     pub fn forget_removed(&self, removed: &[PersonalTransition]) {
         if removed.is_empty() {
@@ -740,6 +759,44 @@ fn write_transitions(connection: &Connection, transitions: &[PersonalTransition]
         let _ = connection.execute_batch("ROLLBACK");
     }
     written
+}
+
+fn unwrite_transitions(connection: &Connection, transitions: &[PersonalTransition]) -> Result<()> {
+    connection.execute_batch("BEGIN IMMEDIATE")?;
+    let undone = (|| -> Result<()> {
+        let mut dec_pair = connection.prepare_cached(
+            "UPDATE personal_bigram SET count = count - ?3 WHERE previous = ?1 AND word = ?2",
+        )?;
+        let mut del_pair = connection.prepare_cached(
+            "DELETE FROM personal_bigram WHERE previous = ?1 AND word = ?2 AND count <= 0",
+        )?;
+        let mut dec_triple = connection.prepare_cached(
+            "UPDATE personal_trigram SET count = count - ?4 WHERE earlier = ?1 AND previous = ?2 AND word = ?3",
+        )?;
+        let mut del_triple = connection.prepare_cached(
+            "DELETE FROM personal_trigram WHERE earlier = ?1 AND previous = ?2 AND word = ?3 AND count <= 0",
+        )?;
+        for transition in transitions {
+            if transition.word.is_empty() || transition.times == 0 {
+                continue;
+            }
+            let previous = or_start(&transition.previous);
+            dec_pair.execute(params![previous, transition.word, transition.times])?;
+            del_pair.execute(params![previous, transition.word])?;
+            if previous == SENTENCE_START {
+                continue;
+            }
+            let earlier = or_start(&transition.earlier);
+            dec_triple.execute(params![earlier, previous, transition.word, transition.times])?;
+            del_triple.execute(params![earlier, previous, transition.word])?;
+        }
+        Ok(())
+    })()
+    .and_then(|()| connection.execute_batch("COMMIT").map_err(EngineError::from));
+    if undone.is_err() && !connection.is_autocommit() {
+        let _ = connection.execute_batch("ROLLBACK");
+    }
+    undone
 }
 
 /// The one thread that writes queued transitions, started by the first store that queues any and again after [`shutdown`] stopped it. Whoever needs the rows on disk at a given moment calls `flush_all`.

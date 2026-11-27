@@ -115,7 +115,8 @@ impl InputClass {
             | Action::SelectAnyCandidate(_)
             | Action::SelectEdge(..)
             | Action::SelectHighlighted
-            | Action::ChooseNineKeySpelling(_) => Self::Selection,
+            | Action::ChooseNineKeySpelling(_)
+            | Action::BrowseNineKeySpelling(_) => Self::Selection,
             Action::NextPage
             | Action::PreviousPage
             | Action::NextCandidate

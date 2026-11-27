@@ -2,6 +2,7 @@
 
 mod bilingual_glide;
 mod bilingual_glide_quality;
+mod glide_adaptive;
 mod sentence_excluded;
 
 use std::path::{Path, PathBuf};
@@ -13477,6 +13478,46 @@ fn a_glide_into_a_composition_starts_a_new_syllable() {
     );
     assert_eq!(session.snapshot().editing_text, "xi'an");
     assert_eq!(words(&session).first().map(String::as_str), Some("西安"));
+}
+
+#[test]
+fn external_glide_readings_insert_separator_merge_secondary_and_preserve_existing_on_fallback() {
+    let fixture = Fixture::new(
+        "CREATE TABLE tbl_1_r(key TEXT, jp TEXT, value TEXT, weight INTEGER);
+         INSERT INTO tbl_1_r VALUES('ri','r','日',9000),('rui','r','瑞',8500);
+         CREATE TABLE tbl_1_x(key TEXT, jp TEXT, value TEXT, weight INTEGER);
+         INSERT INTO tbl_1_x VALUES('xi','x','西',9000);
+         CREATE TABLE tbl_1_a(key TEXT, jp TEXT, value TEXT, weight INTEGER);
+         INSERT INTO tbl_1_a VALUES('an','a','安',9000);
+         CREATE TABLE tbl_2_x_a(key TEXT, jp TEXT, value TEXT, weight INTEGER);
+         INSERT INTO tbl_2_x_a VALUES('xi''an','xa','西安',9500);",
+    );
+    let keyboard = crate::pinyin::glide::tests::keyboard();
+
+    // 1. 新起组字传入多条外部读音，次优读音候选自动合并进前排，且点选后按合并列表正确上屏。
+    let mut session = fixture.session();
+    let rui_points = crate::pinyin::glide::tests::stroke("rui", 0.0, &[]);
+    let res = session.glide_with_readings(&keyboard, &rui_points, &["ri".into(), "rui".into()]);
+    assert!(res.handled);
+    let candidate_words = words(&session);
+    assert!(candidate_words.contains(&"日".to_owned()), "{candidate_words:?}");
+    assert!(candidate_words.contains(&"瑞".to_owned()), "{candidate_words:?}");
+
+    // 2. 已有组字后续滑传入外部读音，自动插入 `'` 分隔符形成 `xi'an`。
+    let mut session = fixture.session();
+    type_text(&mut session, "xi");
+    let an_points = crate::pinyin::glide::tests::stroke("an", 0.0, &[]);
+    let res = session.glide_with_readings(&keyboard, &an_points, &["an".into()]);
+    assert!(res.handled);
+    assert_eq!(session.snapshot().editing_text, "xi'an");
+    assert_eq!(words(&session).first().map(String::as_str), Some("西安"));
+
+    // 3. 外部读音在词典中均无候选时，同调用内无缝回退内置几何解码，绝不清空已有组字 `xi`。
+    let mut session = fixture.session();
+    type_text(&mut session, "xi");
+    let res = session.glide_with_readings(&keyboard, &an_points, &["zzzz".into()]);
+    assert!(res.handled);
+    assert_eq!(session.snapshot().editing_text, "xi'an");
 }
 
 #[test]

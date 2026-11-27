@@ -103,6 +103,13 @@ impl InputSession {
         if !self.has_composition() {
             self.glide_selection_pending = false;
         }
+        if self
+            .pending_glide_calibration
+            .as_ref()
+            .is_some_and(|pending| self.raw_with_cases() != pending.stroke_spelling)
+        {
+            self.pending_glide_calibration = None;
+        }
         if let Some((spelling, _)) = &self.glide_candidates {
             if self.local_mode == LocalInputMode::None
                 && !self.dedicated_english
@@ -151,6 +158,14 @@ impl InputSession {
                     slot,
                     self.first_page_rows,
                 );
+            }
+            if self.mixed_candidates_enabled
+                && !self.caret_edit.active
+                && self.scheme() == SchemeType::Quanpin
+                && !self.wubi_grid_composing()
+            {
+                let raw = self.engine.request().raw_input.clone();
+                crate::mixed_cn_en::insert_for_quanpin(&raw, &mut decoded);
             }
         }
         self.personal_reranked = false;

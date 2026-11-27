@@ -103,6 +103,103 @@ impl InputSession {
         quick_phrase.or(ranked).or(shuangpin_typo)
     }
 
+    /// 为通过 `glide_candidates` 上屏的纯中文候选补齐词频调频与整句学习：
+    /// - 字典词按自身 `canonical_pinyin` 对应的纯同音排名表调频，不被并入的次优读音或英文行干扰名次；
+    /// - 生成整句候选在音节数与汉字数合法匹配时写入用户词库。
+    pub(super) fn learn_glide_chinese_candidate(&mut self, selected: &WordItem) -> Option<String> {
+        if !self.learning_enabled
+            || self.local_mode != LocalInputMode::None
+            || self.dedicated_english
+            || self.engine.wubi_pinyin_lookup_active()
+            || !self
+                .engine
+                .current_scheme_type()
+                .learns_into_main_dictionary()
+        {
+            return None;
+        }
+        if selected.source.is_sentence_learning() {
+            if !self.can_learn_sentence_candidate(selected) {
+                return None;
+            }
+            let canonical =
+                normalize_canonical_pinyin_for_word(&selected.canonical_pinyin, &selected.word);
+            if canonical.is_empty() || segment_count(&canonical) > MAX_LEARNED_SENTENCE_SYLLABLES {
+                return None;
+            }
+            if self
+                .store_user_phrase_from_canonical_pinyin(&canonical, &selected.word)
+                .is_err()
+            {
+                return Some(diagnostics::SENTENCE_NOT_PERSISTED.to_owned());
+            }
+            self.engine.reset_cache();
+            return None;
+        }
+        if self.frequency.mode == FrequencyAdjustmentMode::Disabled
+            || !selected.source.is_dictionary()
+        {
+            return None;
+        }
+        let entry_key = if !selected.canonical_pinyin.is_empty() {
+            selected.canonical_pinyin.as_str()
+        } else {
+            selected.pinyin.as_str()
+        };
+        if entry_key.is_empty() {
+            return None;
+        }
+        let current_norm = self.engine.request().normalized_segmentation.as_str();
+        let same_as_current = !current_norm.is_empty() && current_norm == entry_key;
+        let owned_list: Vec<WordItem>;
+        let ordered: &[WordItem] = if same_as_current {
+            self.engine.candidates()
+        } else {
+            let raw_letters: String = entry_key
+                .bytes()
+                .filter(|b| b.is_ascii_alphabetic())
+                .map(|b| char::from(b.to_ascii_lowercase()))
+                .collect();
+            if raw_letters.is_empty() {
+                return None;
+            }
+            owned_list = self.engine.query_raw_candidates(&raw_letters, &raw_letters);
+            owned_list.as_slice()
+        };
+        let Some(rank) = ordered.iter().position(|item| {
+            item.source.is_dictionary() && item.word.as_str() == selected.word.as_str()
+        }) else {
+            return None;
+        };
+        if rank == 0 {
+            return None;
+        }
+        let main_db = self.paths.dictionary(assets::MAIN_DICTIONARY);
+        let user_db = self.journal_path();
+        let adjusted = adjust_candidate_ranking(&RankingRequest {
+            main_db: &main_db,
+            user_db,
+            context_key: entry_key,
+            ordered,
+            entry_key,
+            value: &selected.word,
+            mode: self.frequency.mode,
+            linear_step: self.frequency.linear_step,
+            trigger_count: self.frequency.trigger_count,
+            force_top: false,
+            kind: PersonalDictionaryKind::Pinyin,
+        });
+        match adjusted {
+            Ok(changed) => {
+                if changed {
+                    self.engine.reset_cache();
+                }
+                None
+            }
+            Err(_) => Some(diagnostics::FREQUENCY_NOT_PERSISTED.to_owned()),
+        }
+    }
+
     /// 快捷短语参与调频（`mixed_input.quick_phrase_frequency`，Windows `utility.quick_phrase_frequency`）：组在普通候选里时，选中组内短语让整组按调频规则前移，越过整组选普通候选让整组后退一格、最多退到首页末位（`learn_quick_phrase_order`，input_session.cpp:1054-1096）。
     fn learn_quick_phrase_order(&mut self, index: usize) -> Option<String> {
         if !self.quick_phrase_frequency
@@ -289,6 +386,14 @@ impl InputSession {
             ordered
         };
         let main_db = self.paths.dictionary(assets::MAIN_DICTIONARY);
+        let kind = if wubi_row {
+            self.engine.wubi_input_options().profile.dictionary_kind()
+        } else {
+            PersonalDictionaryKind::Pinyin
+        };
+        let previous_weight = selected.weight;
+        let saved_entry_key = entry_key.to_owned();
+        let saved_word = selected.word.to_string();
         let adjusted = adjust_candidate_ranking(&RankingRequest {
             main_db: &main_db,
             user_db,
@@ -300,16 +405,17 @@ impl InputSession {
             linear_step: options.linear_step,
             trigger_count: options.trigger_count,
             force_top,
-            kind: if wubi_row {
-                self.engine.wubi_input_options().profile.dictionary_kind()
-            } else {
-                PersonalDictionaryKind::Pinyin
-            },
+            kind,
         });
         match adjusted {
             Ok(changed) => {
                 if changed {
                     self.engine.reset_cache();
+                    if !force_top {
+                        let slot = self.last_learning.get_or_insert_with(Default::default);
+                        slot.weight_rollback =
+                            Some((kind, saved_entry_key, saved_word, previous_weight));
+                    }
                 }
                 None
             }
@@ -682,10 +788,56 @@ impl InputSession {
             });
             self.chain.advance(word, composition_left, now);
         }
-        self.personal_context
-            .record(&transitions)
-            .err()
-            .map(|_| diagnostics::PERSONAL_CONTEXT_NOT_PERSISTED.to_owned())
+        match self.personal_context.record(&transitions) {
+            Ok(()) => {
+                if !transitions.is_empty() {
+                    let slot = self.last_learning.get_or_insert_with(Default::default);
+                    slot.personal_transitions.extend(transitions);
+                }
+                None
+            }
+            Err(_) => Some(diagnostics::PERSONAL_CONTEXT_NOT_PERSISTED.to_owned()),
+        }
+    }
+
+    /// 撤销 26 键最近一次选词上屏产生的自动学习（词频权重与个人二元/三元计数）。
+    pub(super) fn undo_last_learning(&mut self, expected_text: &str) -> bool {
+        let matches = self.last_learning.as_ref().is_some_and(|record| {
+            expected_text.is_empty() || record.committed_word == expected_text
+        });
+        if !matches {
+            return false;
+        }
+        let Some(record) = self.last_learning.take() else {
+            return false;
+        };
+        let mut rolled_back = false;
+        if let Some((kind, entry_key, word, previous_weight)) = record.weight_rollback {
+            let main_db = self.paths.dictionary(assets::MAIN_DICTIONARY);
+            if crate::user_dictionary::ranking::restore_candidate_weight(
+                &main_db,
+                self.journal_path(),
+                kind,
+                &entry_key,
+                &word,
+                previous_weight,
+            )
+            .is_ok()
+            {
+                self.engine.reset_cache();
+                rolled_back = true;
+            }
+        }
+        if !record.personal_transitions.is_empty()
+            && self
+                .personal_context
+                .unrecord(&record.personal_transitions)
+                .is_ok()
+        {
+            self.chain.reset();
+            rolled_back = true;
+        }
+        rolled_back
     }
 
     /// learning, personal context, engine view, quanpin or shuangpin.

@@ -186,15 +186,67 @@ impl InputSession {
                 self.chain.reset();
                 return KeyResult::committed(text);
             };
-            let mut text = row.word.clone();
-            let english = text.as_bytes().last().is_some_and(u8::is_ascii_alphabetic);
-            self.glide_prefers_english = Some(english);
-            if english {
+            let selected = row.clone();
+            let mut text = selected.word.clone();
+            let ends_english = text.as_bytes().last().is_some_and(u8::is_ascii_alphabetic);
+            let contains_english = text.bytes().any(|b| b.is_ascii_alphabetic());
+            self.glide_prefers_english = Some(ends_english);
+            if ends_english {
                 text.push(' ');
             }
+            if contains_english || selected.source == CandidateSource::EnglishDictionary {
+                self.reset_composition();
+                self.chain.reset();
+                return KeyResult::committed(text);
+            }
+            // 纯中文滑行候选上屏：补齐拇指偏移校准、个人词频调频、个人二元上下文与连词造词，
+            // 与正常点按上屏（`commit_plain` + `commit_selection`）保持一致。
+            let mut diagnostic = self.learn_glide_chinese_candidate(&selected);
+            let has_dictionary_reading = selected.source.is_dictionary();
+            let learned_sentence_word = has_dictionary_reading
+                && self.personal_context_applies()
+                && !self.chain.same_composition
+                && !selected.canonical_pinyin.is_empty()
+                && count_utf8_chars(&selected.word) >= 3
+                && {
+                    let mut segments = split_segments(&selected.canonical_pinyin);
+                    normalize_umlaut_aliases(&mut segments);
+                    is_user_inserted(
+                        self.journal_path(),
+                        PersonalDictionaryKind::Pinyin,
+                        &join_segments(&segments),
+                        &selected.word,
+                    )
+                };
+            self.observe_confirmed_glide_calibration(&selected);
+            self.record_context_into(&mut diagnostic, Some(&selected), learned_sentence_word, false);
+            let canonical_for_pick = if !selected.canonical_pinyin.is_empty() {
+                selected.canonical_pinyin.to_string()
+            } else {
+                selected.pinyin.to_string()
+            };
+            let pick = (has_dictionary_reading
+                && !learned_sentence_word
+                && !canonical_for_pick.is_empty()
+                && self.learning_enabled
+                && self.personal_context_enabled)
+                .then(|| Pick {
+                    canonical_pinyin: canonical_for_pick,
+                    word: selected.word.to_string(),
+                    committed_at: self.steady_now(),
+                });
+            if let (Some(current), Some(previous)) = (&pick, self.chain.last_pick.clone()) {
+                if let Some(pair_diagnostic) = self.learn_pick_pair(&previous, current) {
+                    diagnostic.get_or_insert(pair_diagnostic);
+                }
+            }
+            self.chain.last_pick = pick;
             self.reset_composition();
-            self.chain.reset();
-            return KeyResult::committed(text);
+            return KeyResult {
+                handled: true,
+                commit: Some(text.to_string()),
+                diagnostic,
+            };
         }
         if self.caret_edit.active && self.conversion.is_none() && self.date_time_menu_page.is_none()
         {
@@ -321,10 +373,17 @@ impl InputSession {
             }
             None => Some(self.raw_commit_text()),
         };
+        self.last_learning = None;
         let diagnostic = self
             .ranking_index(index)
             .and_then(|learn_index| self.learn_candidate(learn_index));
-        self.commit_selection(selected, text, diagnostic)
+        let result = self.commit_selection(selected, text, diagnostic);
+        if let Some(ref committed_text) = result.commit {
+            if let Some(record) = self.last_learning.as_mut() {
+                record.committed_word.clone_from(committed_text);
+            }
+        }
+        result
     }
 
     /// 拼音组字里上屏选中的行（`None` 是上屏 `text` 本身）之后的事：记个人上下文、推进组字或者结束组字、造词。`diagnostic` 是已经做过的学习留下的诊断。整句改字上屏改好的整句时也走这里。
@@ -380,6 +439,11 @@ impl InputSession {
                 )
             };
         let opens_composition = self.phrase_progress.word.is_empty();
+        if self.selection_completes_composition(&selected) {
+            self.observe_confirmed_glide_calibration(&selected);
+        } else {
+            self.pending_glide_calibration = None;
+        }
         let transition = self.advance_composition_after_selection(&selected);
         self.record_context_into(
             &mut diagnostic,
